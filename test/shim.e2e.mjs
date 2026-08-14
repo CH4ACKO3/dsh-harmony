@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path'
 const require = createRequire(import.meta.url)
 const { installShim, resolveCommandPath } = require('../scripts/install-shim.cjs')
 const root = mkdtempSync(join(tmpdir(), 'dsh-harmony-shim-'))
-const prefix = join(root, 'prefix')
+const prefix = join(root, 'prefix with spaces')
 const globalModules = process.platform === 'win32'
   ? join(prefix, 'node_modules')
   : join(prefix, 'lib/node_modules')
@@ -55,7 +55,7 @@ if (process.platform === 'win32') {
 
 function runCommand() {
   if (process.platform === 'win32') {
-    return spawnSync(process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', `"${command}.cmd"`], { encoding: 'utf8' })
+    return spawnSync(`${command}.cmd`, { encoding: 'utf8', shell: true })
   }
   return spawnSync(command, { encoding: 'utf8' })
 }
