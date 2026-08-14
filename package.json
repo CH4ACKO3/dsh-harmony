@@ -1,0 +1,91 @@
+{
+  "name": "dsh-harmony",
+  "version": "0.1.0",
+  "description": "A library for patching, replacing and decorating dsh plugin during runtime",
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "plugin",
+    "runtime-patching",
+    "typescript-ast"
+  ],
+  "homepage": "https://github.com/CH4ACKO3/dsh-harmony#readme",
+  "bugs": {
+    "url": "https://github.com/CH4ACKO3/dsh-harmony/issues"
+  },
+  "author": {
+    "name": "CH4ACKO3",
+    "url": "https://github.com/CH4ACKO3"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./harmony.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-settings-general"
+      ],
+      "platform": "web"
+    }
+  },
+  "files": [
+    "assets",
+    "client.js",
+    "lib",
+    "scripts",
+    "harmony.patch.yml",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && vitest run && node test/hook.e2e.mjs && node test/client.e2e.mjs && node test/first-boot.e2e.mjs && node test/shim.e2e.mjs && node test/bootstrap.e2e.mjs && node test/runtime-gate.e2e.mjs",
+    "check": "npm test",
+    "prepare": "npm run build",
+    "postinstall": "node scripts/postinstall.cjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CH4ACKO3/dsh-harmony.git"
+  },
+  "engines": {
+    "node": "^22.22.3 || >=24.11.1"
+  },
+  "dependencies": {
+    "@phenomnomnominal/tsquery": "^6.2.0",
+    "magic-string": "^0.30.21",
+    "semver": "^7.8.5",
+    "typescript": "^6.0.3",
+    "yaml": "^2.9.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh": "0.1.0-rc.6"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-app-boot": "0.1.0-rc.6",
+    "@types/node": "^24.10.0",
+    "@types/semver": "^7.8.0",
+    "vitest": "^4.1.10"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,8 @@
+{
+  "name": "hook-provider",
+  "dsh": {
+    "harmony": {
+      "patches": ["./answer.patch.cjs"]
+    }
+  }
+}
