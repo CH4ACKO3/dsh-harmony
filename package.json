@@ -62,6 +62,7 @@
   "files": [
     "assets",
     "client.js",
+    "docs",
     "lib",
     "scripts",
     "harmony.patch.yml",
