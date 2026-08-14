@@ -55,7 +55,7 @@ if (process.platform === 'win32') {
 
 function runCommand() {
   if (process.platform === 'win32') {
-    return spawnSync(`${command}.cmd`, { encoding: 'utf8', shell: true })
+    return spawnSync(`"${command}.cmd"`, { encoding: 'utf8', shell: true })
   }
   return spawnSync(command, { encoding: 'utf8' })
 }
