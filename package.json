@@ -1,12 +1,16 @@
 {
   "name": "dsh-harmony",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A library for patching, replacing and decorating dsh plugin during runtime",
   "keywords": [
     "deepseek",
     "deepseek-harness",
+    "deepseek-harness-plugin",
     "dsh",
+    "dsh-plugin",
+    "harmony",
     "plugin",
+    "plugin-development",
     "runtime-patching",
     "typescript-ast"
   ],
@@ -30,6 +34,18 @@
     "./package.json": "./package.json"
   },
   "dsh": {
+    "plugin": {
+      "schemaVersion": 1,
+      "displayName": {
+        "zh-CN": "Harmony",
+        "en": "Harmony"
+      },
+      "summary": {
+        "zh-CN": "在运行时补丁、替换和装饰 DSH 插件，并提供 Patch 排序、检查和热重载。",
+        "en": "Patch, replace, and decorate DSH plugins at runtime with Patch ordering, inspection, and hot reload."
+      },
+      "category": "plugin-development"
+    },
     "bundle": {
       "patch": "./harmony.patch.yml"
     },

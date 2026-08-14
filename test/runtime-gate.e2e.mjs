@@ -14,6 +14,7 @@ const npmLog = join(root, 'npm.log')
 const dependentMarker = join(root, 'dependent-ran')
 const harmonyRoot = resolve('.')
 const official = resolve('node_modules/@deepseek-ai/dsh/lib/bin.js')
+const harmonyVersion = JSON.parse(readFileSync('package.json', 'utf8')).version
 
 mkdirSync(join(profile, 'node_modules'), { recursive: true })
 mkdirSync(fakeBin, { recursive: true })
@@ -32,7 +33,7 @@ export function apply() { writeFileSync(${JSON.stringify(dependentMarker)}, 'ran
 writeFileSync(join(profile, 'package.json'), `${JSON.stringify({
   name: 'dsh-profile-web',
   private: true,
-  dependencies: { 'dsh-harmony': '0.1.0' },
+  dependencies: { 'dsh-harmony': harmonyVersion },
   dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', 'dsh-harmony'] } },
 }, null, 2)}\n`)
 writeFileSync(join(profile, 'cordis.patch.yml'), '- insert:\n    - id: harmony-dependent\n      name: harmony-dependent\n')
@@ -97,7 +98,7 @@ const response = await fetch(`${url}/dsh-harmony/runtime`, {
 })
 assert.equal(response.ok, true)
 assert.equal((await response.json()).state, 'installed')
-assert.match(readFileSync(npmLog, 'utf8'), /install --global dsh-harmony@0\.1\.0/)
+assert.equal(readFileSync(npmLog, 'utf8'), `install --global dsh-harmony@${harmonyVersion}\nprefix --global\n`)
 assert.equal(await childExit, 0, output)
 assert.equal(existsSync(dependentMarker), false)
 rmSync(root, { recursive: true })

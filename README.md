@@ -8,6 +8,8 @@ plugin files unchanged on disk.
 
 ## Install
 
+Install Harmony directly as the global `dsh` launcher:
+
 ```sh
 npm install -g dsh-harmony
 ```
@@ -23,6 +25,16 @@ dsh web
 dsh --profile tui
 dsh plugin --profile web add ./my-plugin
 ```
+
+Alternatively, install Harmony as a normal profile plugin:
+
+```sh
+dsh plugin --profile web add dsh-harmony
+dsh web
+```
+
+On first boot, choose **Install and restart** to install the global launcher and
+restart the same profile with runtime patching enabled.
 
 `dsh-harmony` is also a real Harness bundle. If that bundle is copied into a
 profile before the global runtime exists, WebUI and interactive terminal boots
