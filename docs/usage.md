@@ -59,26 +59,51 @@ dsh harmony status
 `dsh harmony` opens the ordering TUI for the Web profile. In WebUI, Harmony is
 available under **Settings → Harmony**.
 
-## Embed in Desktop or another Host carrier
+## Connection model
 
-Resolve the public `dsh-harmony/bin` entry and launch it with the same `web` and
-following arguments that the carrier would pass to the official DSH CLI. Set
-this child-process environment variable at the same time:
+| Component | Owns | Does not own |
+| --- | --- | --- |
+| Harmony | Installs Patch hooks before the official CLI runs, then forwards the original arguments | A second Host or a WebUI traffic proxy |
+| DSH Host | Serves WebUI assets, `/api` HTTP RPC, and WebSockets | Sessions from another DSH Host |
+| WebUI | Connects to the current Host's `/api` through `window.location.origin` | A separately selectable backend URL |
+| Desktop | Starts one local Host, reads its readiness URL, and opens that URL in BrowserWindow | A rewritten WebUI or Harness protocol |
+
+The global CLI installation has one path:
 
 ```text
-DSH_DESKTOP_BUILTIN_HOST_ENTRY=/absolute/path/to/@deepseek-ai/dsh/lib/bin.js
+system dsh command
+  -> Harmony shim
+  -> dsh-harmony/bin
+  -> @deepseek-ai/dsh/lib/bin.js
+  -> dsh web Host
+  -> same-origin WebUI + /api + WebSocket
 ```
 
-Harmony resolves `@deepseek-ai/dsh-app-boot` from that official entry, installs
-its module and file hooks, and finally imports that exact entry.
-`DSH_HARMONY_OFFICIAL` is the explicit override used by Harmony-owned shims and
-takes precedence when both variables are present.
+Harmony's postinstall alone creates the initial shim and bootstrap state; the
+bootstrap plugin only restores the shim after an official DSH upgrade replaces
+it. The Harmony runtime no longer rewrites those files. It only resolves the
+official CLI from its `@deepseek-ai/dsh` peer dependency.
 
-Do not set `DSH_HARMONY_COMMAND` in embedded mode. Harmony then creates no
-bootstrap and never installs, replaces, or restores the system-global `dsh`
-command. The carrier continues to own the Node executable, Host child process,
-working directory, exit handling, and readiness protocol; Harmony only wraps
-the DSH CLI entry.
+### Desktop integration
+
+Once Desktop exposes a configurable Host entry, point it at the public
+`dsh-harmony/bin` export and bundle `dsh-harmony` beside the built-in
+`@deepseek-ai/dsh` in the same Node dependency tree:
+
+```text
+Desktop supervisor
+  -> dsh-harmony/bin
+  -> @deepseek-ai/dsh/lib/bin.js web --host 127.0.0.1 --port 0
+  -> readiness URL
+  -> BrowserWindow
+```
+
+Desktop continues to own the Node executable, Host child process, working
+directory, exit handling, and readiness protocol; Harmony only wraps the CLI
+entry. Because this path does not use the global installer, it never writes or
+modifies the system `dsh` command. The current upstream Desktop still starts its
+built-in official CLI directly, so a global Harmony installation cannot affect
+Desktop until it exposes that configurable Host entry.
 
 ## Install through `dsh plugin`
 

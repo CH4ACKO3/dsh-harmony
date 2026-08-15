@@ -56,22 +56,47 @@ dsh harmony status
 `dsh harmony` 会打开 Web profile 的排序 TUI。WebUI 中的 Harmony 位于
 **设置 → Harmony**。
 
-## 嵌入 Desktop 或其他 Host 载体
+## 连接模型
 
-载体应解析公开入口 `dsh-harmony/bin`，并像启动官方 DSH 一样将 `web` 及后续参数传给它。
-同时在子进程环境中设置：
+| 组件 | 职责 | 不负责 |
+| --- | --- | --- |
+| Harmony | 在官方 CLI 运行前安装 Patch Hook，再传递原始参数 | 不启动第二个 Host，不代理 WebUI 流量 |
+| DSH Host | 提供 WebUI 静态资源、`/api` HTTP RPC 和 WebSocket | 不从另一个 DSH Host 读取会话 |
+| WebUI | 使用 `window.location.origin` 连接当前 Host 的 `/api` | 不选择另一个后端地址 |
+| Desktop | 启动一个本地 Host，读取 readiness URL，再用 BrowserWindow 打开该 URL | 不重写 WebUI 或 Harness 协议 |
+
+全局 CLI 安装时的单一路径：
 
 ```text
-DSH_DESKTOP_BUILTIN_HOST_ENTRY=/absolute/path/to/@deepseek-ai/dsh/lib/bin.js
+系统 dsh 命令
+  -> Harmony shim
+  -> dsh-harmony/bin
+  -> @deepseek-ai/dsh/lib/bin.js
+  -> dsh web Host
+  -> 同源 WebUI + /api + WebSocket
 ```
 
-Harmony 会从该官方入口解析 `@deepseek-ai/dsh-app-boot`，安装模块与文件 Hook，最后导入
-同一个入口。`DSH_HARMONY_OFFICIAL` 是 Harmony shim 使用的显式覆盖，存在时优先于
-Desktop 提供的入口。
+Harmony 的 postinstall 独立创建初始 shim 和 bootstrap 状态；bootstrap 插件只在官方 DSH
+升级覆盖 shim 后恢复它。Harmony 运行时不再重复写入这些文件，只从自己的
+`@deepseek-ai/dsh` peer dependency 解析官方 CLI。
 
-嵌入模式不要设置 `DSH_HARMONY_COMMAND`。这样不会创建 bootstrap，也不会安装、替换或
-恢复系统全局 `dsh` 命令。载体仍然拥有 Node 可执行文件、Host 子进程、工作目录、退出处理
-和 readiness 协议；Harmony 只包装 DSH CLI 入口。
+### Desktop 接入
+
+当 Desktop 支持可配置 Host 入口后，将该入口指向公开导出 `dsh-harmony/bin`，并把
+`dsh-harmony` 与内置 `@deepseek-ai/dsh` 放在同一 Node 依赖树即可：
+
+```text
+Desktop supervisor
+  -> dsh-harmony/bin
+  -> @deepseek-ai/dsh/lib/bin.js web --host 127.0.0.1 --port 0
+  -> readiness URL
+  -> BrowserWindow
+```
+
+Desktop 仍然拥有 Node 可执行文件、Host 子进程、工作目录、退出处理和 readiness 协议；
+Harmony 只包装 CLI 入口。因为不经过全局安装，该路径不会写入或修改系统 `dsh` 命令。
+当前上游 Desktop 仍直接启动内置官方 CLI，因此在它提供可配置 Host 入口之前，全局安装
+Harmony 不会影响 Desktop。
 
 ## 通过 `dsh plugin` 安装
 

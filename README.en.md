@@ -162,15 +162,22 @@ dsh plugin --profile web add ./my-plugin
 Open **Settings → Harmony** in WebUI, or run `dsh harmony`, to confirm that the
 runtime is active.
 
-### Embedded desktop Hosts
+### Host and WebUI connection
 
-A carrier that supervises its own DSH Host, such as a desktop application, can
-launch `dsh-harmony/bin` as its Node entry and provide the absolute built-in DSH
-entry through `DSH_DESKTOP_BUILTIN_HOST_ENTRY`. Harmony installs its hooks and
-then forwards the original CLI arguments to that exact entry. Embedded mode
-does not set `DSH_HARMONY_COMMAND`, so it never installs or modifies the system
-global `dsh` shim. `DSH_HARMONY_OFFICIAL` remains the higher-priority explicit
-override for Harmony-owned launchers.
+Harmony does not proxy WebUI traffic or store a second backend URL. The official
+WebUI is served by the active `dsh web` Host and always uses same-origin `/api`
+and WebSocket connections. The global command path is:
+
+```text
+dsh shim -> dsh-harmony/bin -> @deepseek-ai/dsh -> WebUI + /api
+```
+
+A Desktop integration only needs to point its configurable Host entry at
+`dsh-harmony/bin` and bundle Harmony beside its built-in `@deepseek-ai/dsh` in
+the same Node dependency tree. Harmony resolves the official CLI from its peer
+dependency, installs its hooks, and forwards the original arguments. This path
+never installs or modifies the system-global `dsh` shim. See the
+[usage guide](./docs/usage.md#connection-model) for the full responsibility map.
 
 ### Plugin first
 

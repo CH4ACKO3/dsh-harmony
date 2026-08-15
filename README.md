@@ -150,13 +150,19 @@ dsh plugin --profile web add ./my-plugin
 
 在 WebUI 中打开 **设置 → Harmony**，或运行 `dsh harmony`，即可确认运行时已经激活。
 
-### 嵌入桌面 Host
+### Host 与 WebUI 连接
 
-Desktop 等自行管理 DSH Host 的载体可以把 `dsh-harmony/bin` 作为 Node 入口启动，并通过
-`DSH_DESKTOP_BUILTIN_HOST_ENTRY` 提供其内置官方 DSH 的绝对入口路径。Harmony 会先安装
-Hook，再把原始 CLI 参数交给该入口。嵌入模式不设置 `DSH_HARMONY_COMMAND`，因此不会安装
-或修改系统全局 `dsh` shim。`DSH_HARMONY_OFFICIAL` 可用于显式指定官方入口，并具有更高
-优先级。
+Harmony 不代理 WebUI 流量，也不保存第二个后端地址。官方 WebUI 由当前
+`dsh web` Host 提供，并始终使用页面同源的 `/api` 和 WebSocket。全局命令的路径是：
+
+```text
+dsh shim -> dsh-harmony/bin -> @deepseek-ai/dsh -> WebUI + /api
+```
+
+Desktop 接入时只需把可配置的 Host 入口指向 `dsh-harmony/bin`，并将 Harmony 与
+内置 `@deepseek-ai/dsh` 放在同一 Node 依赖树。Harmony 从自己的 peer dependency 解析官方
+CLI，安装 Hook 后传递原始参数。这个路径不会安装或修改系统全局 `dsh` shim。
+详细职责边界见 [安装与使用指南](./docs/usage.zh-CN.md#连接模型)。
 
 ### 先安装插件
 

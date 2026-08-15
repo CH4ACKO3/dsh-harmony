@@ -25,7 +25,7 @@ function resolveDshHome() {
   return resolve(configured)
 }
 
-function shimSource({ command, harmony, official }) {
+function shimSource({ harmony, official }) {
   return `#!/usr/bin/env node
 ${SHIM_MARKER}
 const { existsSync } = require('node:fs')
@@ -34,9 +34,6 @@ const { pathToFileURL } = require('node:url')
 const harmony = ${JSON.stringify(harmony)}
 const official = ${JSON.stringify(official)}
 const target = existsSync(harmony) ? harmony : official
-
-process.env.DSH_HARMONY_COMMAND = ${JSON.stringify(command)}
-process.env.DSH_HARMONY_OFFICIAL = official
 
 import(pathToFileURL(target).href).catch(error => {
   console.error(error)

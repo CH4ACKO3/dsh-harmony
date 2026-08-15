@@ -15,27 +15,12 @@ import {
 import { runHarmonyTui } from './tui.js'
 
 const require = createRequire(import.meta.url)
-const officialEntry = process.env.DSH_HARMONY_OFFICIAL
-  ?? process.env.DSH_DESKTOP_BUILTIN_HOST_ENTRY
-  ?? require.resolve('@deepseek-ai/dsh/lib/bin.js')
+const officialEntry = require.resolve('@deepseek-ai/dsh/lib/bin.js')
 const officialRequire = createRequire(officialEntry)
 process.env.DSH_HARMONY_ACTIVE = '1'
 const { initProfile, PROFILE_TEMPLATES, resolveProfileDir } = await import(
   pathToFileURL(officialRequire.resolve('@deepseek-ai/dsh-app-boot')).href
 )
-const { ensureBootstrap, resolveDshHome } = require('../scripts/install-shim.cjs') as {
-  ensureBootstrap(paths: { home: string; command: string; harmony: string; official: string }): void
-  resolveDshHome(): string
-}
-
-if (process.env.DSH_HARMONY_COMMAND !== undefined && process.env.DSH_HARMONY_OFFICIAL !== undefined) {
-  ensureBootstrap({
-    home: resolveDshHome(),
-    command: process.env.DSH_HARMONY_COMMAND,
-    harmony: fileURLToPath(import.meta.url),
-    official: process.env.DSH_HARMONY_OFFICIAL,
-  })
-}
 
 const args = process.argv.slice(2)
 const isPluginCommand = args[0] === 'plugin'
