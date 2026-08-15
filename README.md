@@ -38,10 +38,6 @@
 - 🧼 **不污染安装目录**：变换仅存在于运行时；卸载 Harmony 后，官方 `dsh` 和所有
   目标插件立即回到原始实现
 
-<p align="center">
-  <img src="./assets/harmony-preview-light.png" alt="DeepSeek Harness 中的 Harmony 插件排序" width="680">
-</p>
-
 ## 最短示例：修改 WebUI 主横幅
 
 官方 WebUI 没有为新会话主横幅提供独立 Slot，并且同一 locale namespace 不能由普通
@@ -165,16 +161,6 @@ dsh web
 
 第一次启动时选择 **安装并重启**。Harmony 会安装全局启动器，平滑关闭当前进程，
 在启用运行时 Patch 的情况下重启同一个 profile，并在新进程就绪后刷新 WebUI。
-
-bundle 已安装但全局启动器不存在时，WebUI 和交互式终端启动会提供四个选项：
-**安装**、**安装并重启**、**移除插件** 和 **本次忽略**。选择 **安装** 后当前进程
-会退出，用户可以自行再次启动 `dsh`。只有重启后的进程已经加载 Patch Hook，才会
-提供 `harmony` 服务，因此依赖它的插件不会在尚未修补的运行时中启动。
-
-如果之后安装或升级官方包，导致它重新取得 `dsh` 命令，Harmony 的引导插件会在
-下一次正常启动 profile 时恢复 shim。WebUI 会显示重启横幅；点击 **立刻重启**
-会先平滑关闭当前 Loader Tree，再通过 Harmony 运行相同命令，并在新进程就绪后
-刷新页面。已经运行的 Node 进程不会在启动途中切换启动器。
 
 每次启动都会在 Harness 插件加载前，收集所选 profile 已安装依赖中声明的所有
 Patch。后续 Loader 更新发现的新 Patch 提供者也会立即被收集，其目标条目会重新
