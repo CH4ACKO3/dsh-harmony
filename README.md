@@ -1,5 +1,7 @@
 <p align="center"><strong>简体中文</strong> | <a href="./README.en.md">English</a></p>
 
+[![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
+
 <p align="center">
   <img src="./assets/harmony-icon.png" alt="dsh-harmony" width="180"><br>
   <strong>dsh-harmony</strong><br>
