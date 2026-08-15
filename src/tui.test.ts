@@ -12,15 +12,19 @@ test('TUI shows provider order, declarations, and the conflicting pair', () => {
   const output = renderHarmonyTui({
     dir: '/profiles/web',
     order: ['late', 'early'],
+    disabled: [],
     plugins: [
-      { name: 'early', dir: '/early', patches: ['patch.cjs'], before: ['late'], after: [] },
-      { name: 'late', dir: '/late', patches: ['patch.cjs'], before: [], after: [] },
+      { name: 'early', dir: '/early', patches: ['patch.cjs'], before: ['late'], after: [], conflicts: ['late'] },
+      { name: 'late', dir: '/late', patches: ['patch.cjs'], before: [], after: [], conflicts: [] },
     ],
+    incompatibilities: [{ declaredBy: 'early', conflictsWith: 'late' }],
   }, 0, '')
 
   expect(output).toContain('profile: web')
   expect(output).toContain('early 必须在 late 前')
   expect(output).toContain('前于 late')
+  expect(output).toContain('early 声明与 late 不兼容')
+  expect(output).toContain('仅警告，插件仍会加载')
 })
 
 test('TUI rejects a conflicting order before changing harmony.json', async () => {

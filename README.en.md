@@ -162,6 +162,16 @@ dsh plugin --profile web add ./my-plugin
 Open **Settings → Harmony** in WebUI, or run `dsh harmony`, to confirm that the
 runtime is active.
 
+### Embedded desktop Hosts
+
+A carrier that supervises its own DSH Host, such as a desktop application, can
+launch `dsh-harmony/bin` as its Node entry and provide the absolute built-in DSH
+entry through `DSH_DESKTOP_BUILTIN_HOST_ENTRY`. Harmony installs its hooks and
+then forwards the original CLI arguments to that exact entry. Embedded mode
+does not set `DSH_HARMONY_COMMAND`, so it never installs or modifies the system
+global `dsh` shim. `DSH_HARMONY_OFFICIAL` remains the higher-priority explicit
+override for Harmony-owned launchers.
+
 ### Plugin first
 
 Harmony is also a normal Harness bundle and can be discovered and installed
@@ -264,7 +274,8 @@ Add patch files to the provider plugin's `package.json`:
     "harmony": {
       "patches": ["./patches/answer.patch.cjs"],
       "after": ["base-patches"],
-      "before": ["ui-patches"]
+      "before": ["ui-patches"],
+      "conflicts": ["legacy-patches"]
     }
   }
 }
@@ -333,6 +344,13 @@ refer to other provider package names. They are sorting constraints, not npm or
 Cordis dependencies. The manual list remains authoritative; the TUI highlights
 violations and its automatic sort finds a minimum-violation order while keeping
 the existing order when solutions tie.
+
+`conflicts` also contains provider package names, but it only declares an
+incompatibility warning. A one-sided declaration is sufficient, and the warning
+appears only while both packages are enabled Harmony Patch providers in the
+current Loader Tree. It never blocks installation, startup, order saves, Patch
+application, or hot reload, and it does not affect automatic sorting. Disabling
+either provider with `<provider>/*` removes the warning.
 
 Patches from each provider run in declaration order. Providers run in the
 profile's manual order, and every later patch receives the source produced by

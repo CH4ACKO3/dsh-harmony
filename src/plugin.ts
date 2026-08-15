@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { publishRuntimeAddress } from './control.js'
 import { registerActiveRuntimeRoute, waitForRuntimeChoice } from './installer.js'
+import type { HarmonyReloadStatus } from './installer.js'
 import {
   beginProfileUpdate,
   beginPluginUpdate,
@@ -37,8 +38,9 @@ function profileView(ctx: any) {
     dir: profile.dir,
     order: profile.order,
     disabled: profile.disabled,
+    incompatibilities: profile.incompatibilities,
     plugins: profile.plugins.map(({
-      name, version, description, patches, before, after, author, contributors, homepage, bugs, license,
+      name, version, description, patches, before, after, conflicts, author, contributors, homepage, bugs, license,
     }) => ({
       name,
       version,
@@ -47,6 +49,7 @@ function profileView(ctx: any) {
       patchCount: patchCounts.get(name) ?? 0,
       before,
       after,
+      conflicts,
       author,
       contributors,
       homepage,
@@ -159,7 +162,6 @@ export async function apply(ctx: any): Promise<void> {
   if (process.env.DSH_HARMONY_ACTIVE !== '1') return waitForRuntimeChoice(ctx)
 
   ctx.provide('harmony', {})
-  registerActiveRuntimeRoute(ctx)
   const pendingHost = new Set<string>()
   const pendingClient = new Set<string>()
   let pendingGeneration = 0
@@ -167,9 +169,40 @@ export async function apply(ctx: any): Promise<void> {
   let queued = false
   let updateTail = Promise.resolve()
   const reloadingEntries = new Set<any>()
+  let incompatibilitySignature = ''
+  let reloadSequence = 0
+  let reloadStatus: HarmonyReloadStatus = { sequence: 0, state: 'idle' }
+
+  registerActiveRuntimeRoute(ctx, () => reloadStatus)
+
+  const warnIncompatibilities = (profile: ProfileTransaction['profile']): void => {
+    const signature = JSON.stringify(profile.incompatibilities)
+    if (signature === incompatibilitySignature) return
+    incompatibilitySignature = signature
+    for (const item of profile.incompatibilities) {
+      ctx.logger.warn?.(
+        `dsh-harmony: ${JSON.stringify(item.declaredBy)} declares ${JSON.stringify(item.conflictsWith)} incompatible; both remain loaded`,
+      )
+    }
+  }
 
   const enqueueUpdate = <T>(task: () => Promise<T>): Promise<T> => {
-    const result = updateTail.then(task)
+    const result = updateTail.then(async () => {
+      const sequence = ++reloadSequence
+      reloadStatus = { sequence, state: 'reloading' }
+      try {
+        const value = await task()
+        reloadStatus = { sequence, state: 'succeeded' }
+        return value
+      } catch (error) {
+        reloadStatus = {
+          sequence,
+          state: 'failed',
+          error: error instanceof Error ? error.message : String(error),
+        }
+        throw error
+      }
+    })
     updateTail = result.then(() => undefined, () => undefined)
     return result
   }
@@ -206,6 +239,7 @@ export async function apply(ctx: any): Promise<void> {
         rebuiltClients.push(packageName)
       }
       transaction.commit()
+      warnIncompatibilities(transaction.profile)
     } catch (error) {
       const rollbackErrors = []
       try {

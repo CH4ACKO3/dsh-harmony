@@ -150,6 +150,14 @@ dsh plugin --profile web add ./my-plugin
 
 在 WebUI 中打开 **设置 → Harmony**，或运行 `dsh harmony`，即可确认运行时已经激活。
 
+### 嵌入桌面 Host
+
+Desktop 等自行管理 DSH Host 的载体可以把 `dsh-harmony/bin` 作为 Node 入口启动，并通过
+`DSH_DESKTOP_BUILTIN_HOST_ENTRY` 提供其内置官方 DSH 的绝对入口路径。Harmony 会先安装
+Hook，再把原始 CLI 参数交给该入口。嵌入模式不设置 `DSH_HARMONY_COMMAND`，因此不会安装
+或修改系统全局 `dsh` shim。`DSH_HARMONY_OFFICIAL` 可用于显式指定官方入口，并具有更高
+优先级。
+
 ### 先安装插件
 
 Harmony 同时也是一个普通的 Harness bundle，可以通过已有的插件命令发现并安装：
@@ -228,7 +236,8 @@ dsh harmony inspect some-dsh-plugin --file lib/index.js
     "harmony": {
       "patches": ["./patches/answer.patch.cjs"],
       "after": ["base-patches"],
-      "before": ["ui-patches"]
+      "before": ["ui-patches"],
+      "conflicts": ["legacy-patches"]
     }
   }
 }
@@ -290,6 +299,11 @@ Handler 也按 Patch 顺序运行。源码 Patch 和语义 Patch 共用同一个
 `before` 和 `after` 属于提供者的 `dsh.harmony` 声明，引用其他 Patch 提供者的包名。
 它们是排序约束，而不是 npm 或 Cordis 依赖。手动列表始终是最终依据；TUI 会高亮
 违反的约束，自动排序则会寻找违规最少的顺序，并在结果并列时保持现有顺序。
+
+`conflicts` 同样引用其他 Patch 提供者的包名，但只表达不兼容告警。单方面声明即可；
+只有双方都是当前 Loader Tree 中启用的 Harmony Patch 提供者时才会显示。它不会阻止
+安装、启动、排序保存、Patch 应用或热重载，也不参与自动排序。通过 `<provider>/*`
+停用任意一方后，该条告警会消失。
 
 每个提供者内部的 Patch 按声明顺序运行，提供者按 profile 的手动顺序运行，每个后续
 Patch 都会收到先前 Patch 产生的源码。如果较早的提供者删除了后续提供者所选择的

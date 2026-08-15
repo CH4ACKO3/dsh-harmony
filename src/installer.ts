@@ -6,7 +6,7 @@ import { createInterface } from 'node:readline/promises'
 import { fileURLToPath } from 'node:url'
 
 type RuntimeAction = 'install' | 'install-restart' | 'remove' | 'ignore'
-type RuntimeState = 'missing' | 'working' | 'installed' | 'removed' | 'ignored' | 'error'
+type RuntimeState = 'missing' | 'desktop-inactive' | 'working' | 'installed' | 'removed' | 'ignored' | 'error'
 
 interface RuntimeStatus {
   state: RuntimeState
@@ -109,7 +109,8 @@ async function terminalChoice(): Promise<RuntimeAction> {
 export async function waitForRuntimeChoice(ctx: any): Promise<void> {
   if (process.env.DSH_HARMONY_IGNORE_ONCE === '1') return
 
-  let status: RuntimeStatus = { state: 'missing', bootId: process.pid }
+  const desktopInactive = process.env.DSH_DESKTOP === '1'
+  let status: RuntimeStatus = { state: desktopInactive ? 'desktop-inactive' : 'missing', bootId: process.pid }
   let finish!: () => void
   const choice = new Promise<void>(resolve => { finish = resolve })
 
@@ -132,7 +133,11 @@ export async function waitForRuntimeChoice(ctx: any): Promise<void> {
       if (action === 'install') return {}
       return { restartCommand: command }
     } catch (error) {
-      status = { state: 'error', bootId: process.pid, error: error instanceof Error ? error.message : String(error) }
+      status = {
+        state: desktopInactive ? 'desktop-inactive' : 'error',
+        bootId: process.pid,
+        error: error instanceof Error ? error.message : String(error),
+      }
       return {}
     }
   }
@@ -150,7 +155,8 @@ export async function waitForRuntimeChoice(ctx: any): Promise<void> {
       const chunks: Buffer[] = []
       for await (const chunk of request) chunks.push(Buffer.from(chunk))
       const { action } = JSON.parse(Buffer.concat(chunks).toString()) as { action: RuntimeAction }
-      if (!['install', 'install-restart', 'remove', 'ignore'].includes(action)) {
+      if (!['install', 'install-restart', 'remove', 'ignore'].includes(action)
+        || (desktopInactive && (action === 'install' || action === 'install-restart'))) {
         response.writeHead(400)
         response.end()
         return
@@ -179,12 +185,22 @@ export async function waitForRuntimeChoice(ctx: any): Promise<void> {
   await choice
 }
 
-export function registerActiveRuntimeRoute(ctx: any): void {
+export interface HarmonyReloadStatus {
+  sequence: number
+  state: 'idle' | 'reloading' | 'succeeded' | 'failed'
+  error?: string
+}
+
+export function registerActiveRuntimeRoute(ctx: any, reloadStatus: () => HarmonyReloadStatus): void {
   ctx.inject(['webServer'], (webCtx: any) => webCtx.webServer.register({
     kind: 'exact',
     path: '/dsh-harmony/runtime',
     handler(request: any, response: any) {
-      if (request.method === 'GET') return sendJson(response, { state: 'active', bootId: process.pid })
+      if (request.method === 'GET') return sendJson(response, {
+        state: 'active',
+        bootId: process.pid,
+        reload: reloadStatus(),
+      })
       response.writeHead(405)
       response.end()
     },

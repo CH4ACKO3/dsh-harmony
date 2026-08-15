@@ -15,7 +15,10 @@ import {
 import { runHarmonyTui } from './tui.js'
 
 const require = createRequire(import.meta.url)
-const officialRequire = createRequire(process.env.DSH_HARMONY_OFFICIAL ?? import.meta.url)
+const officialEntry = process.env.DSH_HARMONY_OFFICIAL
+  ?? process.env.DSH_DESKTOP_BUILTIN_HOST_ENTRY
+  ?? require.resolve('@deepseek-ai/dsh/lib/bin.js')
+const officialRequire = createRequire(officialEntry)
 process.env.DSH_HARMONY_ACTIVE = '1'
 const { initProfile, PROFILE_TEMPLATES, resolveProfileDir } = await import(
   pathToFileURL(officialRequire.resolve('@deepseek-ai/dsh-app-boot')).href
@@ -115,4 +118,4 @@ if (!isPluginCommand && !isDefaultDump && profile !== undefined && !hasHarmonyBu
   else process.argv.splice(2, 0, '--patch', overlay)
 }
 
-await import('@deepseek-ai/dsh/lib/bin.js')
+await import(pathToFileURL(officialEntry).href)

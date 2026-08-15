@@ -11,6 +11,7 @@ function relation(provider: HarmonyProfile['plugins'][number]): string {
   const parts = []
   if (provider.before.length > 0) parts.push(`前于 ${provider.before.join(', ')}`)
   if (provider.after.length > 0) parts.push(`后于 ${provider.after.join(', ')}`)
+  if (provider.conflicts.length > 0) parts.push(`声明不兼容 ${provider.conflicts.join(', ')}`)
   return parts.join('；')
 }
 
@@ -18,6 +19,7 @@ export function renderHarmonyTui(profile: HarmonyProfile, selected: number, mess
   const byName = new Map(profile.plugins.map(plugin => [plugin.name, plugin]))
   const violations = orderViolations(profile.order, profile.plugins)
   const conflicting = new Set(violations.flatMap(item => [item.before, item.after]))
+  const incompatible = new Set(profile.incompatibilities.flatMap(item => [item.declaredBy, item.conflictsWith]))
   const lines = [
     `${ESC}1mDSH Harmony${ESC}0m  profile: ${profile.dir.split('/').at(-1)}`,
     '',
@@ -28,8 +30,10 @@ export function renderHarmonyTui(profile: HarmonyProfile, selected: number, mess
   profile.order.forEach((name, index) => {
     const provider = byName.get(name)!
     const cursor = index === selected ? `${ESC}36m▶${ESC}0m` : ' '
-    const conflict = conflicting.has(name) ? `${ESC}31m!${ESC}0m` : ' '
-    lines.push(`${cursor} ${String(index + 1).padStart(2)} ${conflict} ${name}${name === HARMONY_PLUGIN ? '  [固定]' : ''}`)
+    const warning = conflicting.has(name)
+      ? `${ESC}31m!${ESC}0m`
+      : incompatible.has(name) ? `${ESC}33m!${ESC}0m` : ' '
+    lines.push(`${cursor} ${String(index + 1).padStart(2)} ${warning} ${name}${name === HARMONY_PLUGIN ? '  [固定]' : ''}`)
     const detail = relation(provider)
     if (detail.length > 0) lines.push(`       ${ESC}2m${detail}${ESC}0m`)
   })
@@ -40,6 +44,12 @@ export function renderHarmonyTui(profile: HarmonyProfile, selected: number, mess
     lines.push(`${ESC}31m${violations.length} 条顺序约束无法由当前列表满足：${ESC}0m`)
     for (const violation of violations) {
       lines.push(`  - ${violation.before} 必须在 ${violation.after} 前（由 ${violation.declaredBy} 声明）`)
+    }
+  }
+  if (profile.incompatibilities.length > 0) {
+    lines.push('', `${ESC}33m${profile.incompatibilities.length} 条插件不兼容声明（仅警告，插件仍会加载）：${ESC}0m`)
+    for (const item of profile.incompatibilities) {
+      lines.push(`  - ${item.declaredBy} 声明与 ${item.conflictsWith} 不兼容`)
     }
   }
   if (message.length > 0) lines.push('', `${ESC}33m${message}${ESC}0m`)

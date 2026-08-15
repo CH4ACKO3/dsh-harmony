@@ -1,18 +1,17 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
 const require = createRequire(import.meta.url)
-const { installShim, resolveCommandPath } = require('../scripts/install-shim.cjs')
+const { installShim, resolveCommandPath, resolveGlobalModules } = require('../scripts/install-shim.cjs')
 const root = mkdtempSync(join(tmpdir(), 'dsh-harmony-shim-'))
 const prefix = join(root, 'prefix with spaces')
-const globalModules = process.platform === 'win32'
-  ? join(prefix, 'node_modules')
-  : join(prefix, 'lib/node_modules')
+const globalModules = resolveGlobalModules(prefix)
 const harmony = join(globalModules, 'dsh-harmony')
+const harmonySource = join(root, 'local harmony source')
 const official = join(globalModules, '@deepseek-ai/dsh/lib/bin.js')
 const command = resolveCommandPath(prefix)
 const home = join(root, 'home')
@@ -21,21 +20,25 @@ const originalPatch = '- insert:\n    - id: ordinary\n      name: ordinary-plugi
 assert.equal(resolveCommandPath('/global', 'linux'), join('/global', 'bin/dsh'))
 assert.equal(resolveCommandPath('/global', 'darwin'), join('/global', 'bin/dsh'))
 assert.equal(resolveCommandPath('/global', 'win32'), join('/global', 'dsh'))
+assert.equal(resolveGlobalModules('/global', 'linux'), join('/global', 'lib/node_modules'))
+assert.equal(resolveGlobalModules('/global', 'darwin'), join('/global', 'lib/node_modules'))
+assert.equal(resolveGlobalModules('/global', 'win32'), join('/global', 'node_modules'))
 
 mkdirSync(dirname(official), { recursive: true })
-mkdirSync(join(harmony, 'lib'), { recursive: true })
+mkdirSync(join(harmonySource, 'lib'), { recursive: true })
 mkdirSync(dirname(command), { recursive: true })
 mkdirSync(home, { recursive: true })
+symlinkSync(harmonySource, harmony, process.platform === 'win32' ? 'junction' : 'dir')
 writeFileSync(join(home, 'cordis.patch.yml'), originalPatch)
 writeFileSync(official, '#!/usr/bin/env node\nconsole.log("official")\n')
-writeFileSync(join(harmony, 'lib/bin.js'), '#!/usr/bin/env node\nconsole.log("harmony")\n')
+writeFileSync(join(harmonySource, 'lib/bin.js'), '#!/usr/bin/env node\nconsole.log("harmony")\n')
 chmodSync(official, 0o755)
 copyFileSync(official, command)
-cpSync('scripts', join(harmony, 'scripts'), { recursive: true })
-cpSync('node_modules/yaml', join(harmony, 'node_modules/yaml'), { recursive: true })
+cpSync('scripts', join(harmonySource, 'scripts'), { recursive: true })
+cpSync('node_modules/yaml', join(harmonySource, 'node_modules/yaml'), { recursive: true })
 cpSync('node_modules/js-yaml', join(globalModules, 'js-yaml'), { recursive: true })
 
-const install = spawnSync(process.execPath, [join(harmony, 'scripts/postinstall.cjs')], {
+const install = spawnSync(process.execPath, [join(harmonySource, 'scripts/postinstall.cjs')], {
   encoding: 'utf8',
   env: {
     ...process.env,

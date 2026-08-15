@@ -11,6 +11,10 @@ function resolveCommandPath(prefix, platform = process.platform) {
   return platform === 'win32' ? join(prefix, 'dsh') : join(prefix, 'bin/dsh')
 }
 
+function resolveGlobalModules(prefix, platform = process.platform) {
+  return platform === 'win32' ? join(prefix, 'node_modules') : join(prefix, 'lib/node_modules')
+}
+
 function resolveDshHome() {
   const configured = process.env.DSH_HOME?.trim()
   if (configured === undefined || configured === '') return join(homedir(), '.dsh')
@@ -142,4 +146,5 @@ module.exports = {
   installShim,
   resolveCommandPath,
   resolveDshHome,
+  resolveGlobalModules,
 }

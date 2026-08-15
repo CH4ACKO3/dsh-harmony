@@ -464,7 +464,11 @@ test('applies providers in the persisted manual order', () => {
   writeFileSync(join(target, 'lib/index.js'), 'export const value = 1\n')
   writeFileSync(join(first, 'package.json'), JSON.stringify({
     name: 'first-provider',
-    dsh: { harmony: { patches: ['./patch.cjs'], after: ['second-provider'] } },
+    dsh: { harmony: {
+      patches: ['./patch.cjs'],
+      after: ['second-provider'],
+      conflicts: ['second-provider'],
+    } },
   }))
   writeFileSync(join(second, 'package.json'), JSON.stringify({
     name: 'second-provider',
@@ -492,6 +496,10 @@ module.exports = {
   readFileSync(join(target, 'lib/index.js'), 'utf8')
 
   expect((globalThis as any).__harmonyOrder).toEqual(['second', 'first'])
+  expect(currentProfile().incompatibilities).toEqual([{
+    declaredBy: 'first-provider',
+    conflictsWith: 'second-provider',
+  }])
 })
 
 test('provides harmony and reloads a newly patched loader entry', async () => {
@@ -573,15 +581,31 @@ module.exports = {
 test('reconciles the existing Loader tree when Harmony activates', async () => {
   const profile = join(root, 'initial-loader-profile')
   const provider = join(profile, 'node_modules', 'initial-loader-provider')
+  const incompatible = join(profile, 'node_modules', 'incompatible-loader-provider')
   const target = join(root, 'initial-loader-target')
   mkdirSync(provider, { recursive: true })
+  mkdirSync(incompatible, { recursive: true })
   mkdirSync(join(target, 'lib'), { recursive: true })
-  writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: { 'initial-loader-provider': '1' } }))
+  writeFileSync(join(profile, 'package.json'), JSON.stringify({
+    dependencies: { 'initial-loader-provider': '1', 'incompatible-loader-provider': '1' },
+  }))
   writeFileSync(join(provider, 'package.json'), JSON.stringify({
     name: 'initial-loader-provider',
-    dsh: { harmony: { patches: ['./patch.cjs'] } },
+    dsh: { harmony: { patches: ['./patch.cjs'], conflicts: ['incompatible-loader-provider'] } },
   }))
   writeFileSync(join(provider, 'patch.cjs'), `
+module.exports = {
+  id: 'test-patch',
+  target: { package: 'initial-loader-target', files: ['lib/index.js'] },
+  select: 'SourceFile',
+  apply() {},
+}
+`)
+  writeFileSync(join(incompatible, 'package.json'), JSON.stringify({
+    name: 'incompatible-loader-provider',
+    dsh: { harmony: { patches: ['./patch.cjs'] } },
+  }))
+  writeFileSync(join(incompatible, 'patch.cjs'), `
 module.exports = {
   id: 'test-patch',
   target: { package: 'initial-loader-target', files: ['lib/index.js'] },
@@ -611,12 +635,14 @@ module.exports = {
   const entries = [
     targetEntry,
     { options: { name: 'initial-loader-provider' } },
+    { options: { name: 'incompatible-loader-provider' } },
     { options: { name: 'dsh-harmony' } },
   ]
   const disposers: (() => void)[] = []
+  const warnings: string[] = []
   applyHarmonyPlugin({
     provide() {},
-    logger: { error() {} },
+    logger: { error() {}, warn(message: string) { warnings.push(message) } },
     on() {},
     effect(start: () => () => void) { disposers.push(start()) },
     inject(services: string[], start: (ctx: any) => () => void) {
@@ -631,6 +657,9 @@ module.exports = {
   await new Promise<void>(resolve => setImmediate(resolve))
   await new Promise<void>(resolve => setImmediate(resolve))
   expect(started).toEqual([nextPlugin])
+  expect(warnings).toEqual([
+    'dsh-harmony: "initial-loader-provider" declares "incompatible-loader-provider" incompatible; both remain loaded',
+  ])
   for (const dispose of disposers) dispose()
 })
 
@@ -1501,17 +1530,24 @@ module.exports = [{
     writeHead(status: number) { this.status = status },
     end(body = '') { this.body = body },
   })
+  const runtimeStatus = async () => {
+    const result = response()
+    await routes.get('/dsh-harmony/runtime')({ method: 'GET' }, result)
+    return JSON.parse(result.body).reload
+  }
   const desired = ['dsh-harmony', 'web-transaction-target', 'web-transaction-provider']
   failNext = true
   const failed = response()
   await routes.get('/dsh-harmony/order')(request(desired), failed)
   expect(failed.status).toBe(500)
+  expect(await runtimeStatus()).toMatchObject({ state: 'failed', error: 'transaction reload failed' })
   expect(readFileSync(join(profile, 'harmony.json'), 'utf8')).toBe(stateBefore)
   expect(entry.fiber.runtime.callback).toBe(nextPlugin)
 
   const succeeded = response()
   await routes.get('/dsh-harmony/order')(request(desired), succeeded)
   expect(succeeded.status).toBe(200)
+  expect(await runtimeStatus()).toMatchObject({ state: 'succeeded' })
   expect(JSON.parse(succeeded.body).order).toEqual(desired)
   expect(JSON.parse(succeeded.body).plugins.find((plugin: any) => plugin.name === 'web-transaction-provider')).toMatchObject({
     author: 'Patch Author', patchCount: 3,
@@ -1538,6 +1574,7 @@ module.exports = [{
   const second = response()
   const firstUpdate = routes.get('/dsh-harmony/order')(request(JSON.parse(stateBefore).order), first)
   await new Promise<void>(resolve => setImmediate(resolve))
+  expect(await runtimeStatus()).toMatchObject({ state: 'reloading' })
   const secondUpdate = routes.get('/dsh-harmony/order')(request(desired), second)
   releaseStart()
   await Promise.all([firstUpdate, secondUpdate])

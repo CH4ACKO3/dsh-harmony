@@ -9,6 +9,7 @@ export interface InstalledPlugin extends HarmonyProvider {
   version: string
   description: string
   patches: string[]
+  conflicts: string[]
   author: string
   contributors: string[]
   homepage: string
@@ -16,11 +17,17 @@ export interface InstalledPlugin extends HarmonyProvider {
   license: string
 }
 
+export interface HarmonyIncompatibility {
+  declaredBy: string
+  conflictsWith: string
+}
+
 export interface HarmonyProfile {
   dir: string
   order: string[]
   disabled: string[]
   plugins: InstalledPlugin[]
+  incompatibilities: HarmonyIncompatibility[]
 }
 
 export const HARMONY_STATE_FILE = 'harmony.json'
@@ -65,7 +72,7 @@ function installedPlugins(profileDir: string, requested?: string[]): InstalledPl
       homepage?: string
       bugs?: string | { url?: string }
       license?: string
-      dsh?: { harmony?: { patches?: string[]; before?: string[]; after?: string[] } }
+      dsh?: { harmony?: { patches?: string[]; before?: string[]; after?: string[]; conflicts?: string[] } }
     }
     const harmony = manifest.dsh?.harmony
     plugins.push({
@@ -76,6 +83,7 @@ function installedPlugins(profileDir: string, requested?: string[]): InstalledPl
       patches: harmony?.patches ?? [],
       before: harmony?.before ?? [],
       after: harmony?.after ?? [],
+      conflicts: harmony?.conflicts ?? [],
       author: person(manifest.author),
       contributors: (manifest.contributors ?? []).map(person).filter(Boolean),
       homepage: manifest.homepage ?? '',
@@ -84,6 +92,19 @@ function installedPlugins(profileDir: string, requested?: string[]): InstalledPl
     })
   }
   return plugins
+}
+
+export function providerIncompatibilities(
+  plugins: InstalledPlugin[],
+  disabled: string[],
+): HarmonyIncompatibility[] {
+  const disabledKeys = new Set(disabled)
+  const active = new Set(plugins
+    .filter(plugin => plugin.patches.length > 0 && !disabledKeys.has(`${plugin.name}/*`))
+    .map(plugin => plugin.name))
+  return plugins.flatMap(plugin => !active.has(plugin.name) ? [] : plugin.conflicts
+    .filter(name => name !== plugin.name && active.has(name))
+    .map(conflictsWith => ({ declaredBy: plugin.name, conflictsWith })))
 }
 
 export interface HarmonyState {
@@ -123,5 +144,11 @@ export function synchronizeHarmonyProfile(profileDir: string, requested?: string
   if (persist && (order.length !== current.length || order.some((name, index) => name !== current[index]))) {
     saveHarmonyState(profileDir, { ...state, order })
   }
-  return { dir: profileDir, order, disabled: state.disabled, plugins }
+  return {
+    dir: profileDir,
+    order,
+    disabled: state.disabled,
+    plugins,
+    incompatibilities: providerIncompatibilities(plugins, state.disabled),
+  }
 }

@@ -50,7 +50,7 @@ if (process.platform === 'win32') {
   chmodSync(join(fakeBin, 'npm'), 0o755)
 }
 
-const port = await new Promise((resolvePort, reject) => {
+const freePort = () => new Promise((resolvePort, reject) => {
   const server = createServer()
   server.once('error', reject)
   server.listen(0, '127.0.0.1', () => {
@@ -58,36 +58,65 @@ const port = await new Promise((resolvePort, reject) => {
     server.close(() => resolvePort(address.port))
   })
 })
-const child = spawn(process.execPath, [official, 'web', '--port', String(port)], {
-  env: {
-    ...process.env,
-    DSH_HOME: home,
-    PATH: `${fakeBin}${delimiter}${process.env.PATH}`,
-    DSH_HARMONY_ACTIVE: '',
-  },
-  stdio: ['ignore', 'pipe', 'pipe'],
-})
-const childExit = new Promise(resolveExit => child.once('exit', resolveExit))
-let output = ''
-child.stdout.on('data', chunk => { output += chunk })
-child.stderr.on('data', chunk => { output += chunk })
 
-const url = `http://127.0.0.1:${port}`
-const status = await new Promise((resolveStatus, reject) => {
-  const deadline = Date.now() + 10_000
-  const poll = async () => {
-    try {
-      const response = await fetch(`${url}/dsh-harmony/runtime`)
-      if (response.ok) return resolveStatus(await response.json())
-    } catch {}
-    if (Date.now() >= deadline) return reject(new Error(`runtime prompt did not start:\n${output}`))
-    setTimeout(poll, 100)
-  }
-  void poll()
+async function startRuntime(env = {}) {
+  const port = await freePort()
+  const child = spawn(process.execPath, [official, 'web', '--port', String(port)], {
+    env: {
+      ...process.env,
+      DSH_HOME: home,
+      PATH: `${fakeBin}${delimiter}${process.env.PATH}`,
+      DSH_HARMONY_ACTIVE: '',
+      ...env,
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  const childExit = new Promise(resolveExit => child.once('exit', resolveExit))
+  let output = ''
+  child.stdout.on('data', chunk => { output += chunk })
+  child.stderr.on('data', chunk => { output += chunk })
+  return { child, childExit, url: `http://127.0.0.1:${port}`, output: () => output }
+}
+
+function waitForStatus(runtime) {
+  return new Promise((resolveStatus, reject) => {
+    const deadline = Date.now() + 10_000
+    const poll = async () => {
+      try {
+        const response = await fetch(`${runtime.url}/dsh-harmony/runtime`)
+        if (response.ok) return resolveStatus(await response.json())
+      } catch {}
+      if (Date.now() >= deadline) return reject(new Error(`runtime prompt did not start:\n${runtime.output()}`))
+      setTimeout(poll, 100)
+    }
+    void poll()
+  })
+}
+
+const desktop = await startRuntime({ DSH_DESKTOP: '1' })
+assert.equal((await waitForStatus(desktop)).state, 'desktop-inactive')
+const blockedInstall = await fetch(`${desktop.url}/dsh-harmony/runtime`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ action: 'install' }),
 })
+assert.equal(blockedInstall.status, 400)
+assert.equal(existsSync(npmLog), false)
+const ignored = await fetch(`${desktop.url}/dsh-harmony/runtime`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ action: 'ignore' }),
+})
+assert.equal((await ignored.json()).state, 'ignored')
+desktop.child.kill()
+await desktop.childExit
+
+const runtime = await startRuntime()
+const url = runtime.url
+const status = await waitForStatus(runtime)
 assert.equal(status.state, 'missing')
 const client = await fetch(`${url}/plugins/dsh-harmony/client.js`)
-assert.equal(client.ok, true, output)
+assert.equal(client.ok, true, runtime.output())
 assert.match(await client.text(), /Install and restart/)
 assert.equal(existsSync(dependentMarker), false)
 
@@ -99,6 +128,6 @@ const response = await fetch(`${url}/dsh-harmony/runtime`, {
 assert.equal(response.ok, true)
 assert.equal((await response.json()).state, 'installed')
 assert.equal(readFileSync(npmLog, 'utf8'), `install --global dsh-harmony@${harmonyVersion}\nprefix --global\n`)
-assert.equal(await childExit, 0, output)
+assert.equal(await runtime.childExit, 0, runtime.output())
 assert.equal(existsSync(dependentMarker), false)
 rmSync(root, { recursive: true })

@@ -15,7 +15,13 @@ import type {
   HarmonySemanticPatch,
   HarmonySourcePatch,
 } from './index.js'
-import { HARMONY_STATE_FILE, pinHarmonyOrder, saveHarmonyState, synchronizeHarmonyProfile } from './profile.js'
+import {
+  HARMONY_STATE_FILE,
+  pinHarmonyOrder,
+  providerIncompatibilities,
+  saveHarmonyState,
+  synchronizeHarmonyProfile,
+} from './profile.js'
 import type { HarmonyProfile } from './profile.js'
 
 const nativeReadFileSync = fs.readFileSync.bind(fs)
@@ -361,7 +367,17 @@ export function synchronizeProfile(profileDir: string, installed?: string[]): Ha
 
 export function currentProfile(): HarmonyProfile {
   const profile = synchronizeHarmonyProfile(activeProfileDir!, undefined, false)
-  return { ...profile, order: [...providerOrder], disabled: [...disabledPatchKeys] }
+  const disabled = [...disabledPatchKeys]
+  const loaded = new Set(providerOrder)
+  return {
+    ...profile,
+    order: [...providerOrder],
+    disabled,
+    incompatibilities: providerIncompatibilities(
+      profile.plugins.filter(plugin => loaded.has(plugin.name)),
+      disabled,
+    ),
+  }
 }
 
 export function synchronizePluginOrder(installed: string[]): HarmonyProfile {

@@ -59,6 +59,27 @@ dsh harmony status
 `dsh harmony` opens the ordering TUI for the Web profile. In WebUI, Harmony is
 available under **Settings → Harmony**.
 
+## Embed in Desktop or another Host carrier
+
+Resolve the public `dsh-harmony/bin` entry and launch it with the same `web` and
+following arguments that the carrier would pass to the official DSH CLI. Set
+this child-process environment variable at the same time:
+
+```text
+DSH_DESKTOP_BUILTIN_HOST_ENTRY=/absolute/path/to/@deepseek-ai/dsh/lib/bin.js
+```
+
+Harmony resolves `@deepseek-ai/dsh-app-boot` from that official entry, installs
+its module and file hooks, and finally imports that exact entry.
+`DSH_HARMONY_OFFICIAL` is the explicit override used by Harmony-owned shims and
+takes precedence when both variables are present.
+
+Do not set `DSH_HARMONY_COMMAND` in embedded mode. Harmony then creates no
+bootstrap and never installs, replaces, or restores the system-global `dsh`
+command. The carrier continues to own the Node executable, Host child process,
+working directory, exit handling, and readiness protocol; Harmony only wraps
+the DSH CLI entry.
+
 ## Install through `dsh plugin`
 
 This path starts from an existing official `dsh` installation:
@@ -282,7 +303,8 @@ Declare CommonJS Patch modules in the provider's `package.json`:
     "harmony": {
       "patches": ["./patches/answer.patch.cjs"],
       "after": ["base-patches"],
-      "before": ["ui-patches"]
+      "before": ["ui-patches"],
+      "conflicts": ["legacy-patches"]
     }
   }
 }
@@ -311,6 +333,10 @@ Source Patches use TSQuery and MagicString. Semantic Patches target a named
 function or class method and use `before`, `after`, `around`, or `replace`.
 Browser `lib/client.js` targets must use source Patches because semantic handlers
 execute in the Node process.
+
+`conflicts` lists Harmony Patch provider package names that should produce a
+warning when both sides are enabled. The declaration does not block installation,
+loading, Patch application, or hot reload, and it does not affect sorting.
 
 Use DSH's existing dependency mechanism when the provider itself must not start
 without Harmony:

@@ -12,7 +12,10 @@ test('profile order appends installed providers and removes uninstalled provider
   for (const name of ['first', 'second']) {
     writeFileSync(join(profile, 'node_modules', name, 'package.json'), JSON.stringify({
       name,
-      dsh: { harmony: { patches: ['./patch.cjs'] } },
+      dsh: { harmony: {
+        patches: ['./patch.cjs'],
+        conflicts: name === 'first' ? ['second', 'ordinary', 'first'] : [],
+      } },
     }))
   }
   writeFileSync(join(profile, 'node_modules', 'ordinary', 'package.json'), JSON.stringify({
@@ -30,6 +33,10 @@ test('profile order appends installed providers and removes uninstalled provider
 
   const synchronized = synchronizeHarmonyProfile(profile)
   expect(synchronized.order).toEqual(['second', 'first', 'ordinary'])
+  expect(synchronized.plugins.find(plugin => plugin.name === 'first')?.conflicts).toEqual([
+    'second', 'ordinary', 'first',
+  ])
+  expect(synchronized.incompatibilities).toEqual([{ declaredBy: 'first', conflictsWith: 'second' }])
   expect(synchronized.plugins.find(plugin => plugin.name === 'ordinary')).toMatchObject({
     patches: [],
     version: '1.2.3',
@@ -40,6 +47,16 @@ test('profile order appends installed providers and removes uninstalled provider
     bugs: 'https://example.com/issues',
     license: 'MIT',
   })
+
+  writeFileSync(join(profile, 'harmony.json'), JSON.stringify({ order: synchronized.order, disabled: ['first/*'] }))
+  expect(synchronizeHarmonyProfile(profile).incompatibilities).toEqual([])
+  writeFileSync(join(profile, 'harmony.json'), JSON.stringify({ order: synchronized.order, disabled: ['second/*'] }))
+  expect(synchronizeHarmonyProfile(profile).incompatibilities).toEqual([])
+  writeFileSync(join(profile, 'harmony.json'), JSON.stringify({ order: synchronized.order, disabled: ['first/test'] }))
+  expect(synchronizeHarmonyProfile(profile).incompatibilities).toEqual([{
+    declaredBy: 'first', conflictsWith: 'second',
+  }])
+  writeFileSync(join(profile, 'harmony.json'), JSON.stringify({ order: synchronized.order, disabled: [] }))
 
   writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: { first: '1' } }))
   rmSync(join(profile, 'node_modules', 'second'), { recursive: true })

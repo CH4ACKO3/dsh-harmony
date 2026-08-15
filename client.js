@@ -15,6 +15,7 @@ window.__ModuleLoader__.load({
 .dshHarmonyTab:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px}
 .dshHarmonyHeading{margin:0;font-size:18px;line-height:26px;font-weight:600}
 .dshHarmonyIntro{max-width:68ch;margin:2px 0 0;color:var(--dsw-alias-label-tertiary);font-size:13px;line-height:20px}
+.dshHarmonyWarning{margin:0;padding:8px 10px;border:1px solid rgba(217,119,6,.24);border-radius:8px;background:rgba(217,119,6,.1);color:var(--dsw-alias-label-secondary);font-size:12px;line-height:19px}
 .dshHarmonyWorkspace{flex:1;min-height:0;display:grid;grid-template-columns:minmax(210px,2fr) minmax(0,3fr);gap:14px}
 .dshHarmonyList{min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:2px;margin:0;padding:6px;list-style:none;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-layer-1)}
 .dshHarmonyRow{width:100%;min-height:44px;display:flex;align-items:center;gap:9px;padding:8px 9px;border:0;border-radius:9px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:grab;user-select:none;touch-action:none}
@@ -89,8 +90,12 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
 .dshHarmonyRuntimeError{color:var(--dsw-alias-state-error-primary)!important;overflow-wrap:anywhere}
 .dshHarmonyRuntimeActions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-top:20px}
 .dshHarmonyDanger{color:var(--dsw-alias-state-error-primary)}
+.dshHarmonyToast{position:fixed;z-index:1200;top:24px;left:50%;display:flex;align-items:center;gap:9px;max-width:min(560px,calc(100vw - 32px));padding:10px 14px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);box-shadow:var(--dsw-shadow-lv2);font-size:13px;line-height:20px;transform:translateX(-50%)}
+.dshHarmonyToastDot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--dsw-alias-state-business-primary)}
+.dshHarmonyToast[data-state=failed] .dshHarmonyToastDot{background:var(--dsw-alias-state-error-primary)}
 @media(max-width:680px){.dshHarmonyWorkspace,.dshHarmonyPatchWorkspace{grid-template-columns:1fr;overflow-y:auto}.dshHarmonyList,.dshHarmonyPatchList{min-height:220px;max-height:260px}.dshHarmonyDetail,.dshHarmonyPatchDetail{overflow:visible}.dshHarmonySkeleton{grid-template-columns:1fr}}
-@media(prefers-reduced-motion:no-preference){.dshHarmonyRow{transition:background-color .16s ease,opacity .16s ease}}
+@media(prefers-reduced-motion:no-preference){.dshHarmonyRow{transition:background-color .16s ease,opacity .16s ease}.dshHarmonyToast{animation:dshHarmonyToastIn .18s ease-out}}
+@keyframes dshHarmonyToastIn{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1;transform:translate(-50%,0)}}
 `
     const styleId = 'dsh-harmony/client.css'
     if (!document.querySelector(`style[data-plugin-css="${styleId}"]`)) {
@@ -141,6 +146,8 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         noDescription: '这个插件没有提供介绍。',
         before: '需要位于这些插件之前',
         after: '需要位于这些插件之后',
+        conflicts: '声明不兼容',
+        incompatibilityWarning: '检测到插件不兼容声明；这些插件仍会正常加载：',
         noConstraints: '没有声明 Harmony 顺序约束。',
         harmony: 'Harmony',
         fixed: '固定',
@@ -157,9 +164,14 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         cancel: '取消',
         runtimeTitle: '需要安装 Harmony 启动器',
         runtimeBody: '插件已经添加到当前配置，但这个 dsh 进程尚未启用 Harmony。Patch 只有在启动器安装并重新启动 dsh 后才会生效。',
+        runtimeDesktopTitle: 'Desktop 尚未通过 Harmony 启动',
+        runtimeDesktopBody: '请配置 Desktop Host 入口，或升级到支持自定义 Host 入口的 Desktop 版本。安装全局启动器不会修改 Desktop 内置 Host。',
         runtimeInstalled: '启动器已安装。下次启动 dsh 时将自动启用 Harmony。',
         runtimeWorking: '正在处理…',
         runtimeError: '操作失败',
+        reloadStarting: 'Harmony 正在重载',
+        reloadSucceeded: 'Harmony 重载成功',
+        reloadFailed: 'Harmony 重载失败',
         install: '安装',
         installRestart: '安装并重启',
         removePlugin: '移除插件',
@@ -205,6 +217,8 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         noDescription: 'This plugin does not provide a description.',
         before: 'Must load before',
         after: 'Must load after',
+        conflicts: 'Declares incompatible',
+        incompatibilityWarning: 'Plugin incompatibilities were declared; all plugins remain loaded:',
         noConstraints: 'No Harmony order constraints declared.',
         harmony: 'Harmony',
         fixed: 'Pinned',
@@ -221,9 +235,14 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         cancel: 'Cancel',
         runtimeTitle: 'Harmony launcher required',
         runtimeBody: 'The plugin is present in this profile, but Harmony is not active in this dsh process. Patches take effect only after the launcher is installed and dsh restarts.',
+        runtimeDesktopTitle: 'Desktop is not running through Harmony',
+        runtimeDesktopBody: 'Configure the Desktop Host entry, or upgrade to a Desktop version that supports a custom Host entry. Installing the global launcher does not change the Host bundled with Desktop.',
         runtimeInstalled: 'The launcher is installed. Harmony will activate the next time dsh starts.',
         runtimeWorking: 'Working…',
         runtimeError: 'The operation failed',
+        reloadStarting: 'Harmony is reloading',
+        reloadSucceeded: 'Harmony reloaded successfully',
+        reloadFailed: 'Harmony reload failed',
         install: 'Install',
         installRestart: 'Install and restart',
         removePlugin: 'Remove plugin',
@@ -252,7 +271,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
           .then(setStatus)
           .catch(() => {})
       }, [])
-      useEffect(() => { if (status?.state === 'missing') primary.current?.focus() }, [status?.state])
+      useEffect(() => { if (status?.state === 'missing' || status?.state === 'desktop-inactive') primary.current?.focus() }, [status?.state])
 
       const choose = async action => {
         setBusy(true)
@@ -282,7 +301,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
           }
           window.setTimeout(poll, 300)
         } catch (reason) {
-          setStatus({ state: 'error', bootId: status.bootId, error: reason instanceof Error ? reason.message : String(reason) })
+          setStatus({ state: status.state === 'desktop-inactive' ? 'desktop-inactive' : 'error', bootId: status.bootId, error: reason instanceof Error ? reason.message : String(reason) })
         } finally {
           if (!polling) setBusy(false)
         }
@@ -290,19 +309,76 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
 
       if (dismissed || status === null || status.state === 'active' || status.state === 'ignored' || status.state === 'removed') return null
       const installed = status.state === 'installed'
+      const desktopInactive = status.state === 'desktop-inactive'
       return h('div', { className: 'dshHarmonyRuntimeLayer', role: 'presentation' },
         h('section', { className: 'dshHarmonyRuntimeDialog', role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'dsh-harmony-runtime-title' },
-          h('h2', { id: 'dsh-harmony-runtime-title' }, t('runtimeTitle')),
-          h('p', null, t(installed ? 'runtimeInstalled' : status.state === 'working' ? 'runtimeWorking' : 'runtimeBody')),
-          status.state === 'error' ? h('p', { className: 'dshHarmonyRuntimeError', role: 'alert' }, `${t('runtimeError')}: ${status.error}`) : null,
+          h('h2', { id: 'dsh-harmony-runtime-title' }, t(desktopInactive ? 'runtimeDesktopTitle' : 'runtimeTitle')),
+          h('p', null, t(desktopInactive ? 'runtimeDesktopBody' : installed ? 'runtimeInstalled' : status.state === 'working' ? 'runtimeWorking' : 'runtimeBody')),
+          status.error ? h('p', { className: 'dshHarmonyRuntimeError', role: 'alert' }, `${t('runtimeError')}: ${status.error}`) : null,
           h('div', { className: 'dshHarmonyRuntimeActions' },
             installed
               ? h('button', { className: 'dshHarmonySecondary', type: 'button', onClick: () => setDismissed(true) }, t('done'))
+              : desktopInactive
+                ? h(React.Fragment, null,
+                  h('button', { className: 'dshHarmonySecondary dshHarmonyDanger', type: 'button', disabled: busy, onClick: () => { void choose('remove') } }, t('removePlugin')),
+                  h('button', { ref: primary, className: 'dshHarmonyButton', type: 'button', disabled: busy, onClick: () => { void choose('ignore') } }, busy ? t('runtimeWorking') : t('ignoreOnce')))
               : h(React.Fragment, null,
                 h('button', { className: 'dshHarmonySecondary dshHarmonyDanger', type: 'button', disabled: busy, onClick: () => { void choose('remove') } }, t('removePlugin')),
                 h('button', { className: 'dshHarmonySecondary', type: 'button', disabled: busy, onClick: () => { void choose('ignore') } }, t('ignoreOnce')),
                 h('button', { className: 'dshHarmonySecondary', type: 'button', disabled: busy, onClick: () => { void choose('install') } }, t('install')),
                 h('button', { ref: primary, className: 'dshHarmonyButton', type: 'button', disabled: busy, onClick: () => { void choose('install-restart') } }, busy ? t('runtimeWorking') : t('installRestart'))))))
+    }
+
+    function ReloadNotifications({ t }) {
+      const [notice, setNotice] = useState(null)
+      const seen = useRef(null)
+
+      useEffect(() => {
+        let mounted = true
+        let timer
+        const poll = async () => {
+          try {
+            const status = await fetch('/dsh-harmony/runtime', { cache: 'no-store' }).then(response => response.json())
+            if (!mounted || status.state !== 'active' || status.reload === undefined) return
+            const signature = `${status.reload.sequence}:${status.reload.state}`
+            if (seen.current === null) seen.current = signature
+            else if (seen.current !== signature) {
+              seen.current = signature
+              const key = {
+                reloading: 'reloadStarting',
+                succeeded: 'reloadSucceeded',
+                failed: 'reloadFailed',
+              }[status.reload.state]
+              if (key !== undefined) setNotice({
+                signature,
+                state: status.reload.state,
+                text: status.reload.state === 'failed' && status.reload.error
+                  ? `${t(key)}: ${status.reload.error}`
+                  : t(key),
+              })
+            }
+          } catch {}
+          if (mounted) timer = window.setTimeout(poll, 250)
+        }
+        void poll()
+        return () => {
+          mounted = false
+          window.clearTimeout(timer)
+        }
+      }, [t])
+
+      useEffect(() => {
+        if (notice === null || notice.state === 'reloading') return
+        const timer = window.setTimeout(() => setNotice(current => current?.signature === notice.signature ? null : current), 4000)
+        return () => window.clearTimeout(timer)
+      }, [notice])
+
+      if (notice === null) return null
+      return h('div', {
+        className: 'dshHarmonyToast',
+        'data-state': notice.state,
+        role: notice.state === 'failed' ? 'alert' : 'status',
+      }, h('span', { className: 'dshHarmonyToastDot', 'aria-hidden': 'true' }), notice.text)
     }
 
     function PatchStatusPage({ t }) {
@@ -578,6 +654,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       const constraints = selectedPlugin === undefined ? [] : [
         selectedPlugin.before.length > 0 ? `${t('before')}: ${selectedPlugin.before.join(', ')}` : '',
         selectedPlugin.after.length > 0 ? `${t('after')}: ${selectedPlugin.after.join(', ')}` : '',
+        selectedPlugin.conflicts.length > 0 ? `${t('conflicts')}: ${selectedPlugin.conflicts.join(', ')}` : '',
       ].filter(Boolean)
 
       return h('div', { className: 'dshHarmonyPage' },
@@ -594,6 +671,12 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         h('header', null,
           h('h2', { className: 'dshHarmonyHeading' }, t('title')),
           h('p', { className: 'dshHarmonyIntro' }, t('intro'))),
+        view.incompatibilities.length > 0
+          ? h('p', { className: 'dshHarmonyWarning', role: 'status' },
+            `${t('incompatibilityWarning')} ${view.incompatibilities
+              .map(item => `${item.declaredBy} ↔ ${item.conflictsWith}`)
+              .join(' · ')}`)
+          : null,
         h('div', { className: 'dshHarmonyWorkspace' },
           h('ul', {
             ref: listRef,
@@ -698,6 +781,12 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         order: -110,
         locale: localeNamespace,
       }, RuntimePrompt))
+      ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+        name: 'shell.overlay',
+        id: 'harmony-reload-notifications',
+        order: -109,
+        locale: localeNamespace,
+      }, ReloadNotifications))
       ctx.effect(async () => {
         const status = await fetch('/dsh-harmony/runtime', { cache: 'no-store' }).then(response => response.json())
         if (status.state !== 'active') return

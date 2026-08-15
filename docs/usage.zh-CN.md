@@ -56,6 +56,23 @@ dsh harmony status
 `dsh harmony` 会打开 Web profile 的排序 TUI。WebUI 中的 Harmony 位于
 **设置 → Harmony**。
 
+## 嵌入 Desktop 或其他 Host 载体
+
+载体应解析公开入口 `dsh-harmony/bin`，并像启动官方 DSH 一样将 `web` 及后续参数传给它。
+同时在子进程环境中设置：
+
+```text
+DSH_DESKTOP_BUILTIN_HOST_ENTRY=/absolute/path/to/@deepseek-ai/dsh/lib/bin.js
+```
+
+Harmony 会从该官方入口解析 `@deepseek-ai/dsh-app-boot`，安装模块与文件 Hook，最后导入
+同一个入口。`DSH_HARMONY_OFFICIAL` 是 Harmony shim 使用的显式覆盖，存在时优先于
+Desktop 提供的入口。
+
+嵌入模式不要设置 `DSH_HARMONY_COMMAND`。这样不会创建 bootstrap，也不会安装、替换或
+恢复系统全局 `dsh` 命令。载体仍然拥有 Node 可执行文件、Host 子进程、工作目录、退出处理
+和 readiness 协议；Harmony 只包装 DSH CLI 入口。
+
 ## 通过 `dsh plugin` 安装
 
 这种方式从已经可用的官方 `dsh` 开始：
@@ -259,7 +276,8 @@ dsh web
     "harmony": {
       "patches": ["./patches/answer.patch.cjs"],
       "after": ["base-patches"],
-      "before": ["ui-patches"]
+      "before": ["ui-patches"],
+      "conflicts": ["legacy-patches"]
     }
   }
 }
@@ -287,6 +305,9 @@ module.exports = {
 源码 Patch 使用 TSQuery 和 MagicString。语义 Patch 以具名函数或类方法为目标，可用
 `before`、`after`、`around` 或 `replace`。由于语义 Handler 在 Node 进程中执行，
 浏览器端 `lib/client.js` 目标必须使用源码 Patch。
+
+`conflicts` 列出需要在双方都启用时产生告警的 Harmony Patch 提供者包名。该声明不会
+阻止安装、加载、Patch 应用或热重载，也不影响排序。
 
 如果提供者本身必须在 Harmony 存在时才能启动，可以使用 DSH 现有的依赖机制：
 
