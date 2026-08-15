@@ -1,6 +1,6 @@
 # 安装与使用指南
 
-<p><a href="./usage.md">English</a> | <strong>简体中文</strong> | <a href="../README.zh-CN.md">README</a></p>
+<p><a href="./usage.md">English</a> | <strong>简体中文</strong> | <a href="../README.md">README</a></p>
 
 本文介绍安装、首次启动、profile 选择、Patch 排序、检查、更新和卸载。文末提供
 Patch 开发入门，完整 API 示例仍放在项目 README 中。
@@ -295,7 +295,7 @@ export const inject = ['harmony']
 ```
 
 完整源码与语义 API、排序规则和冲突行为见
-[声明 Patch](../README.zh-CN.md#声明-patch)。
+[声明 Patch](../README.md#声明-patch)。
 
 ## 常见问题
 

@@ -1,6 +1,6 @@
 # Installation and usage
 
-<p><strong>English</strong> | <a href="./usage.zh-CN.md">简体中文</a> | <a href="../README.md">README</a></p>
+<p><strong>English</strong> | <a href="./usage.zh-CN.md">简体中文</a> | <a href="../README.en.md">README</a></p>
 
 This guide covers installation, first boot, profile selection, Patch ordering,
 inspection, updates, and removal. Patch authoring is introduced at the end; the
@@ -319,7 +319,7 @@ without Harmony:
 export const inject = ['harmony']
 ```
 
-See [Declare patches](../README.md#declare-patches) for the full source and
+See [Declare patches](../README.en.md#declare-patches) for the full source and
 semantic API, ordering rules, and conflict behavior.
 
 ## Troubleshooting

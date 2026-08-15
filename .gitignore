@@ -3,3 +3,5 @@ node_modules/
 coverage/
 *.tgz
 PRODUCT.md
+/examples/ch4acko3-brand/
+/test/brand-demo.e2e.mjs

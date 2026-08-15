@@ -63,3 +63,12 @@ test('pins dsh-harmony above every installed plugin', () => {
   })
   rmSync(profile, { recursive: true })
 })
+
+test('treats a missing disabled list as empty', () => {
+  const profile = mkdtempSync(join(tmpdir(), 'dsh-harmony-profile-'))
+  writeFileSync(join(profile, 'package.json'), '{}')
+  writeFileSync(join(profile, 'harmony.json'), JSON.stringify({ order: [] }))
+
+  expect(synchronizeHarmonyProfile(profile).disabled).toEqual([])
+  rmSync(profile, { recursive: true })
+})

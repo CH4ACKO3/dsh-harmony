@@ -66,7 +66,8 @@
     "lib",
     "scripts",
     "harmony.patch.yml",
-    "README.md"
+    "README.md",
+    "README.en.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",

@@ -235,10 +235,10 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
     const localeNamespace = 'dsh-harmony'
     const sameOrder = (left, right) => left.length === right.length && left.every((name, index) => name === right[index])
     const harmonyPlugin = 'dsh-harmony'
-    const deepseekScope = '@deepseek-ai'
-    const displayName = name => name.startsWith(`${deepseekScope}/`) ? name.slice(deepseekScope.length + 1) : name
+    const displayName = name => name.replace(/^@[^/]+\//, '')
     const listName = name => displayName(name).replace(/^dsh-/, '')
-    const packageScope = name => name.startsWith(`${deepseekScope}/`) ? deepseekScope : ''
+    const packageScope = name => name.match(/^(@[^/]+)\//)?.[1] ?? ''
+    const detailAuthor = plugin => [packageScope(plugin.name), plugin.author].filter(Boolean).join(' · ')
 
     function RuntimePrompt({ t }) {
       const [status, setStatus] = useState(null)
@@ -445,6 +445,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       dirtyRef.current = dirty
       const plugins = useMemo(() => new Map((view?.plugins ?? []).map(plugin => [plugin.name, plugin])), [view])
       const selectedPlugin = plugins.get(selected) ?? plugins.get(draftOrder[0])
+      const selectedAuthor = selectedPlugin === undefined ? '' : detailAuthor(selectedPlugin)
 
       const load = async () => {
         setLoading(true)
@@ -657,13 +658,10 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
               h('div', { className: 'dshHarmonyIdentity' },
                 h('div', { className: 'dshHarmonyMeta' },
                   h('h3', { className: 'dshHarmonyTitle' }, displayName(selectedPlugin.name)),
-                  selectedPlugin.version ? h('span', { className: 'dshHarmonyVersion' }, `v${selectedPlugin.version}`) : null),
-                packageScope(selectedPlugin.name)
-                  ? h('p', { className: 'dshHarmonyScope' }, packageScope(selectedPlugin.name))
-                  : null),
+                  selectedPlugin.version ? h('span', { className: 'dshHarmonyVersion' }, `v${selectedPlugin.version}`) : null)),
               h('p', { className: 'dshHarmonyDescription' }, selectedPlugin.description || t('noDescription')),
               h('div', { className: 'dshHarmonyFacts' },
-                selectedPlugin.author ? h('span', null, `${t('author')}: ${selectedPlugin.author}`) : null,
+                selectedAuthor ? h('span', null, `${t('author')}: ${selectedAuthor}`) : null,
                 selectedPlugin.contributors.length > 0 ? h('span', null, `${t('contributors')}: ${selectedPlugin.contributors.join(', ')}`) : null,
                 selectedPlugin.license ? h('span', null, `${t('license')}: ${selectedPlugin.license}`) : null,
                 selectedPlugin.harmony ? h('span', null, `${t('patchCount')}: ${selectedPlugin.patchCount}`) : null,

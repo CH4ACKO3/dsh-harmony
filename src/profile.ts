@@ -94,7 +94,8 @@ export interface HarmonyState {
 function readState(profileDir: string): HarmonyState {
   const path = join(profileDir, HARMONY_STATE_FILE)
   if (!existsSync(path)) return { order: [], disabled: [] }
-  return JSON.parse(readFileSync(path, 'utf8')) as HarmonyState
+  const state = JSON.parse(readFileSync(path, 'utf8')) as { order: string[]; disabled?: string[] }
+  return { order: state.order, disabled: state.disabled ?? [] }
 }
 
 export function saveHarmonyState(profileDir: string, state: HarmonyState): void {
