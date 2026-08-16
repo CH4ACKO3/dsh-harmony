@@ -66,7 +66,7 @@ const designContract = `<!--
 THESIS: Harmony documentation reads like layered tracing film: the original module stays visible while each Patch adds a precise, reversible overlay.
 OWN-WORLD: Cool white sheets, cobalt and cyan paths, translucent layers, compact status labels, and typography optimized for long technical reading.
 STORY: Readers understand where Harmony sits, install it safely, author a Patch, and inspect the resulting runtime without returning to a monolithic README.
-FIRST VIEWPORT: A concise promise and two actions sit beside the interlocked Harmony mark; the first content block turns original, Patch, and runtime into one horizontal trace.
+FIRST VIEWPORT: The standard documentation shell presents the library definition, supported versions, and a copyable installation path without promotional artwork.
 FORM: Layered service manual, grounded direction 5, seed be380533.
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
 -->`
@@ -104,7 +104,7 @@ export default defineConfig({
         ],
         sidebar: chineseSidebar,
         outline: { label: '本页目录', level: [2, 3] },
-        editLink: { pattern: `${repository}/edit/main/docs/:path`, text: '在 GitHub 上编辑此页' },
+        editLink: { pattern: `${repository}/edit/docs/docs/:path`, text: '在 GitHub 上编辑此页' },
         lastUpdated: { text: '最后更新' },
         docFooter: { prev: '上一页', next: '下一页' },
         footer: { message: '基于 MIT License 发布。', copyright: 'Copyright © 2026 CH4ACKO3' },
@@ -123,7 +123,7 @@ export default defineConfig({
     ],
     sidebar: englishSidebar,
     outline: { label: 'On this page', level: [2, 3] },
-    editLink: { pattern: `${repository}/edit/main/docs/:path`, text: 'Edit this page on GitHub' },
+    editLink: { pattern: `${repository}/edit/docs/docs/:path`, text: 'Edit this page on GitHub' },
     lastUpdated: { text: 'Last updated' },
     docFooter: { prev: 'Previous', next: 'Next' },
     footer: { message: 'Released under the MIT License.', copyright: 'Copyright © 2026 CH4ACKO3' },
