@@ -15,7 +15,7 @@ colors:
 typography:
   display:
     fontFamily: "Atkinson Hyperlegible Next Variable, sans-serif"
-    fontSize: "clamp(2.25rem, 5vw, 3.25rem)"
+    fontSize: "clamp(2rem, 4vw, 2.625rem)"
     fontWeight: 700
     lineHeight: 1.08
     letterSpacing: "-0.025em"
@@ -98,7 +98,7 @@ The pairing prioritizes character recognition and durable reading over fashionab
 
 ### Hierarchy
 
-- **Display** (700, `clamp(2.25rem, 5vw, 3.25rem)`, 1.08): page titles, including the documentation index.
+- **Display** (700, `clamp(2rem, 4vw, 2.625rem)`, 1.08): page titles, including the documentation index.
 - **Headline** (600, `1.5rem`, 1.3): document sections.
 - **Body** (460, `17px`, 1.72): documentation prose and lists.
 - **Mono** (`0.82rem`): paths, provider identifiers, runtime generations, and code.

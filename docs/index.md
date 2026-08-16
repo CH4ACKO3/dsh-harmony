@@ -1,13 +1,21 @@
 ---
-title: dsh-harmony
+title: Harmony
 description: Runtime Patch coordination for DeepSeek Harness plugins.
 ---
 
-# dsh-harmony
+# Harmony
 
-A library for patching, replacing and decorating DeepSeek Harness plugins during runtime.
+> Don't reinvent the wheel. Decorate it.
 
-Harmony transforms compiled Host and WebUI modules in memory before the Harness Loader executes them. Installed plugin files remain unchanged, and failed updates keep the previous runtime generation active.
+Harmony provides an elegant way to modify the behavior of other plugins written for DeepSeek Harness. It runs as an external framework, applies Patches to target plugins at runtime, and starts DeepSeek Harness with the transformed plugin set.
+
+Source Patches use TSQuery to precisely match target nodes in a TypeScript AST, then use MagicString to rewrite the corresponding ranges of the current in-memory source. Patches run in their configured order, and each Patch receives the output of the previous one, giving multiple changes to the same target a chance to coexist. Installed plugin files are never modified.
+
+The goal is to extend the expressive power of DeepSeek Harness through creativity, composition, and **modification**.
+
+::: info Respect
+Inspired by [Harmony](https://harmony.pardeike.net/), the project of the same name created by Andreas Pardeike and other contributors for C#.
+:::
 
 ## Install
 

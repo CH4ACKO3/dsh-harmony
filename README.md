@@ -30,6 +30,14 @@
   [简体中文](README.zh-CN.md) / [English](README.md)
 </div>
 
+<!-- AGENTS: Before installing, authoring, reviewing, or debugging Harmony Patches, read .agents/skills/use-dsh-harmony/SKILL.md. -->
+<details>
+<summary><strong>AI agents: use the repository skill</strong></summary>
+
+Load [`use-dsh-harmony`](.agents/skills/use-dsh-harmony/SKILL.md) for installation, Patch selection and authoring, runtime operations, and troubleshooting.
+
+</details>
+
 ## Install
 
 Requires Node.js `^22.22.3` or `>=24.11.1` and `@deepseek-ai/dsh@0.1.0-rc.6`.

@@ -1,13 +1,21 @@
 ---
-title: dsh-harmony
+title: Harmony
 description: DeepSeek Harness 插件的运行时 Patch 协调层。
 ---
 
-# dsh-harmony
+# Harmony
 
-一个用于在运行时修补、替换和装饰 DeepSeek Harness 插件的库。
+> 不要重造轮子，去装饰轮子。
 
-Harmony 在 Harness Loader 执行插件之前，在内存中变换已编译的 Host 和 WebUI 模块。安装目录中的插件文件始终保持不变，更新失败时继续使用上一代运行状态。
+Harmony 提供一种以优雅的方式来修改其它为 DeepSeek Harness 编写的插件的功能。它作为一个外置框架，在运行时将补丁应用到目标插件上，并以修改后的插件集运行 DeepSeek Harness。
+
+源码 Patch 通过 TSQuery 在 TypeScript AST 中精确匹配目标节点，再使用 MagicString 改写当前内存源码的对应区间。Patch 按排序依次应用，后一个 Patch 继续处理前一个 Patch 的输出，因此针对同一目标的多个修改有机会和谐共处。整个过程不会写回已安装的插件文件。
+
+该功能旨在让 DeepSeek Harness 的表达能力更进一步：创造性、组合性、**修改性**。
+
+::: info Respect
+灵感来源于 Andreas Pardeike 和其它开发者创作的同名 C# 项目 [Harmony](https://harmony.pardeike.net/)
+:::
 
 ## 安装
 

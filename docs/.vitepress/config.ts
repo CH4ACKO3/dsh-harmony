@@ -72,12 +72,17 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 -->`
 
 export default defineConfig({
-  title: 'dsh-harmony',
+  title: 'Harmony',
   description: 'Runtime Patch coordination for DeepSeek Harness plugins.',
   base: '/dsh-harmony/',
   cleanUrls: true,
   lastUpdated: true,
-  markdown: { theme: 'github-dark' },
+  markdown: {
+    theme: {
+      light: 'github-light',
+      dark: 'github-dark',
+    },
+  },
   sitemap: { hostname: 'https://ch4acko3.github.io/dsh-harmony/' },
   head: [
     ['link', { rel: 'icon', type: 'image/png', href: '/dsh-harmony/harmony-icon.png' }],
@@ -87,13 +92,13 @@ export default defineConfig({
     root: {
       label: 'English',
       lang: 'en',
-      title: 'dsh-harmony',
+      title: 'Harmony',
       description: 'Runtime Patch coordination for DeepSeek Harness plugins.',
     },
     zh: {
       label: '简体中文',
       lang: 'zh-CN',
-      title: 'dsh-harmony',
+      title: 'Harmony',
       description: 'DeepSeek Harness 插件的运行时 Patch 协调层。',
       themeConfig: {
         nav: [
