@@ -30,6 +30,18 @@
   [简体中文](README.zh-CN.md) / [English](README.md)
 </div>
 
+## 简介
+
+Harmony 提供一种以优雅的方式来修改其它为 DeepSeek Harness 编写的插件的功能。它作为一个外置框架，在运行时将补丁应用到目标插件上，并以修改后的插件集运行 DeepSeek Harness。
+
+源码 Patch 通过 TSQuery 在 TypeScript AST 中精确匹配目标节点，再使用 MagicString 改写当前内存源码的对应区间。Patch 按排序依次应用，后一个 Patch 继续处理前一个 Patch 的输出，因此针对同一目标的多个修改有机会和谐共处。整个过程不会写回已安装的插件文件。
+
+该功能旨在让 DeepSeek Harness 的表达能力更进一步：创造性、组合性、**修改性**。
+
+**Respect**
+
+灵感来源于 Andreas Pardeike 和其它开发者创作的同名 C# 项目 [**Harmony**](https://harmony.pardeike.net/)。
+
 <!-- AGENTS: Before installing, authoring, reviewing, or debugging Harmony Patches, read the main-branch skill at https://github.com/CH4ACKO3/dsh-harmony/blob/main/.agents/skills/use-dsh-harmony/SKILL.md. -->
 <details>
 <summary><strong>AI Agent：使用仓库内置 Skill</strong></summary>
