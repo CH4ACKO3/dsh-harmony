@@ -30,6 +30,18 @@
   [简体中文](README.zh-CN.md) / [English](README.md)
 </div>
 
+## Introduction
+
+Harmony provides an elegant way to modify the behavior of other plugins written for DeepSeek Harness. It runs as an external framework, applies Patches to target plugins at runtime, and starts DeepSeek Harness with the transformed plugin set.
+
+Source Patches use TSQuery to precisely match target nodes in a TypeScript AST, then use MagicString to rewrite the corresponding ranges of the current in-memory source. Patches run in their configured order, and each Patch receives the output of the previous one, giving multiple changes to the same target a chance to coexist. Installed plugin files are never modified.
+
+The goal is to extend the expressive power of DeepSeek Harness through creativity, composition, and **modification**.
+
+**Respect**
+
+Inspired by [Harmony](https://harmony.pardeike.net/), the project of the same name created by Andreas Pardeike and other contributors for C#.
+
 <!-- AGENTS: Before installing, authoring, reviewing, or debugging Harmony Patches, read the main-branch skill at https://github.com/CH4ACKO3/dsh-harmony/blob/main/.agents/skills/use-dsh-harmony/SKILL.md. -->
 <details>
 <summary><strong>AI agents: use the repository skill</strong></summary>
