@@ -30,6 +30,14 @@
   [简体中文](README.zh-CN.md) / [English](README.md)
 </div>
 
+<!-- AGENTS: Before installing, authoring, reviewing, or debugging Harmony Patches, read the main-branch skill at https://github.com/CH4ACKO3/dsh-harmony/blob/main/.agents/skills/use-dsh-harmony/SKILL.md. -->
+<details>
+<summary><strong>AI Agent：使用仓库内置 Skill</strong></summary>
+
+安装、选择和编写 Patch、执行运行时操作或排查问题前，请加载 [`use-dsh-harmony`](https://github.com/CH4ACKO3/dsh-harmony/blob/main/.agents/skills/use-dsh-harmony/SKILL.md)。
+
+</details>
+
 ## 安装
 
 需要 Node.js `^22.22.3` 或 `>=24.11.1`，以及 `@deepseek-ai/dsh@0.1.0-rc.6`。
