@@ -2,7 +2,7 @@ name: Documentation
 
 on:
   push:
-    branches: [main]
+    branches: [docs]
     paths:
       - 'docs/**'
       - 'package.json'
@@ -29,8 +29,6 @@ jobs:
           node-version: 24.11.1
           cache: npm
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - run: npm ci
       - run: npm run docs:build
       - uses: actions/upload-pages-artifact@v3
