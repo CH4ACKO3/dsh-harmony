@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+      - 'react-v*'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  core:
+    if: startsWith(github.ref_name, 'v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.11.1
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run test:package
+      - name: Verify tag version
+        run: test "${GITHUB_REF_NAME#v}" = "$(node -p "require('./package.json').version")"
+      - run: npm publish --provenance --access public
+
+  react:
+    if: startsWith(github.ref_name, 'react-v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.11.1
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm pack --dry-run --workspace dsh-harmony-react
+      - name: Verify tag version
+        run: test "${GITHUB_REF_NAME#react-v}" = "$(node -p "require('./packages/react/package.json').version")"
+      - run: npm publish --workspace dsh-harmony-react --provenance --access public

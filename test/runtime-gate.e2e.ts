@@ -18,7 +18,7 @@ const official = resolve('node_modules/@deepseek-ai/dsh/lib/bin.js')
 const harmonyVersion = JSON.parse(readFileSync('package.json', 'utf8')).version
 
 interface RuntimeStatus {
-  state: 'missing' | 'desktop-inactive' | 'ignored' | 'installed'
+  state: 'missing' | 'desktop-inactive' | 'working' | 'ignored' | 'installed'
 }
 
 mkdirSync(join(profile, 'node_modules'), { recursive: true })
@@ -46,6 +46,7 @@ const fakeNpm = join(fakeBin, 'npm.cjs')
 writeFileSync(fakeNpm, `#!/usr/bin/env node
 const { appendFileSync } = require('node:fs')
 appendFileSync(${JSON.stringify(npmLog)}, process.argv.slice(2).join(' ') + '\\n')
+if (process.argv[2] === 'install') setTimeout(() => {}, Number(process.env.HARMONY_TEST_NPM_DELAY_MS ?? 0))
 if (process.argv[2] === 'prefix') process.stdout.write(${JSON.stringify(prefix)} + '\\n')
 `)
 if (process.platform === 'win32') {
@@ -83,13 +84,16 @@ async function startRuntime(env: NodeJS.ProcessEnv = {}) {
   return { child, childExit, url: `http://127.0.0.1:${port}`, output: () => output }
 }
 
-function waitForStatus(runtime: Awaited<ReturnType<typeof startRuntime>>): Promise<RuntimeStatus> {
+function waitForState(runtime: Awaited<ReturnType<typeof startRuntime>>, expected: RuntimeStatus['state']): Promise<RuntimeStatus> {
   return new Promise<RuntimeStatus>((resolveStatus, reject) => {
     const deadline = Date.now() + 10_000
     const poll = async () => {
       try {
         const response = await fetch(`${runtime.url}/dsh-harmony/runtime`)
-        if (response.ok) return resolveStatus(await response.json() as RuntimeStatus)
+        if (response.ok) {
+          const status = await response.json() as RuntimeStatus
+          if (status.state === expected) return resolveStatus(status)
+        }
       } catch {}
       if (Date.now() >= deadline) return reject(new Error(`runtime prompt did not start:\n${runtime.output()}`))
       setTimeout(poll, 100)
@@ -99,7 +103,7 @@ function waitForStatus(runtime: Awaited<ReturnType<typeof startRuntime>>): Promi
 }
 
 const desktop = await startRuntime({ DSH_DESKTOP: '1' })
-assert.equal((await waitForStatus(desktop)).state, 'desktop-inactive')
+assert.equal((await waitForState(desktop, 'desktop-inactive')).state, 'desktop-inactive')
 const blockedInstall = await fetch(`${desktop.url}/dsh-harmony/runtime`, {
   method: 'POST',
   headers: { 'content-type': 'application/json' },
@@ -116,20 +120,28 @@ assert.equal((await ignored.json() as RuntimeStatus).state, 'ignored')
 desktop.child.kill()
 await desktop.childExit
 
-const runtime = await startRuntime()
+const runtime = await startRuntime({ HARMONY_TEST_NPM_DELAY_MS: '300' })
 const url = runtime.url
-const status = await waitForStatus(runtime)
+const status = await waitForState(runtime, 'missing')
 assert.equal(status.state, 'missing')
 const client = await fetch(`${url}/plugins/dsh-harmony/client.js`)
 assert.equal(client.ok, true, runtime.output())
 assert.match(await client.text(), /Install and restart/)
 assert.equal(existsSync(dependentMarker), false)
 
-const response = await fetch(`${url}/dsh-harmony/runtime`, {
+const request = fetch(`${url}/dsh-harmony/runtime`, {
   method: 'POST',
   headers: { 'content-type': 'application/json' },
   body: JSON.stringify({ action: 'install' }),
 })
+await waitForState(runtime, 'working')
+const concurrent = await fetch(`${url}/dsh-harmony/runtime`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ action: 'install' }),
+})
+assert.equal(concurrent.status, 409)
+const response = await request
 assert.equal(response.ok, true)
 assert.equal((await response.json() as RuntimeStatus).state, 'installed')
 assert.equal(readFileSync(npmLog, 'utf8'), `install --global dsh-harmony@${harmonyVersion}\nprefix --global\n`)

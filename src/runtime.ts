@@ -201,12 +201,25 @@ function resetPatchStatuses(): void {
   ]))
 }
 
-function snapshotGeneration(): void {
+function snapshotGeneration(retainedGeneration?: number): void {
+  const retainedState = retainedGeneration === undefined ? undefined : generationStates.get(retainedGeneration)
+  generationStates.clear()
+  if (retainedState !== undefined) generationStates.set(retainedGeneration!, retainedState)
   generationStates.set(generation, {
     providers: [...providers.values()],
     order: [...providerOrder],
     disabled: new Set(disabledPatchKeys),
   })
+}
+
+export function retainedGenerationCount(): number {
+  return generationStates.size
+}
+
+function retainGeneration(activeGeneration: number): void {
+  const state = generationStates.get(activeGeneration)!
+  generationStates.clear()
+  generationStates.set(activeGeneration, state)
 }
 
 function pruneSemanticBindings(activeGeneration: number): void {
@@ -471,21 +484,23 @@ export function beginPluginUpdate(installed: string[], force = false): ProfileTr
     throw error
   }
   generation = ++generationSequence
+  const candidateGeneration = generation
   transformCache = new Map()
   semanticBindings = new Map(previous.bindings)
   resetPatchStatuses()
-  snapshotGeneration()
+  snapshotGeneration(previous.generation)
   let active = true
   return {
-    generation,
+    generation: candidateGeneration,
     profile,
     targets,
     commit() {
       if (!active) return
-      pruneSemanticBindings(generation)
+      pruneSemanticBindings(candidateGeneration)
       saveHarmonyState(activeProfileDir!, { order: profile.order, disabled: profile.disabled })
       refreshWatchedFiles?.()
       stagedProviderCaches.clear()
+      retainGeneration(candidateGeneration)
       active = false
     },
     rollback() {
@@ -501,6 +516,7 @@ export function beginPluginUpdate(installed: string[], force = false): ProfileTr
       for (const restore of [...stagedProviderCaches.values()].reverse()) restore()
       stagedProviderCaches.clear()
       refreshWatchedFiles?.()
+      retainGeneration(previous.generation)
       active = false
     },
   }
@@ -522,19 +538,21 @@ export function beginProfileUpdate(input: { order?: string[]; disabled?: string[
   providerOrder = order
   disabledPatchKeys = disabled
   generation = ++generationSequence
+  const candidateGeneration = generation
   transformCache = new Map()
   semanticBindings = new Map(previous.bindings)
   resetPatchStatuses()
-  snapshotGeneration()
+  snapshotGeneration(previous.generation)
   let active = true
   return {
-    generation,
+    generation: candidateGeneration,
     profile: { ...currentProfile(), order, disabled: [...disabled] },
     targets: allTargets(),
     commit() {
       if (!active) return
-      pruneSemanticBindings(generation)
+      pruneSemanticBindings(candidateGeneration)
       saveHarmonyState(activeProfileDir!, { order, disabled: [...disabled] })
+      retainGeneration(candidateGeneration)
       active = false
     },
     rollback() {
@@ -545,6 +563,7 @@ export function beginProfileUpdate(input: { order?: string[]; disabled?: string[
       transformCache = previous.cache
       patchStatuses = previous.statuses
       semanticBindings = previous.bindings
+      retainGeneration(previous.generation)
       active = false
     },
   }

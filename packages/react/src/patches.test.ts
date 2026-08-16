@@ -1,3 +1,6 @@
+import { realpathSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { dirname } from 'node:path'
 import { tsquery } from '@phenomnomnominal/tsquery'
 import MagicString from 'magic-string'
 import ts from 'typescript'
@@ -12,6 +15,8 @@ import {
   transformProps,
   wrapElement,
 } from './index.js'
+
+const require = createRequire(import.meta.url)
 
 const target = {
   package: '@deepseek-ai/dsh-client-ui-example',
@@ -30,6 +35,11 @@ function applyPatch(source: string, patch: HarmonySourcePatch): string {
 }
 
 describe('React source patches', () => {
+  test('uses the current core workspace during development', () => {
+    const resolvedCore = dirname(require.resolve('dsh-harmony/package.json'))
+    expect(realpathSync(resolvedCore)).toBe(realpathSync(new URL('../../..', import.meta.url)))
+  })
+
   test('replaces member components and preserves props and key', () => {
     const source = '(0, react_jsx_runtime.jsx)(primitives.BrandWordmark, { compact: true }, "brand")'
     const patch = replaceElement({
