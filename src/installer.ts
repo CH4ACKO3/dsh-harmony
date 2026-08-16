@@ -1,9 +1,13 @@
 import { spawn } from 'node:child_process'
 import { readFileSync } from 'node:fs'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { createInterface } from 'node:readline/promises'
 import { fileURLToPath } from 'node:url'
+import type { AppExit } from '@deepseek-ai/dsh-cmdline'
+import type { WebServer } from '@deepseek-ai/dsh-host-webserver'
+import type { Context } from '@deepseek-ai/cordis'
 
 type RuntimeAction = 'install' | 'install-restart' | 'remove' | 'ignore'
 type RuntimeState = 'missing' | 'desktop-inactive' | 'working' | 'installed' | 'removed' | 'ignored' | 'error'
@@ -28,7 +32,7 @@ const { resolveCommandPath } = require('../scripts/install-shim.cjs') as {
   resolveCommandPath(prefix: string, platform?: NodeJS.Platform): string
 }
 
-function sendJson(response: any, value: unknown): void {
+function sendJson(response: ServerResponse, value: unknown): void {
   response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
   response.end(JSON.stringify(value))
 }
@@ -80,7 +84,8 @@ async function removePlugin(): Promise<void> {
   await run(process.execPath, [process.argv[1]!, 'plugin', '--profile', invocationProfile(), 'remove', packageName], process.stdin.isTTY)
 }
 
-function restart(ctx: any, command: string): void {
+function restart(ctx: Context, command: string): void {
+  if (ctx.appExit === undefined) throw new Error('dsh-harmony: appExit service is unavailable')
   const helper = spawn(process.execPath, [
     restartScript,
     String(process.pid),
@@ -106,8 +111,10 @@ async function terminalChoice(): Promise<RuntimeAction> {
   }
 }
 
-export async function waitForRuntimeChoice(ctx: any): Promise<void> {
+export async function waitForRuntimeChoice(ctx: Context): Promise<void> {
   if (process.env.DSH_HARMONY_IGNORE_ONCE === '1') return
+  if (ctx.appExit === undefined) throw new Error('dsh-harmony: appExit service is unavailable')
+  const appExit = ctx.appExit
 
   const desktopInactive = process.env.DSH_DESKTOP === '1'
   let status: RuntimeStatus = { state: desktopInactive ? 'desktop-inactive' : 'missing', bootId: process.pid }
@@ -142,10 +149,10 @@ export async function waitForRuntimeChoice(ctx: any): Promise<void> {
     }
   }
 
-  ctx.inject(['webServer'], (webCtx: any) => webCtx.webServer.register({
+  ctx.inject(['webServer'], webCtx => webCtx.webServer.register({
     kind: 'exact',
     path: '/dsh-harmony/runtime',
-    async handler(request: any, response: any) {
+    async handler(request: IncomingMessage, response: ServerResponse) {
       if (request.method === 'GET') return sendJson(response, status)
       if (request.method !== 'POST') {
         response.writeHead(405)
@@ -163,8 +170,8 @@ export async function waitForRuntimeChoice(ctx: any): Promise<void> {
       }
       const result = await act(action)
       sendJson(response, status)
-      if (status.state === 'removed') setImmediate(() => ctx.appExit(0))
-      if (status.state === 'installed' && action === 'install') setImmediate(() => ctx.appExit(0))
+      if (status.state === 'removed') setImmediate(() => appExit(0))
+      if (status.state === 'installed' && action === 'install') setImmediate(() => appExit(0))
       if (result.restartCommand !== undefined) setImmediate(() => restart(ctx, result.restartCommand!))
     },
   }))
@@ -174,11 +181,11 @@ export async function waitForRuntimeChoice(ctx: any): Promise<void> {
     const action = await terminalChoice()
     const result = await act(action)
     if (status.state === 'error') throw new Error(status.error)
-    if (action === 'remove') return ctx.appExit(0)
+    if (action === 'remove') return appExit(0)
     if (result.restartCommand !== undefined) return restart(ctx, result.restartCommand)
     if (action === 'install') {
       process.stdout.write('dsh-harmony installed. Run dsh again to enable patches.\n')
-      return ctx.appExit(0)
+      return appExit(0)
     }
   }
 
@@ -191,11 +198,11 @@ export interface HarmonyReloadStatus {
   error?: string
 }
 
-export function registerActiveRuntimeRoute(ctx: any, reloadStatus: () => HarmonyReloadStatus): void {
-  ctx.inject(['webServer'], (webCtx: any) => webCtx.webServer.register({
+export function registerActiveRuntimeRoute(ctx: Context, reloadStatus: () => HarmonyReloadStatus): void {
+  ctx.inject(['webServer'], webCtx => webCtx.webServer.register({
     kind: 'exact',
     path: '/dsh-harmony/runtime',
-    handler(request: any, response: any) {
+    handler(request: IncomingMessage, response: ServerResponse) {
       if (request.method === 'GET') return sendJson(response, {
         state: 'active',
         bootId: process.pid,

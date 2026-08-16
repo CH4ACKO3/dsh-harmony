@@ -1,5 +1,10 @@
 import { readFileSync } from 'node:fs'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 import { fileURLToPath } from 'node:url'
+import type { ClientModuleRegistry } from '@deepseek-ai/dsh-client-modules'
+import type { WebServer } from '@deepseek-ai/dsh-host-webserver'
+import type { Context, Fiber } from '@deepseek-ai/cordis'
+import type { Loader } from '@deepseek-ai/cordis-plugin-loader'
 import { publishRuntimeAddress } from './control.js'
 import { HarmonyDraftRuntime } from './draft-runtime.js'
 import type { DraftPackage } from './draft-runtime.js'
@@ -21,12 +26,27 @@ import {
 import type { PatchTargets, ProfileTransaction } from './runtime.js'
 
 const imageAssets = [
-  ['/dsh-harmony/assets/harmony-icon-mono.png', new URL('../assets/harmony-icon-mono.png', import.meta.url)],
-  ['/dsh-harmony/assets/harmony-preview.png', new URL('../assets/harmony-preview.png', import.meta.url)],
-  ['/dsh-harmony/assets/harmony-preview-light.png', new URL('../assets/harmony-preview-light.png', import.meta.url)],
+  ['/dsh-harmony/assets/harmony-icon-mono.png', new URL('../assets/harmony-icon-mono.png', import.meta.url), 'image/png'],
+  ['/dsh-harmony/assets/harmony-preview.webp', new URL('../assets/harmony-preview.webp', import.meta.url), 'image/webp'],
+  ['/dsh-harmony/assets/harmony-preview-light.webp', new URL('../assets/harmony-preview-light.webp', import.meta.url), 'image/webp'],
 ] as const
 
-function loaderPackages(ctx: any): string[] {
+interface ReloadFiber {
+  uid: number | null
+  runtime: { callback: unknown } | null
+}
+
+interface ReloadableEntry {
+  options: { name: string }
+  fiber?: ReloadFiber
+  parent: { tree: { ctx?: { baseUrl?: string }; import(name: string, getOuterStack?: () => string[]): unknown } }
+  loader: { unwrapExports(value: unknown): unknown }
+  getOuterStack(): string[]
+  _dispose(fiber?: ReloadFiber): Promise<void>
+  _start(plugin: unknown): Promise<void>
+}
+
+function loaderPackages(ctx: Context): string[] {
   const packages = new Set<string>()
   for (const entry of ctx.loader.entries()) {
     const name = packageNameOf(entry.options.name)
@@ -35,7 +55,7 @@ function loaderPackages(ctx: any): string[] {
   return [...packages]
 }
 
-function profileView(ctx: any) {
+function profileView(ctx: Context) {
   const profile = currentProfile()
   const patchCounts = new Map<string, number>()
   for (const patch of getPatchStatuses()) patchCounts.set(patch.owner, (patchCounts.get(patch.owner) ?? 0) + 1)
@@ -64,33 +84,33 @@ function profileView(ctx: any) {
   }
 }
 
-function sendJson(response: any, value: unknown): void {
+function sendJson(response: ServerResponse, value: unknown): void {
   response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
   response.end(JSON.stringify(value))
 }
 
-async function readJson(request: any): Promise<any> {
+async function readJson(request: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = []
   for await (const chunk of request) chunks.push(Buffer.from(chunk))
   return JSON.parse(Buffer.concat(chunks).toString())
 }
 
-function sendError(response: any, error: unknown): void {
+function sendError(response: ServerResponse, error: unknown): void {
   response.writeHead(500, { 'content-type': 'application/json; charset=utf-8' })
   response.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }))
 }
 
-function sendPng(request: any, response: any, image: Buffer): void {
+function sendAsset(request: IncomingMessage, response: ServerResponse, image: Buffer, contentType: string): void {
   response.writeHead(200, {
     'cache-control': 'public, max-age=3600',
     'content-length': image.length,
-    'content-type': 'image/png',
+    'content-type': contentType,
   })
   response.end(request.method === 'HEAD' ? undefined : image)
 }
 
-export async function reloadEntries(entries: any[], generation: number): Promise<() => Promise<void>> {
-  const plans: Array<{ entry: any; previous: any; previousPlugin: any; next: any }> = []
+export async function reloadEntries(entries: ReloadableEntry[], generation: number): Promise<() => Promise<void>> {
+  const plans: Array<{ entry: ReloadableEntry; previous: ReloadFiber; previousPlugin: unknown; next: unknown }> = []
   const commonjsPackages = new Map<string, () => void>()
   const commonjsRestores = new Set<() => void>()
   const restoreCommonJS = (): void => {
@@ -107,12 +127,12 @@ export async function reloadEntries(entries: any[], generation: number): Promise
   try {
     for (const entry of entries) {
       const previous = entry.fiber
-      if (previous?.uid == null) continue
+      if (previous?.uid == null || previous.runtime === null) continue
       const baseUrl = entry.parent.tree.ctx?.baseUrl
       const prepared = prepareModuleReload(entry.options.name, baseUrl, commonjsPackages)
       if (prepared !== undefined) commonjsRestores.add(prepared.restore)
       const imported = prepared?.load === undefined
-        ? await entry.parent.tree.import(`${entry.options.name}?dsh-harmony=${generation}`, entry.getOuterStack())
+        ? await entry.parent.tree.import(`${entry.options.name}?dsh-harmony=${generation}`, entry.getOuterStack)
         : prepared.load()
       const next = entry.loader.unwrapExports(imported)
       plans.push({ entry, previous, previousPlugin: previous.runtime.callback, next })
@@ -135,7 +155,7 @@ export async function reloadEntries(entries: any[], generation: number): Promise
     }
     for (const plan of [...touched].reverse()) {
       try {
-        if (plan.entry.fiber?.runtime.callback === plan.previousPlugin) continue
+        if (plan.entry.fiber?.runtime?.callback === plan.previousPlugin) continue
         if (plan.entry.fiber !== undefined) await plan.entry._dispose()
         if (plan.entry.fiber === undefined) await plan.entry._start(plan.previousPlugin)
       } catch (rollbackError) {
@@ -163,7 +183,7 @@ export async function reloadEntries(entries: any[], generation: number): Promise
   return () => restore(plans)
 }
 
-export async function apply(ctx: any): Promise<void> {
+export async function apply(ctx: Context): Promise<void> {
   if (process.env.DSH_HARMONY_ACTIVE !== '1') return waitForRuntimeChoice(ctx)
 
   const profileDir = currentProfile().dir
@@ -171,13 +191,13 @@ export async function apply(ctx: any): Promise<void> {
   const pendingClient = new Set<string>()
   const stagedProviders = new Set<string>()
   let pendingGeneration = 0
-  let clientModules: any
+  let clientModules: ClientModuleRegistry | undefined
   let queued = false
   let syncQueued = false
   let initialSync = true
   let initializing = true
   let updateTail = Promise.resolve()
-  const reloadingEntries = new Set<any>()
+  const reloadingEntries = new Set<object>()
   let incompatibilitySignature = ''
   let reloadSequence = 0
   let reloadStatus: HarmonyReloadStatus = { sequence: 0, state: 'idle' }
@@ -216,12 +236,12 @@ export async function apply(ctx: any): Promise<void> {
     return result
   }
 
-  const hostEntries = (targets: PatchTargets): any[] => [...ctx.loader.entries()].filter((entry: any) => {
+  const hostEntries = (targets: PatchTargets): ReloadableEntry[] => [...ctx.loader.entries()].filter((entry) => {
     const packageName = packageNameOf(entry.options.name)
     return packageName !== undefined && targets.has(packageName)
       && [...targets.get(packageName)!].some(file => file !== 'lib/client.js')
-  })
-  const reload = async (entries: any[], nextGeneration: number): Promise<() => Promise<void>> => {
+  }) as unknown as ReloadableEntry[]
+  const reload = async (entries: ReloadableEntry[], nextGeneration: number): Promise<() => Promise<void>> => {
     for (const entry of entries) reloadingEntries.add(entry)
     try {
       const restore = await reloadEntries(entries, nextGeneration)
@@ -240,11 +260,12 @@ export async function apply(ctx: any): Promise<void> {
   const applyTransaction = async (transaction: ProfileTransaction): Promise<void> => {
     let restoreEntries: (() => Promise<void>) | undefined
     const rebuiltClients: string[] = []
+    const modules = clientModules
     try {
       restoreEntries = await reload(hostEntries(transaction.targets), transaction.generation)
       for (const [packageName, files] of transaction.targets) {
-        if (!files.has('lib/client.js') || clientModules === undefined) continue
-        clientModules.rebuilt(packageName)
+        if (!files.has('lib/client.js') || modules === undefined) continue
+        modules.rebuilt(packageName)
         rebuiltClients.push(packageName)
       }
       transaction.commit()
@@ -263,7 +284,7 @@ export async function apply(ctx: any): Promise<void> {
       }
       for (const packageName of rebuiltClients.reverse()) {
         try {
-          clientModules.rebuilt(packageName)
+          modules?.rebuilt(packageName)
         } catch (rollbackError) {
           rollbackErrors.push(rollbackError)
         }
@@ -287,7 +308,7 @@ export async function apply(ctx: any): Promise<void> {
     }
   }
 
-  ctx.inject(['clientModules'], (clientCtx: any) => {
+  ctx.inject(['clientModules'], (clientCtx) => {
     clientModules = clientCtx.clientModules
     return () => { clientModules = undefined }
   })
@@ -296,7 +317,7 @@ export async function apply(ctx: any): Promise<void> {
     profileDir,
     setProviderStaged,
     async ensureLoaderEntry(name) {
-      const entries = [...ctx.loader.entries()].filter((entry: any) => packageNameOf(entry.options.name) === name)
+      const entries = [...ctx.loader.entries()].filter(entry => packageNameOf(entry.options.name) === name)
       if (entries.length > 1) throw new Error(`dsh-harmony: Draft ${JSON.stringify(name)} has multiple Loader entries`)
       if (entries.length === 1) return { id: entries[0].id, created: false }
       return { id: await ctx.loader.create({ name }), created: true }
@@ -308,16 +329,17 @@ export async function apply(ctx: any): Promise<void> {
     },
     async waitForClientEntry(name) {
       if (clientModules === undefined) throw new Error('dsh-harmony: client module graph is unavailable')
-      const current = clientModules.graph()
-      if (current.entries.some((entry: { id: string }) => entry.id === name)) return current
+      const modules = clientModules
+      const current = modules.graph()
+      if (current.entries.some(entry => entry.id === name)) return current
       return await new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
           stop()
           reject(new Error(`dsh-harmony: Draft ${JSON.stringify(name)} did not enter the client graph`))
         }, 10_000)
-        const stop = clientModules.onGraphChanged(() => {
-          const graph = clientModules.graph()
-          if (!graph.entries.some((entry: { id: string }) => entry.id === name)) return
+        const stop = modules.onGraphChanged(() => {
+          const graph = modules.graph()
+          if (!graph.entries.some(entry => entry.id === name)) return
           clearTimeout(timeout)
           stop()
           resolve(graph)
@@ -362,14 +384,14 @@ export async function apply(ctx: any): Promise<void> {
     await disposeExtensions?.()
   }, 'dsh-harmony: extensions')
 
-  ctx.inject(['webServer'], (webCtx: any) => {
+  ctx.inject(['webServer'], (webCtx) => {
     const update = (input: () => { order?: string[]; disabled?: string[] }): Promise<void> => enqueueUpdate(
       () => applyTransaction(beginProfileUpdate(input())),
     )
     const dispose = [webCtx.webServer.register({
       kind: 'exact',
       path: '/dsh-harmony/order',
-      async handler(request: any, response: any) {
+      async handler(request: IncomingMessage, response: ServerResponse) {
         if (request.method === 'GET') return sendJson(response, profileView(ctx))
         if (request.method === 'POST') {
           try {
@@ -386,7 +408,7 @@ export async function apply(ctx: any): Promise<void> {
     }), webCtx.webServer.register({
       kind: 'exact',
       path: '/dsh-harmony/patches',
-      async handler(request: any, response: any) {
+      async handler(request: IncomingMessage, response: ServerResponse) {
         if (request.method === 'GET') return sendJson(response, { patches: getPatchStatuses() })
         if (request.method === 'POST') {
           try {
@@ -419,24 +441,25 @@ export async function apply(ctx: any): Promise<void> {
     }), webCtx.webServer.register({
       kind: 'exact',
       path: '/dsh-harmony/inspect',
-      handler(request: any, response: any) {
+      handler(request: IncomingMessage, response: ServerResponse) {
         if (request.method !== 'GET') {
           response.writeHead(405)
-          return response.end()
+          response.end()
+          return
         }
-        const url = new URL(request.url, 'http://localhost')
+        const url = new URL(request.url ?? '/', 'http://localhost')
         return sendJson(response, {
           inspections: getPatchInspections(url.searchParams.get('package') ?? undefined, url.searchParams.get('file') ?? undefined),
         })
       },
     })]
-    for (const [path, url] of imageAssets) {
+    for (const [path, url, contentType] of imageAssets) {
       const image = readFileSync(url)
       dispose.push(webCtx.webServer.register({
         kind: 'exact',
         path,
-        handler(request: any, response: any) {
-          if (request.method === 'GET' || request.method === 'HEAD') return sendPng(request, response, image)
+        handler(request: IncomingMessage, response: ServerResponse) {
+          if (request.method === 'GET' || request.method === 'HEAD') return sendAsset(request, response, image, contentType)
           response.writeHead(405)
           response.end()
         },
@@ -461,8 +484,8 @@ export async function apply(ctx: any): Promise<void> {
     })
   }
   ctx.effect(() => watchProfile(synchronizeLoader, (error) => ctx.logger.error(error)), 'dsh-harmony: profile order watch')
-  ctx.on('internal/plugin', (fiber: any) => {
-    if (!reloadingEntries.has(fiber.entry)) synchronizeLoader()
+  ctx.on('internal/plugin', (fiber: Fiber) => {
+    if (fiber.entry === undefined || !reloadingEntries.has(fiber.entry)) synchronizeLoader()
   })
 
   ctx.effect(() => subscribe((targets, generation) => {
@@ -482,10 +505,10 @@ export async function apply(ctx: any): Promise<void> {
         const generation = pendingGeneration
         pendingClient.clear()
         pendingHost.clear()
-        const entries = [...ctx.loader.entries()].filter((entry: any) => {
+        const entries = [...ctx.loader.entries()].filter((entry) => {
           const packageName = packageNameOf(entry.options.name)
           return packageName !== undefined && hostTargets.has(packageName)
-        })
+        }) as unknown as ReloadableEntry[]
         await reload(entries, generation)
         for (const target of clientTargets) clientModules?.rebuilt(target)
       }).catch(error => ctx.logger.error(error))
