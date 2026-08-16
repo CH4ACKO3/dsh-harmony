@@ -66,7 +66,6 @@
   "files": [
     "assets",
     "browser-dist",
-    "docs",
     "lib",
     "scripts",
     "harmony.patch.yml",
@@ -78,6 +77,9 @@
     "build:core": "tsc -p tsconfig.json",
     "build:browser": "tsc -p tsconfig.browser.json",
     "build:scripts": "tsc -p tsconfig.scripts.json",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs",
     "test": "npm run build && npm run build --workspaces --if-present && tsc -p tsconfig.test.json && vitest run && node test/hook.e2e.ts && node test/client.e2e.ts && node test/first-boot.e2e.ts && node test/embedded.e2e.ts && node test/shim.e2e.ts && node test/bootstrap.e2e.ts && node test/runtime-gate.e2e.ts",
     "check": "npm test",
     "prepare": "npm run build",
@@ -108,8 +110,11 @@
   "devDependencies": {
     "@deepseek-ai/dsh": "0.1.0-rc.6",
     "@deepseek-ai/dsh-app-boot": "0.1.0-rc.6",
+    "@fontsource-variable/atkinson-hyperlegible-next": "^5.3.0",
+    "@fontsource-variable/source-code-pro": "^5.3.0",
     "@types/node": "^24.10.0",
     "@types/semver": "^7.8.0",
+    "vitepress": "^1.6.4",
     "vitest": "^4.1.10"
   },
   "license": "MIT"

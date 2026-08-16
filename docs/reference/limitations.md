@@ -1,0 +1,35 @@
+# Limitations
+
+Harmony changes compiled runtime code, so its guarantees stop at explicit boundaries.
+
+## Patch modules
+
+Provider Patch files must be CommonJS modules. Harmony's live Loader update path collects them synchronously.
+
+## Compiled structure
+
+Source selectors depend on the compiled shape of the target package. A target upgrade may change names, nesting, JSX output, or bundler helpers without changing the visible feature. Pin a compatible `target.version`, keep `expect` exact, and run `dsh harmony status` in release checks.
+
+## Semantic targets
+
+Semantic Patches support named function declarations and class methods. Parameters must be named identifiers; generators are not supported.
+
+Semantic handlers execute in Node.js. Browser bundles such as `lib/client.js` require Source Patches.
+
+Only one enabled semantic `replace` Patch may target a function. A conflicting transaction is rejected.
+
+## Provider order
+
+`before` and `after` are preferences over provider package names. Contradictory constraints may have no perfect order; automatic sorting minimizes violations but does not override the manual list.
+
+`conflicts` produces a warning, not an installation or runtime block.
+
+## Runtime ownership
+
+Harmony does not:
+
+- mutate installed target files;
+- proxy WebUI traffic;
+- provide a second Host or session store;
+- make a global installation affect an upstream Desktop that starts its own built-in CLI directly;
+- infer whether two arbitrary source transformations are semantically compatible.

@@ -10,3 +10,6 @@ PRODUCT.md
 /packages/react/examples/rebrand-plugin/client.js
 /packages/react/examples/rebrand-plugin/index.cjs
 /packages/react/examples/rebrand-plugin/patch.cjs
+/docs/.vitepress/cache/
+/docs/.vitepress/dist/
+/.impeccable/review/
