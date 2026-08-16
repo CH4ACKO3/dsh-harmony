@@ -1047,12 +1047,13 @@ module.exports = {
   const stop = watchProfile(() => { beginPluginUpdate(['watched-provider']).commit() }, error => errors.push(error))
   expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 2')
   writePatch(3)
-  await new Promise(resolve => setTimeout(resolve, 1200))
-  expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 3')
+  await expect.poll(
+    () => readFileSync(join(target, 'lib/index.js'), 'utf8'),
+    { timeout: 5000 },
+  ).toContain('value = 3')
   writeFileSync(patchFile, 'throw new Error("invalid patch")\n')
-  await new Promise(resolve => setTimeout(resolve, 1200))
+  await expect.poll(() => errors.length, { timeout: 5000 }).toBeGreaterThan(0)
   expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 3')
-  expect(errors.length).toBeGreaterThan(0)
   stop()
 })
 
@@ -1087,8 +1088,7 @@ module.exports = {
     name: 'watched-path-provider',
     dsh: { harmony: { patches: ['./new.cjs'] } },
   }))
-  await new Promise(resolve => setTimeout(resolve, 1200))
-  expect(errors.length).toBeGreaterThan(0)
+  await expect.poll(() => errors.length, { timeout: 5000 }).toBeGreaterThan(0)
   writeFileSync(join(provider, 'new.cjs'), `
 module.exports = {
   id: 'test-patch',
@@ -1097,8 +1097,10 @@ module.exports = {
   apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '3') },
 }
 `)
-  await new Promise(resolve => setTimeout(resolve, 1200))
-  expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 3')
+  await expect.poll(
+    () => readFileSync(join(target, 'lib/index.js'), 'utf8'),
+    { timeout: 5000 },
+  ).toContain('value = 3')
   stop()
 })
 
