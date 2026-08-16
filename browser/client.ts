@@ -1,7 +1,7 @@
 window.__ModuleLoader__.load({
   id: 'dsh-harmony',
   factory: (require) => {
-    const module = { exports: {} }
+    const module: BrowserPluginModule = { exports: {} }
     const exports = module.exports
     const React = require('react')
     const { createElement: h, useEffect, useMemo, useRef, useState } = React
@@ -249,21 +249,94 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         ignoreOnce: 'Ignore once',
         done: 'Done',
       },
+    } as const
+
+    type TranslationKey = keyof typeof dictionaries.en
+    type Translate = (key: TranslationKey) => string
+    type RuntimeAction = 'install' | 'install-restart' | 'remove' | 'ignore'
+    type RuntimeState = 'active' | 'missing' | 'desktop-inactive' | 'working' | 'installed' | 'removed' | 'ignored' | 'error'
+    type ReloadState = 'idle' | 'reloading' | 'succeeded' | 'failed'
+
+    interface RuntimeStatus {
+      state: RuntimeState
+      bootId: number
+      error?: string
+      reload?: { sequence: number; state: ReloadState; error?: string }
+    }
+
+    interface ReloadNotice {
+      signature: string
+      state: ReloadState
+      text: string
+    }
+
+    interface PatchStatus {
+      key: string
+      owner: string
+      target: { package: string; version?: string; files: string[] }
+      kind: 'source' | 'semantic'
+      operation?: 'before' | 'after' | 'around' | 'replace'
+      state: 'pending' | 'bound' | 'disabled' | 'failed'
+      loaded: boolean
+      matches: number
+      generation: number
+      file?: string
+      error?: string
+    }
+
+    interface PatchInspection {
+      original: string
+      final: string
+      steps: Array<{ key: string; matches: number; source: string }>
+    }
+
+    interface PluginView {
+      name: string
+      version: string
+      description: string
+      harmony: boolean
+      patchCount: number
+      before: string[]
+      after: string[]
+      conflicts: string[]
+      author: string
+      contributors: string[]
+      homepage: string
+      bugs: string
+      license: string
+    }
+
+    interface ProfileView {
+      order: string[]
+      plugins: PluginView[]
+      incompatibilities: Array<{ declaredBy: string; conflictsWith: string }>
+    }
+
+    interface HarmonyClientContext {
+      effect(register: () => unknown, label?: string): void
+      locale: {
+        register(namespace: string, values: typeof dictionaries): unknown
+        bind(namespace: string): Translate
+      }
+      slots: {
+        inject(name: string, mount: () => unknown): unknown
+        register(options: Record<string, unknown>, component: unknown): unknown
+      }
     }
 
     const localeNamespace = 'dsh-harmony'
-    const sameOrder = (left, right) => left.length === right.length && left.every((name, index) => name === right[index])
+    const sameOrder = (left: string[], right: string[]) => left.length === right.length && left.every((name, index) => name === right[index])
     const harmonyPlugin = 'dsh-harmony'
-    const displayName = name => name.replace(/^@[^/]+\//, '')
-    const listName = name => displayName(name).replace(/^dsh-/, '')
-    const packageScope = name => name.match(/^(@[^/]+)\//)?.[1] ?? ''
-    const detailAuthor = plugin => [packageScope(plugin.name), plugin.author].filter(Boolean).join(' · ')
+    const displayName = (name: string) => name.replace(/^@[^/]+\//, '')
+    const listName = (name: string) => displayName(name).replace(/^dsh-/, '')
+    const packageScope = (name: string) => name.match(/^(@[^/]+)\//)?.[1] ?? ''
+    const detailAuthor = (plugin: PluginView) => [packageScope(plugin.name), plugin.author].filter(Boolean).join(' · ')
 
-    function RuntimePrompt({ t }) {
-      const [status, setStatus] = useState(null)
+    function RuntimePrompt({ t }: { t: Translate }) {
+      const [status, setStatus] = useState<RuntimeStatus | null>(null)
       const [busy, setBusy] = useState(false)
       const [dismissed, setDismissed] = useState(false)
-      const primary = useRef(null)
+      const primary = useRef<HTMLButtonElement | null>(null)
 
       useEffect(() => {
         fetch('/dsh-harmony/runtime', { cache: 'no-store' })
@@ -273,7 +346,8 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       }, [])
       useEffect(() => { if (status?.state === 'missing' || status?.state === 'desktop-inactive') primary.current?.focus() }, [status?.state])
 
-      const choose = async action => {
+      const choose = async (action: RuntimeAction) => {
+        if (status === null) return
         setBusy(true)
         let polling = false
         try {
@@ -284,7 +358,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
             body: JSON.stringify({ action }),
           })
           if (!response.ok) throw new Error(`${response.status}`)
-          const next = await response.json()
+          const next = await response.json() as RuntimeStatus
           setStatus(next)
           if (action === 'ignore') return setDismissed(true)
           if (action !== 'install-restart' || next.state !== 'installed') return
@@ -292,7 +366,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
           const deadline = Date.now() + 15_000
           const poll = async () => {
             try {
-              const current = await fetch('/dsh-harmony/runtime', { cache: 'no-store' }).then(result => result.json())
+              const current = await fetch('/dsh-harmony/runtime', { cache: 'no-store' }).then(result => result.json() as Promise<RuntimeStatus>)
               if (current.bootId !== previous && current.state === 'active') return window.location.reload()
             } catch {}
             if (Date.now() < deadline) return window.setTimeout(poll, 300)
@@ -329,26 +403,27 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
                 h('button', { ref: primary, className: 'dshHarmonyButton', type: 'button', disabled: busy, onClick: () => { void choose('install-restart') } }, busy ? t('runtimeWorking') : t('installRestart'))))))
     }
 
-    function ReloadNotifications({ t }) {
-      const [notice, setNotice] = useState(null)
-      const seen = useRef(null)
+    function ReloadNotifications({ t }: { t: Translate }) {
+      const [notice, setNotice] = useState<ReloadNotice | null>(null)
+      const seen = useRef<string | null>(null)
 
       useEffect(() => {
         let mounted = true
-        let timer
+        let timer: number | undefined
         const poll = async () => {
           try {
-            const status = await fetch('/dsh-harmony/runtime', { cache: 'no-store' }).then(response => response.json())
+            const status = await fetch('/dsh-harmony/runtime', { cache: 'no-store' }).then(response => response.json() as Promise<RuntimeStatus>)
             if (!mounted || status.state !== 'active' || status.reload === undefined) return
             const signature = `${status.reload.sequence}:${status.reload.state}`
             if (seen.current === null) seen.current = signature
             else if (seen.current !== signature) {
               seen.current = signature
-              const key = {
+              const reloadMessages: Partial<Record<ReloadState, TranslationKey>> = {
                 reloading: 'reloadStarting',
                 succeeded: 'reloadSucceeded',
                 failed: 'reloadFailed',
-              }[status.reload.state]
+              }
+              const key = reloadMessages[status.reload.state]
               if (key !== undefined) setNotice({
                 signature,
                 state: status.reload.state,
@@ -363,7 +438,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         void poll()
         return () => {
           mounted = false
-          window.clearTimeout(timer)
+          if (timer !== undefined) window.clearTimeout(timer)
         }
       }, [t])
 
@@ -381,15 +456,15 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       }, h('span', { className: 'dshHarmonyToastDot', 'aria-hidden': 'true' }), notice.text)
     }
 
-    function PatchStatusPage({ t }) {
-      const [patches, setPatches] = useState([])
-      const [selected, setSelected] = useState(null)
-      const [inspection, setInspection] = useState(null)
+    function PatchStatusPage({ t }: { t: Translate }) {
+      const [patches, setPatches] = useState<PatchStatus[]>([])
+      const [selected, setSelected] = useState<string | null>(null)
+      const [inspection, setInspection] = useState<PatchInspection | null>(null)
       const [loading, setLoading] = useState(true)
-      const [busy, setBusy] = useState(null)
+      const [busy, setBusy] = useState<string | null>(null)
       const [error, setError] = useState('')
       const patch = patches.find(item => item.key === selected) ?? patches[0]
-      const stateLabel = state => t({ pending: 'patchPending', bound: 'patchBound', disabled: 'patchDisabled', failed: 'patchFailed' }[state])
+      const stateLabel = (state: PatchStatus['state']) => t({ pending: 'patchPending', bound: 'patchBound', disabled: 'patchDisabled', failed: 'patchFailed' }[state] as TranslationKey)
 
       const load = async () => {
         setLoading(true)
@@ -397,7 +472,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         try {
           const response = await fetch('/dsh-harmony/patches', { cache: 'no-store' })
           if (!response.ok) throw new Error(`${response.status}`)
-          const next = await response.json()
+          const next = await response.json() as { patches: PatchStatus[] }
           setPatches(next.patches)
           setSelected(current => next.patches.some(item => item.key === current) ? current : next.patches[0]?.key ?? null)
         } catch (reason) {
@@ -415,12 +490,13 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         const query = new URLSearchParams({ package: patch.target.package, file: patch.file })
         fetch(`/dsh-harmony/inspect?${query}`, { cache: 'no-store' })
           .then(response => response.ok ? response.json() : Promise.reject(new Error(`${response.status}`)))
-          .then(value => { if (current) setInspection(value.inspections[0] ?? null) })
+          .then((value: { inspections: PatchInspection[] }) => { if (current) setInspection(value.inspections[0] ?? null) })
           .catch(reason => { if (current) setError(reason instanceof Error ? reason.message : String(reason)) })
         return () => { current = false }
       }, [patch?.key, patch?.file])
 
-      const toggle = async provider => {
+      const toggle = async (provider: boolean) => {
+        if (patch === undefined) return
         setBusy(patch.key)
         setError('')
         try {
@@ -431,7 +507,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
               ? { owner: patch.owner, enabled: patches.filter(item => item.owner === patch.owner).every(item => item.state === 'disabled') }
               : { key: patch.key, enabled: patch.state === 'disabled' }),
           })
-          const next = await response.json()
+          const next = await response.json() as { patches: PatchStatus[]; error?: string }
           if (!response.ok) throw new Error(next.error ?? `${response.status}`)
           setPatches(next.patches)
         } catch (reason) {
@@ -496,31 +572,32 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         error ? h('p', { className: 'dshHarmonyHint dshHarmonyError', role: 'alert' }, `${t('runtimeError')}: ${error}`) : null)
     }
 
-    function HarmonySettings({ t }) {
-      const [page, setPage] = useState('order')
-      const [view, setView] = useState(null)
-      const [savedOrder, setSavedOrder] = useState([])
-      const [draftOrder, setDraftOrder] = useState([])
-      const [selected, setSelected] = useState(null)
+    function HarmonySettings({ t }: { t: Translate }) {
+      const [page, setPage] = useState<'order' | 'patches'>('order')
+      const [view, setView] = useState<ProfileView | null>(null)
+      const [savedOrder, setSavedOrder] = useState<string[]>([])
+      const [draftOrder, setDraftOrder] = useState<string[]>([])
+      const [selected, setSelected] = useState<string | null>(null)
       const [loading, setLoading] = useState(true)
       const [error, setError] = useState('')
       const [saving, setSaving] = useState(false)
-      const [closePrompt, setClosePrompt] = useState(null)
-      const [dragging, setDragging] = useState(null)
-      const listRef = useRef(null)
-      const rowRefs = useRef(new Map())
-      const drag = useRef(null)
-      const pendingClose = useRef(null)
-      const promptButton = useRef(null)
+      const [closePrompt, setClosePrompt] = useState<boolean | null>(null)
+      const [dragging, setDragging] = useState<string | null>(null)
+      const listRef = useRef<HTMLUListElement | null>(null)
+      const rowRefs = useRef(new Map<string, HTMLButtonElement>())
+      const drag = useRef<{ name: string; pointerId: number } | null>(null)
+      const pendingClose = useRef<{ promise: Promise<boolean>; resolve(allow: boolean): void } | null>(null)
+      const promptButton = useRef<HTMLButtonElement | null>(null)
       const draftRef = useRef(draftOrder)
       const dirtyRef = useRef(false)
-      const saveRef = useRef(null)
+      const saveRef = useRef<(() => Promise<void>) | null>(null)
 
       const dirty = !sameOrder(savedOrder, draftOrder)
       draftRef.current = draftOrder
       dirtyRef.current = dirty
       const plugins = useMemo(() => new Map((view?.plugins ?? []).map(plugin => [plugin.name, plugin])), [view])
-      const selectedPlugin = plugins.get(selected) ?? plugins.get(draftOrder[0])
+      const firstPlugin = draftOrder[0] === undefined ? undefined : plugins.get(draftOrder[0])
+      const selectedPlugin = (selected === null ? undefined : plugins.get(selected)) ?? firstPlugin
       const selectedAuthor = selectedPlugin === undefined ? '' : detailAuthor(selectedPlugin)
 
       const load = async () => {
@@ -529,11 +606,11 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         try {
           const response = await fetch('/dsh-harmony/order')
           if (!response.ok) throw new Error(`${response.status}`)
-          const next = await response.json()
+          const next = await response.json() as ProfileView
           setView(next)
           setSavedOrder(next.order)
           setDraftOrder(next.order)
-          setSelected(current => next.order.includes(current) ? current : next.order[0] ?? null)
+          setSelected(current => current !== null && next.order.includes(current) ? current : next.order[0] ?? null)
         } catch (reason) {
           setError(reason instanceof Error ? reason.message : String(reason))
         } finally {
@@ -550,7 +627,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ order: draftRef.current }),
           })
-          const next = await response.json()
+          const next = await response.json() as ProfileView & { error?: string }
           if (!response.ok) throw new Error(next.error ?? `${response.status}`)
           setView(next)
           setSavedOrder(next.order)
@@ -570,27 +647,27 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         const guard = () => {
           if (!dirtyRef.current) return Promise.resolve(true)
           if (pendingClose.current !== null) return pendingClose.current.promise
-          let resolve
-          const promise = new Promise(next => { resolve = next })
+          let resolve!: (allow: boolean) => void
+          const promise = new Promise<boolean>(next => { resolve = next })
           pendingClose.current = { promise, resolve }
           setClosePrompt(true)
           return promise
         }
-        globalThis.__dshHarmonyBeforeSettingsClose = guard
-        const beforeUnload = event => {
+        window.__dshHarmonyBeforeSettingsClose = guard
+        const beforeUnload = (event: BeforeUnloadEvent) => {
           if (!dirtyRef.current) return
           event.preventDefault()
           event.returnValue = ''
         }
         window.addEventListener('beforeunload', beforeUnload)
         return () => {
-          if (globalThis.__dshHarmonyBeforeSettingsClose === guard) delete globalThis.__dshHarmonyBeforeSettingsClose
+          if (window.__dshHarmonyBeforeSettingsClose === guard) delete window.__dshHarmonyBeforeSettingsClose
           window.removeEventListener('beforeunload', beforeUnload)
         }
       }, [])
 
-      const focus = name => requestAnimationFrame(() => rowRefs.current.get(name)?.focus())
-      const moveTo = (name, target) => {
+      const focus = (name: string) => requestAnimationFrame(() => rowRefs.current.get(name)?.focus())
+      const moveTo = (name: string, target: number) => {
         if (saving) return
         setDraftOrder(current => {
           const from = current.indexOf(name)
@@ -603,16 +680,16 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
           return next
         })
       }
-      const moveBy = (name, offset) => {
+      const moveBy = (name: string, offset: number) => {
         const index = draftRef.current.indexOf(name)
         moveTo(name, index + offset)
         focus(name)
       }
-      const moveFromPointer = event => {
+      const moveFromPointer = (event: PointerEvent & { currentTarget: HTMLElement }) => {
         if (saving) return
         const active = drag.current
         if (active?.pointerId !== event.pointerId) return
-        const rows = [...event.currentTarget.querySelectorAll('[data-plugin-name]')]
+        const rows = [...event.currentTarget.querySelectorAll<HTMLElement>('[data-plugin-name]')]
           .filter(row => row.dataset.pluginName !== active.name)
         const target = rows.findIndex(row => {
           const bounds = row.getBoundingClientRect()
@@ -620,14 +697,14 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         })
         moveTo(active.name, target === -1 ? rows.length : target)
       }
-      const finishDrag = event => {
+      const finishDrag = (event: PointerEvent) => {
         const active = drag.current
         if (active?.pointerId !== event.pointerId) return
         drag.current = null
         setDragging(null)
         setSelected(active.name)
       }
-      const selectBy = (name, offset) => {
+      const selectBy = (name: string, offset: number) => {
         const index = draftRef.current.indexOf(name)
         const next = draftRef.current[Math.max(0, Math.min(draftRef.current.length - 1, index + offset))]
         if (next !== undefined) {
@@ -635,8 +712,9 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
           focus(next)
         }
       }
-      const finishPrompt = allow => {
+      const finishPrompt = (allow: boolean) => {
         const prompt = pendingClose.current
+        if (prompt === null) return
         pendingClose.current = null
         setClosePrompt(null)
         prompt.resolve(allow)
@@ -693,7 +771,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
               const isFixed = name === harmonyPlugin
               return h('li', { key: name },
                 h('button', {
-                  ref: element => element === null ? rowRefs.current.delete(name) : rowRefs.current.set(name, element),
+                  ref: (element: HTMLButtonElement | null) => element === null ? rowRefs.current.delete(name) : rowRefs.current.set(name, element),
                   type: 'button',
                   role: 'option',
                   className: 'dshHarmonyRow',
@@ -705,14 +783,14 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
                   'aria-grabbed': isDragging,
                   'aria-disabled': saving || isFixed,
                   onClick: () => { setSelected(name) },
-                  onPointerDown: event => {
+                  onPointerDown: (event: PointerEvent) => {
                     if (event.button !== 0 || isFixed || saving) return
-                    listRef.current.setPointerCapture(event.pointerId)
+                    listRef.current?.setPointerCapture(event.pointerId)
                     drag.current = { name, pointerId: event.pointerId }
                     setDragging(name)
                     setSelected(name)
                   },
-                  onKeyDown: event => {
+                  onKeyDown: (event: KeyboardEvent) => {
                     if (saving) return
                     if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
                     event.preventDefault()
@@ -767,12 +845,12 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
               h('button', {
                 ref: promptButton,
                 className: 'dshHarmonyButton', type: 'button', disabled: saving,
-                onClick: () => { void saveRef.current().then(() => finishPrompt(true)).catch(() => {}) },
+                onClick: () => { void saveRef.current?.().then(() => finishPrompt(true)).catch(() => {}) },
               }, saving ? t('saving') : t('saveExit'))))) : null))
     }
 
     const inject = ['slots', 'locale']
-    function apply(ctx) {
+    function apply(ctx: HarmonyClientContext) {
       ctx.effect(() => ctx.locale.register(localeNamespace, dictionaries), 'dsh-harmony: dictionaries')
       const t = ctx.locale.bind(localeNamespace)
       ctx.slots.inject('shell.overlay', () => ctx.slots.register({

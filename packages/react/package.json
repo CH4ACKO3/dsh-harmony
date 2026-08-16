@@ -42,7 +42,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && tsc -p examples/rebrand-plugin/tsconfig.json && tsc -p examples/rebrand-plugin/tsconfig.client.json",
     "test": "npm run build && vitest run",
     "check": "npm test",
     "prepare": "npm run build"

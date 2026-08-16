@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
+import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { delimiter, join, resolve } from 'node:path'
 
@@ -15,6 +16,10 @@ const dependentMarker = join(root, 'dependent-ran')
 const harmonyRoot = resolve('.')
 const official = resolve('node_modules/@deepseek-ai/dsh/lib/bin.js')
 const harmonyVersion = JSON.parse(readFileSync('package.json', 'utf8')).version
+
+interface RuntimeStatus {
+  state: 'missing' | 'desktop-inactive' | 'ignored' | 'installed'
+}
 
 mkdirSync(join(profile, 'node_modules'), { recursive: true })
 mkdirSync(fakeBin, { recursive: true })
@@ -50,16 +55,16 @@ if (process.platform === 'win32') {
   chmodSync(join(fakeBin, 'npm'), 0o755)
 }
 
-const freePort = () => new Promise((resolvePort, reject) => {
+const freePort = () => new Promise<number>((resolvePort, reject) => {
   const server = createServer()
   server.once('error', reject)
   server.listen(0, '127.0.0.1', () => {
-    const address = server.address()
+    const address = server.address() as AddressInfo
     server.close(() => resolvePort(address.port))
   })
 })
 
-async function startRuntime(env = {}) {
+async function startRuntime(env: NodeJS.ProcessEnv = {}) {
   const port = await freePort()
   const child = spawn(process.execPath, [official, 'web', '--port', String(port)], {
     env: {
@@ -78,13 +83,13 @@ async function startRuntime(env = {}) {
   return { child, childExit, url: `http://127.0.0.1:${port}`, output: () => output }
 }
 
-function waitForStatus(runtime) {
-  return new Promise((resolveStatus, reject) => {
+function waitForStatus(runtime: Awaited<ReturnType<typeof startRuntime>>): Promise<RuntimeStatus> {
+  return new Promise<RuntimeStatus>((resolveStatus, reject) => {
     const deadline = Date.now() + 10_000
     const poll = async () => {
       try {
         const response = await fetch(`${runtime.url}/dsh-harmony/runtime`)
-        if (response.ok) return resolveStatus(await response.json())
+        if (response.ok) return resolveStatus(await response.json() as RuntimeStatus)
       } catch {}
       if (Date.now() >= deadline) return reject(new Error(`runtime prompt did not start:\n${runtime.output()}`))
       setTimeout(poll, 100)
@@ -107,7 +112,7 @@ const ignored = await fetch(`${desktop.url}/dsh-harmony/runtime`, {
   headers: { 'content-type': 'application/json' },
   body: JSON.stringify({ action: 'ignore' }),
 })
-assert.equal((await ignored.json()).state, 'ignored')
+assert.equal((await ignored.json() as RuntimeStatus).state, 'ignored')
 desktop.child.kill()
 await desktop.childExit
 
@@ -126,7 +131,7 @@ const response = await fetch(`${url}/dsh-harmony/runtime`, {
   body: JSON.stringify({ action: 'install' }),
 })
 assert.equal(response.ok, true)
-assert.equal((await response.json()).state, 'installed')
+assert.equal((await response.json() as RuntimeStatus).state, 'installed')
 assert.equal(readFileSync(npmLog, 'utf8'), `install --global dsh-harmony@${harmonyVersion}\nprefix --global\n`)
 assert.equal(await runtime.childExit, 0, runtime.output())
 assert.equal(existsSync(dependentMarker), false)

@@ -33,7 +33,7 @@
     },
     "./bin": "./lib/bin.js",
     "./client": {
-      "default": "./client.js"
+      "default": "./browser-dist/client.js"
     },
     "./package.json": "./package.json"
   },
@@ -65,17 +65,20 @@
   },
   "files": [
     "assets",
-    "client.js",
+    "browser-dist",
     "docs",
     "lib",
     "scripts",
     "harmony.patch.yml",
     "README.md",
-    "README.en.md"
+    "README.zh-CN.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "test": "npm run build && npm run build --workspaces --if-present && vitest run && node test/hook.e2e.mjs && node test/client.e2e.mjs && node test/first-boot.e2e.mjs && node test/embedded.e2e.mjs && node test/shim.e2e.mjs && node test/bootstrap.e2e.mjs && node test/runtime-gate.e2e.mjs",
+    "build": "npm run build:core && npm run build:browser && npm run build:scripts",
+    "build:core": "tsc -p tsconfig.json",
+    "build:browser": "tsc -p tsconfig.browser.json",
+    "build:scripts": "tsc -p tsconfig.scripts.json",
+    "test": "npm run build && npm run build --workspaces --if-present && tsc -p tsconfig.test.json && vitest run && node test/hook.e2e.ts && node test/client.e2e.ts && node test/first-boot.e2e.ts && node test/embedded.e2e.ts && node test/shim.e2e.ts && node test/bootstrap.e2e.ts && node test/runtime-gate.e2e.ts",
     "check": "npm test",
     "prepare": "npm run build",
     "postinstall": "node scripts/postinstall.cjs"

@@ -10,8 +10,14 @@ const fixtures = join(dirname(fileURLToPath(import.meta.url)), 'fixtures')
 const profile = mkdtempSync(join(tmpdir(), 'dsh-harmony-hook-'))
 const modules = join(profile, 'node_modules')
 mkdirSync(modules)
+const packageNames: Record<string, string> = {
+  provider: 'hook-provider',
+  'provider-cjs': 'hook-provider-cjs',
+  target: 'hook-target',
+  'target-cjs': 'hook-target-cjs',
+}
 for (const name of ['provider', 'provider-cjs', 'target', 'target-cjs']) {
-  const packageName = { provider: 'hook-provider', 'provider-cjs': 'hook-provider-cjs', target: 'hook-target', 'target-cjs': 'hook-target-cjs' }[name]
+  const packageName = packageNames[name]!
   cpSync(join(fixtures, name), join(modules, packageName), { recursive: true })
 }
 writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: {
@@ -27,25 +33,37 @@ const originalCjs = await import(`${pathToFileURL(cjsEntry).href}?dsh-harmony=0`
 assert.equal(originalCjs.default.answer(), 1)
 
 synchronizeProfile(profile)
-const generation = getPatchStatuses().find(patch => patch.owner === 'hook-provider').generation
+const generation = getPatchStatuses().find(patch => patch.owner === 'hook-provider')?.generation
+assert.ok(generation !== undefined)
 const target = await import(`${targetEntry}?dsh-harmony=${generation}`)
 assert.equal(target.answer(), 2)
 const candidate = beginProfileUpdate({ disabled: ['hook-provider/lazy-patch'] })
 assert.equal(await target.lazyAnswer(), 2)
 candidate.rollback()
 assert.equal(await target.lazyAnswer(), 2)
-const entry = {
+const entry: {
+  options: { name: string }
+  fiber?: { uid: number; runtime: { callback: { answer(): number } } }
+  loader: { unwrapExports(value: unknown): unknown }
+  parent: { tree: { ctx: { baseUrl: string }; import(): Promise<unknown> } }
+  getOuterStack(): never[]
+  _dispose(): Promise<void>
+  _start(plugin: { answer(): number }): Promise<void>
+} = {
   options: { name: cjsEntry },
   fiber: { uid: 1, runtime: { callback: originalCjs.default } },
-  loader: { unwrapExports(value) {
-    value = value?.default ?? value
-    return value?.__esModule ? value.default ?? value : value
+  loader: { unwrapExports(value: unknown) {
+    const candidate = value as { default?: unknown; __esModule?: boolean } | null | undefined
+    const unwrapped = candidate?.default ?? candidate
+    if (typeof unwrapped !== 'object' || unwrapped === null) return unwrapped
+    const module = unwrapped as { default?: unknown; __esModule?: boolean }
+    return module.__esModule ? module.default ?? module : module
   } },
   parent: { tree: { ctx: { baseUrl: import.meta.url }, import() { return import(`${pathToFileURL(cjsEntry).href}?dsh-harmony=${generation}`) } } },
   getOuterStack() { return [] },
   async _dispose() { this.fiber = undefined },
-  async _start(plugin) { this.fiber = { uid: 2, runtime: { callback: plugin } } },
+  async _start(plugin: { answer(): number }) { this.fiber = { uid: 2, runtime: { callback: plugin } } },
 }
 await reloadEntries([entry], 1)
-assert.equal(entry.fiber.runtime.callback.answer(), 2)
+assert.equal(entry.fiber?.runtime.callback.answer(), 2)
 rmSync(profile, { recursive: true })

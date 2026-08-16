@@ -6,7 +6,18 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
 const require = createRequire(import.meta.url)
-const { installShim, resolveCommandPath, resolveGlobalModules } = require('../scripts/install-shim.cjs')
+interface ShimPaths { command: string; harmony: string; official: string; platform?: NodeJS.Platform }
+interface BootstrapRoute { path: string }
+interface BootstrapContext {
+  appExit?(): void
+  inject(services: string[], callback: (ctx: { webServer: { register(route: BootstrapRoute): () => void } }) => void): void
+  logger: { warn(message: string): void }
+}
+const { installShim, resolveCommandPath, resolveGlobalModules } = require('../scripts/install-shim.cjs') as {
+  installShim(paths: ShimPaths): void
+  resolveCommandPath(prefix: string, platform?: NodeJS.Platform): string
+  resolveGlobalModules(prefix: string, platform?: NodeJS.Platform): string
+}
 const root = mkdtempSync(join(tmpdir(), 'dsh-harmony-shim-'))
 const prefix = join(root, 'prefix with spaces')
 const globalModules = resolveGlobalModules(prefix)
@@ -35,6 +46,7 @@ writeFileSync(join(harmonySource, 'lib/bin.js'), '#!/usr/bin/env node\nconsole.l
 chmodSync(official, 0o755)
 copyFileSync(official, command)
 cpSync('scripts', join(harmonySource, 'scripts'), { recursive: true })
+cpSync('browser-dist', join(harmonySource, 'browser-dist'), { recursive: true })
 cpSync('node_modules/yaml', join(harmonySource, 'node_modules/yaml'), { recursive: true })
 cpSync('node_modules/js-yaml', join(globalModules, 'js-yaml'), { recursive: true })
 
@@ -73,9 +85,9 @@ if (process.platform === 'win32') {
   writeFileSync(`${command}.ps1`, '& node "$PSScriptRoot/dsh" @args\n')
 }
 let warning = ''
-const routes = []
+const routes: BootstrapRoute[] = []
 const bootstrapFile = join(home, 'node_modules/dsh-harmony-bootstrap/bootstrap.cjs')
-const bootstrap = require(bootstrapFile)
+const bootstrap = require(bootstrapFile) as { apply(ctx: BootstrapContext): void }
 bootstrap.apply({
   appExit() {},
   inject(_services, callback) {

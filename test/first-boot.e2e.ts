@@ -10,9 +10,9 @@ const child = spawn(process.execPath, ['lib/bin.js', 'web', '--port', '0'], {
   stdio: ['ignore', 'pipe', 'pipe'],
 })
 let output = ''
-await new Promise((resolve, reject) => {
+await new Promise<void>((resolve, reject) => {
   const timer = setTimeout(() => reject(new Error(`first boot timed out:\n${output}`)), 10_000)
-  const read = chunk => {
+  const read = (chunk: Buffer) => {
     output += chunk
     if (!output.includes('dsh web: http://127.0.0.1:')) return
     clearTimeout(timer)

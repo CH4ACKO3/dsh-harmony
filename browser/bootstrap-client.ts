@@ -1,7 +1,7 @@
 window.__ModuleLoader__.load({
   id: 'dsh-harmony-bootstrap',
   factory: (require) => {
-    const module = { exports: {} }
+    const module: BrowserPluginModule = { exports: {} }
     const exports = module.exports
     const React = require('react')
     const { createElement: h, useEffect, useState } = React
@@ -21,6 +21,22 @@ window.__ModuleLoader__.load({
         failed: 'Restart failed. Try again.',
         retry: 'Retry',
       },
+    } as const
+
+    type Translate = (key: keyof typeof dictionaries.en) => string
+
+    interface BootstrapStatus {
+      restart: boolean
+      bootId: number
+    }
+
+    interface BootstrapClientContext {
+      effect(register: () => unknown, label?: string): void
+      locale: { register(namespace: string, values: typeof dictionaries): unknown }
+      slots: {
+        inject(name: string, mount: () => unknown): unknown
+        register(options: Record<string, unknown>, component: unknown): unknown
+      }
     }
 
     const css = `
@@ -40,8 +56,8 @@ window.__ModuleLoader__.load({
       document.head.appendChild(style)
     }
 
-    function RestartBanner({ t }) {
-      const [status, setStatus] = useState(null)
+    function RestartBanner({ t }: { t: Translate }) {
+      const [status, setStatus] = useState<BootstrapStatus | null>(null)
       const [restarting, setRestarting] = useState(false)
       const [failed, setFailed] = useState(false)
 
@@ -53,6 +69,7 @@ window.__ModuleLoader__.load({
       }, [])
 
       const restart = async () => {
+        if (status === null) return
         setRestarting(true)
         setFailed(false)
         try {
@@ -63,7 +80,7 @@ window.__ModuleLoader__.load({
           const poll = async () => {
             try {
               const nextResponse = await fetch('/dsh-harmony-bootstrap/restart', { cache: 'no-store' })
-              const next = await nextResponse.json()
+              const next = await nextResponse.json() as BootstrapStatus
               if (next.bootId !== previous) return window.location.reload()
             } catch {}
             if (Date.now() < deadline) return window.setTimeout(poll, 300)
@@ -85,7 +102,7 @@ window.__ModuleLoader__.load({
     }
 
     const inject = ['slots', 'locale']
-    function apply(ctx) {
+    function apply(ctx: BootstrapClientContext) {
       ctx.effect(() => ctx.locale.register(namespace, dictionaries), 'dsh-harmony-bootstrap: dictionaries')
       ctx.slots.inject('shell.overlay', () => ctx.slots.register({
         name: 'shell.overlay',

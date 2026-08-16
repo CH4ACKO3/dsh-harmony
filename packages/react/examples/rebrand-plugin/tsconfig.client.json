@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "rootDir": "src",
+    "outDir": ".",
+    "strict": true,
+    "lib": ["ES2023", "DOM"],
+    "types": [],
+    "skipLibCheck": true
+  },
+  "files": ["src/client.ts", "../../../../browser/runtime.d.ts"]
+}

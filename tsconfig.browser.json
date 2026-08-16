@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "rootDir": "browser",
+    "outDir": "browser-dist",
+    "strict": true,
+    "lib": ["ES2023", "DOM"],
+    "types": [],
+    "skipLibCheck": true
+  },
+  "include": ["browser"]
+}

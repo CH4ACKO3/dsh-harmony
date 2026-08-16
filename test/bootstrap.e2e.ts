@@ -3,11 +3,15 @@ import { spawn } from 'node:child_process'
 import { copyFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { createServer } from 'node:net'
+import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 
 const require = createRequire(import.meta.url)
-const { ensureBootstrap } = require('../scripts/install-shim.cjs')
+const { ensureBootstrap } = require('../scripts/install-shim.cjs') as {
+  ensureBootstrap(paths: { home: string; command: string; official: string; harmony: string }): void
+}
+interface RuntimeStatus { restart: boolean; bootId: number }
 const root = mkdtempSync(join(tmpdir(), 'dsh-harmony-bootstrap-'))
 const home = join(root, 'home')
 const command = join(root, 'bin/dsh')
@@ -18,11 +22,11 @@ mkdirSync(dirname(command), { recursive: true })
 copyFileSync(official, command)
 ensureBootstrap({ home, command, official, harmony })
 
-const port = await new Promise((resolvePort, reject) => {
+const port = await new Promise<number>((resolvePort, reject) => {
   const server = createServer()
   server.once('error', reject)
   server.listen(0, '127.0.0.1', () => {
-    const address = server.address()
+    const address = server.address() as AddressInfo
     server.close(() => resolvePort(address.port))
   })
 })
@@ -32,9 +36,9 @@ const child = spawn(process.execPath, [official, 'web', '--port', String(port)],
 })
 const firstExit = new Promise(resolveExit => child.once('exit', resolveExit))
 let output = ''
-const url = await new Promise((resolveUrl, reject) => {
+const url = await new Promise<string>((resolveUrl, reject) => {
   const timer = setTimeout(() => reject(new Error(`bootstrap boot timed out:\n${output}`)), 10_000)
-  const read = chunk => {
+  const read = (chunk: Buffer) => {
     output += chunk
     const match = output.match(/dsh web: (http:\/\/127\.0\.0\.1:\d+)/)
     if (!match) return
@@ -49,7 +53,7 @@ const url = await new Promise((resolveUrl, reject) => {
   })
 })
 
-const status = await fetch(`${url}/dsh-harmony-bootstrap/restart`).then(response => response.json())
+const status = await fetch(`${url}/dsh-harmony-bootstrap/restart`).then(response => response.json() as Promise<RuntimeStatus>)
 assert.equal(status.restart, true)
 const html = await fetch(url).then(response => response.text())
 assert.match(html, /dsh-harmony-bootstrap/)
@@ -59,11 +63,11 @@ assert.match(client, /Restart now/)
 const restart = await fetch(`${url}/dsh-harmony-bootstrap/restart`, { method: 'POST' })
 assert.equal(restart.ok, true)
 await firstExit
-const next = await new Promise((resolveStatus, reject) => {
+const next = await new Promise<RuntimeStatus>((resolveStatus, reject) => {
   const deadline = Date.now() + 10_000
   const poll = async () => {
     try {
-      const current = await fetch(`${url}/dsh-harmony-bootstrap/restart`).then(response => response.json())
+      const current = await fetch(`${url}/dsh-harmony-bootstrap/restart`).then(response => response.json() as Promise<RuntimeStatus>)
       if (current.bootId !== status.bootId) return resolveStatus(current)
     } catch {}
     if (Date.now() >= deadline) return reject(new Error(`restarted dsh did not become ready:\n${output}`))
@@ -76,7 +80,7 @@ const harmonyHtml = await fetch(url).then(response => response.text())
 assert.match(harmonyHtml, /dsh-harmony/)
 
 process.kill(next.bootId, 'SIGTERM')
-await new Promise(resolveExit => {
+await new Promise<void>(resolveExit => {
   const poll = () => {
     try {
       process.kill(next.bootId, 0)
