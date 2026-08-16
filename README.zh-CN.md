@@ -58,8 +58,32 @@
   受影响的 Loader 条目或 WebUI bundle；失败时保留旧代
 - 🧯 **冲突可见**：匹配数异常、两个 `replace` 争用同一函数、前序 Patch 移除后序目标
   等错误会指出提供者、目标文件和冲突关系
+- 🛠️ **工具 API**：检查、Host 扩展和隔离的 Draft Runtime API 允许下游工具通过当前
+  Patch 引擎验证构建结果
 - 🧼 **不污染安装目录**：变换仅存在于运行时；卸载 Harmony 后，官方 `dsh` 和所有
   目标插件立即回到原始实现
+
+## React 感知 Patch
+
+[`dsh-harmony-react`](https://github.com/CH4ACKO3/dsh-harmony/tree/main/packages/react)
+是用于修改编译后 React `jsx` / `jsxs` 调用的配套包，无需手写 TSQuery 选择器和
+源码编辑。它的类型化工厂会生成普通的 `HarmonySourcePatch` 声明，Patch 的发现、
+排序、验证、事务和 WebUI HMR 仍由 Harmony 统一负责。
+
+```sh
+npm install dsh-harmony-react
+```
+
+可以使用 `replaceElement`、`wrapElement`、`insertBefore`、`insertAfter`、
+`transformProps` 或 `removeElement` 修改现有 React 树，同时保留编译后运行时的调用
+约定；`replaceStringLiteral` 用于精确替换浏览器字符串。该包只在 Node 侧生成 Patch，
+不会安装第二个 DSH 插件，也不会携带另一套客户端运行时。
+
+可选的 `dsh-harmony-react/studio` 入口可以在兼容的
+[`dsh-webui-studio`](https://github.com/CH4ACKO3/dsh-webui-studio) 预览中注册明确的
+Element 和可编辑变量；相同调用在普通 `dsh web` 会话中为空操作。完整的包结构和 API
+见 [`dsh-harmony-react` 指南](https://github.com/CH4ACKO3/dsh-harmony/tree/main/packages/react)
+与[可运行的换肤示例](https://github.com/CH4ACKO3/dsh-harmony/tree/main/packages/react/examples/rebrand-plugin)。
 
 ## 最短示例：修改 WebUI 主横幅
 
@@ -89,7 +113,7 @@ banner-demo/
     "bundle": { "patch": "./harmony.patch.yml" },
     "harmony": { "patches": ["./banner.patch.cjs"] }
   },
-  "peerDependencies": { "dsh-harmony": "^0.1.1" }
+  "peerDependencies": { "dsh-harmony": "^0.1.3" }
 }
 ```
 
@@ -210,6 +234,7 @@ Patch。后续 Loader 更新发现的新 Patch 提供者也会立即被收集，
 
 - [安装与使用指南](./docs/usage.zh-CN.md)
 - [Patch 声明和 API](#声明-patch)
+- [`dsh-harmony-react` 指南](https://github.com/CH4ACKO3/dsh-harmony/tree/main/packages/react)
 - [Patch 排序与检查](#patch-顺序)
 - [GitHub Issues](https://github.com/CH4ACKO3/dsh-harmony/issues)
 

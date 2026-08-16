@@ -62,12 +62,38 @@ design is inspired by [Harmony for C# and .NET](https://github.com/pardeike/Harm
   WebUI bundles reload; failures keep the previous generation
 - **Visible conflicts:** match errors, competing `replace` operations, and
   targets removed by earlier Patches name the providers and target file
+- **Tooling APIs:** inspection, Host extensions, and isolated Draft runtime APIs
+  let downstream tools validate builds against the active Patch engine
 - **No installed-file mutations:** transforms live only in the runtime;
   uninstalling Harmony restores the official `dsh` and original plugins
 
-<p align="center">
-  <img src="./assets/harmony-preview-light.png" alt="Harmony plugin order in DeepSeek Harness" width="680">
-</p>
+## React-aware patches
+
+[`dsh-harmony-react`](https://github.com/CH4ACKO3/dsh-harmony/tree/main/packages/react)
+is the companion package for patching
+compiled React `jsx` / `jsxs` calls without hand-writing TSQuery selectors and
+source edits. Its typed factories produce ordinary `HarmonySourcePatch`
+declarations, so Harmony still owns discovery, ordering, validation,
+transactions, and WebUI HMR.
+
+```sh
+npm install dsh-harmony-react
+```
+
+Use `replaceElement`, `wrapElement`, `insertBefore`, `insertAfter`,
+`transformProps`, or `removeElement` to change an existing React tree while
+preserving the compiled runtime conventions. `replaceStringLiteral` covers
+exact browser string replacements. The package runs on the Node side and does
+not install another DSH plugin or ship a second client runtime.
+
+The optional `dsh-harmony-react/studio` entry registers explicit Elements and
+editable variables in compatible
+[`dsh-webui-studio`](https://github.com/CH4ACKO3/dsh-webui-studio) previews; the
+same calls are no-ops during a normal `dsh web` session. See the
+[`dsh-harmony-react` guide](https://github.com/CH4ACKO3/dsh-harmony/tree/main/packages/react)
+and its
+[runnable rebrand example](https://github.com/CH4ACKO3/dsh-harmony/tree/main/packages/react/examples/rebrand-plugin)
+for the package layout and complete API.
 
 ## Shortest example: change the WebUI hero
 
@@ -97,7 +123,7 @@ banner-demo/
     "bundle": { "patch": "./harmony.patch.yml" },
     "harmony": { "patches": ["./banner.patch.cjs"] }
   },
-  "peerDependencies": { "dsh-harmony": "^0.1.1" }
+  "peerDependencies": { "dsh-harmony": "^0.1.3" }
 }
 ```
 
@@ -242,6 +268,7 @@ CommonJS entries invalidate their same-package `require` graph before reload.
 
 - [Installation and usage guide](./docs/usage.md)
 - [Patch declaration and API](#declare-patches)
+- [`dsh-harmony-react` guide](https://github.com/CH4ACKO3/dsh-harmony/tree/main/packages/react)
 - [Patch ordering and inspection](#patch-order)
 - [GitHub Issues](https://github.com/CH4ACKO3/dsh-harmony/issues)
 
