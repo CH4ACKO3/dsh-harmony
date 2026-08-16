@@ -87,8 +87,9 @@ official CLI from its `@deepseek-ai/dsh` peer dependency.
 ### Desktop integration
 
 Once Desktop exposes a configurable Host entry, point it at the public
-`dsh-harmony/bin` export and bundle `dsh-harmony` beside the built-in
-`@deepseek-ai/dsh` in the same Node dependency tree:
+`dsh-harmony/bin` export. If `dsh-harmony` and the built-in
+`@deepseek-ai/dsh` live in separate Node dependency trees, also set
+`DSH_HARMONY_DSH_ENTRY` to the built-in CLI's absolute path:
 
 ```text
 Desktop supervisor
@@ -99,9 +100,11 @@ Desktop supervisor
 ```
 
 Desktop continues to own the Node executable, Host child process, working
-directory, exit handling, and readiness protocol; Harmony only wraps the CLI
-entry. Because this path does not use the global installer, it never writes or
-modifies the system `dsh` command. The current upstream Desktop still starts its
+directory, exit handling, and readiness protocol. Harmony reads the selected
+DSH entry, installs its hooks, and then imports that entry. Without
+`DSH_HARMONY_DSH_ENTRY`, Harmony resolves DSH from its peer dependency. Because
+this path does not use the global installer, it never writes or modifies the
+system `dsh` command. The current upstream Desktop still starts its
 built-in official CLI directly, so a global Harmony installation cannot affect
 Desktop until it exposes that configurable Host entry.
 

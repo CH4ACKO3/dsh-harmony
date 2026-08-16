@@ -82,8 +82,9 @@ Harmony 的 postinstall 独立创建初始 shim 和 bootstrap 状态；bootstrap
 
 ### Desktop 接入
 
-当 Desktop 支持可配置 Host 入口后，将该入口指向公开导出 `dsh-harmony/bin`，并把
-`dsh-harmony` 与内置 `@deepseek-ai/dsh` 放在同一 Node 依赖树即可：
+当 Desktop 支持可配置 Host 入口后，将该入口指向公开导出 `dsh-harmony/bin`。如果
+`dsh-harmony` 与内置 `@deepseek-ai/dsh` 位于不同 Node 依赖树，再将内置 CLI 的绝对路径
+写入 `DSH_HARMONY_DSH_ENTRY`：
 
 ```text
 Desktop supervisor
@@ -94,7 +95,9 @@ Desktop supervisor
 ```
 
 Desktop 仍然拥有 Node 可执行文件、Host 子进程、工作目录、退出处理和 readiness 协议；
-Harmony 只包装 CLI 入口。因为不经过全局安装，该路径不会写入或修改系统 `dsh` 命令。
+Harmony 读取指定的 DSH 入口、安装 Hook，再导入该入口。未设置
+`DSH_HARMONY_DSH_ENTRY` 时，Harmony 从自己的 peer dependency 解析 DSH。因为不经过
+全局安装，该路径不会写入或修改系统 `dsh` 命令。
 当前上游 Desktop 仍直接启动内置官方 CLI，因此在它提供可配置 Host 入口之前，全局安装
 Harmony 不会影响 Desktop。
 

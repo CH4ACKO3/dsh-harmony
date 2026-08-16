@@ -161,9 +161,10 @@ Harmony 不代理 WebUI 流量，也不保存第二个后端地址。官方 WebU
 dsh shim -> dsh-harmony/bin -> @deepseek-ai/dsh -> WebUI + /api
 ```
 
-Desktop 接入时只需把可配置的 Host 入口指向 `dsh-harmony/bin`，并将 Harmony 与
-内置 `@deepseek-ai/dsh` 放在同一 Node 依赖树。Harmony 从自己的 peer dependency 解析官方
-CLI，安装 Hook 后传递原始参数。这个路径不会安装或修改系统全局 `dsh` shim。
+Desktop 接入时把可配置的 Host 入口指向 `dsh-harmony/bin`。如果 Harmony 与内置 DSH
+不在同一 Node 依赖树，使用 `DSH_HARMONY_DSH_ENTRY` 指定内置
+`@deepseek-ai/dsh/lib/bin.js`；未设置时，Harmony 从自己的 peer dependency 解析官方 CLI。
+Harmony 安装 Hook 后传递原始参数，这个路径不会安装或修改系统全局 `dsh` shim。
 详细职责边界见 [安装与使用指南](./docs/usage.zh-CN.md#连接模型)。
 
 ### 先安装插件

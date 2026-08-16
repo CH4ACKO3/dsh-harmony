@@ -2,7 +2,7 @@
 
 import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
   discoverProfile,
@@ -15,11 +15,14 @@ import {
 import { runHarmonyTui } from './tui.js'
 
 const require = createRequire(import.meta.url)
-const officialEntry = require.resolve('@deepseek-ai/dsh/lib/bin.js')
-const officialRequire = createRequire(officialEntry)
+const configuredDshEntry = process.env.DSH_HARMONY_DSH_ENTRY
+const dshEntry = configuredDshEntry === undefined
+  ? require.resolve('@deepseek-ai/dsh/lib/bin.js')
+  : resolve(configuredDshEntry)
+const dshRequire = createRequire(dshEntry)
 process.env.DSH_HARMONY_ACTIVE = '1'
 const { initProfile, PROFILE_TEMPLATES, resolveProfileDir } = await import(
-  pathToFileURL(officialRequire.resolve('@deepseek-ai/dsh-app-boot')).href
+  pathToFileURL(dshRequire.resolve('@deepseek-ai/dsh-app-boot')).href
 )
 
 const args = process.argv.slice(2)
@@ -103,4 +106,4 @@ if (!isPluginCommand && !isDefaultDump && profile !== undefined && !hasHarmonyBu
   else process.argv.splice(2, 0, '--patch', overlay)
 }
 
-await import(pathToFileURL(officialEntry).href)
+await import(pathToFileURL(dshEntry).href)

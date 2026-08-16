@@ -1,5 +1,9 @@
 import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { publishRuntimeAddress } from './control.js'
+import { HarmonyDraftRuntime } from './draft-runtime.js'
+import type { DraftPackage } from './draft-runtime.js'
+import { loadHarmonyExtensions } from './extension.js'
 import { registerActiveRuntimeRoute, waitForRuntimeChoice } from './installer.js'
 import type { HarmonyReloadStatus } from './installer.js'
 import {
@@ -8,6 +12,7 @@ import {
   currentProfile,
   getPatchInspections,
   getPatchStatuses,
+  inspectPatchDependencies,
   packageNameOf,
   prepareModuleReload,
   subscribe,
@@ -161,12 +166,16 @@ export async function reloadEntries(entries: any[], generation: number): Promise
 export async function apply(ctx: any): Promise<void> {
   if (process.env.DSH_HARMONY_ACTIVE !== '1') return waitForRuntimeChoice(ctx)
 
-  ctx.provide('harmony', {})
+  const profileDir = currentProfile().dir
   const pendingHost = new Set<string>()
   const pendingClient = new Set<string>()
+  const stagedProviders = new Set<string>()
   let pendingGeneration = 0
   let clientModules: any
   let queued = false
+  let syncQueued = false
+  let initialSync = true
+  let initializing = true
   let updateTail = Promise.resolve()
   const reloadingEntries = new Set<any>()
   let incompatibilitySignature = ''
@@ -264,10 +273,94 @@ export async function apply(ctx: any): Promise<void> {
     }
   }
 
+  const patchProviders = (): string[] => loaderPackages(ctx).filter(name => !stagedProviders.has(name))
+  const setProviderStaged = async (name: string, staged: boolean): Promise<void> => {
+    const wasStaged = stagedProviders.has(name)
+    if (staged) stagedProviders.add(name)
+    else stagedProviders.delete(name)
+    try {
+      await enqueueUpdate(() => applyTransaction(beginPluginUpdate(patchProviders(), true)))
+    } catch (error) {
+      if (wasStaged) stagedProviders.add(name)
+      else stagedProviders.delete(name)
+      throw error
+    }
+  }
+
   ctx.inject(['clientModules'], (clientCtx: any) => {
     clientModules = clientCtx.clientModules
     return () => { clientModules = undefined }
   })
+
+  const draftRuntime = new HarmonyDraftRuntime({
+    profileDir,
+    setProviderStaged,
+    async ensureLoaderEntry(name) {
+      const entries = [...ctx.loader.entries()].filter((entry: any) => packageNameOf(entry.options.name) === name)
+      if (entries.length > 1) throw new Error(`dsh-harmony: Draft ${JSON.stringify(name)} has multiple Loader entries`)
+      if (entries.length === 1) return { id: entries[0].id, created: false }
+      return { id: await ctx.loader.create({ name }), created: true }
+    },
+    removeLoaderEntry: id => ctx.loader.remove(id),
+    clientGraph() {
+      if (clientModules === undefined) throw new Error('dsh-harmony: client module graph is unavailable')
+      return clientModules.graph()
+    },
+    async waitForClientEntry(name) {
+      if (clientModules === undefined) throw new Error('dsh-harmony: client module graph is unavailable')
+      const current = clientModules.graph()
+      if (current.entries.some((entry: { id: string }) => entry.id === name)) return current
+      return await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          stop()
+          reject(new Error(`dsh-harmony: Draft ${JSON.stringify(name)} did not enter the client graph`))
+        }, 10_000)
+        const stop = clientModules.onGraphChanged(() => {
+          const graph = clientModules.graph()
+          if (!graph.entries.some((entry: { id: string }) => entry.id === name)) return
+          clearTimeout(timeout)
+          stop()
+          resolve(graph)
+        })
+      })
+    },
+    async applyBuild(name) {
+      return enqueueUpdate(async () => {
+        const transaction = beginPluginUpdate(patchProviders(), true)
+        const files = transaction.targets.get(name) ?? new Set<string>()
+        files.add('lib/index.js')
+        files.add('lib/client.js')
+        transaction.targets.set(name, files)
+        await applyTransaction(transaction)
+        if (clientModules === undefined) throw new Error('dsh-harmony: client module graph is unavailable')
+        return clientModules.graph()
+      })
+    },
+  })
+  ctx.provide('harmony', {
+    binEntry: fileURLToPath(new URL('./bin.js', import.meta.url)),
+    profileDir,
+    inspect(input: { package?: string; file?: string } = {}) {
+      return {
+        patches: getPatchStatuses(),
+        targets: getPatchInspections(input.package, input.file),
+      }
+    },
+    inspectDependencies: (owner: string) => inspectPatchDependencies(owner),
+    prepareDraft: (input: DraftPackage) => draftRuntime.prepareDraft(input),
+  })
+  ctx.effect(() => () => draftRuntime.dispose(), 'dsh-harmony: Draft runtime')
+  let disposeExtensions: (() => Promise<void>) | undefined
+  let extensionsDisposed = false
+  const extensionsReady = loadHarmonyExtensions(ctx, profileDir).then(async dispose => {
+    if (extensionsDisposed) await dispose()
+    else disposeExtensions = dispose
+  })
+  ctx.effect(() => async () => {
+    extensionsDisposed = true
+    await extensionsReady
+    await disposeExtensions?.()
+  }, 'dsh-harmony: extensions')
 
   ctx.inject(['webServer'], (webCtx: any) => {
     const update = (input: () => { order?: string[]; disabled?: string[] }): Promise<void> => enqueueUpdate(
@@ -353,16 +446,13 @@ export async function apply(ctx: any): Promise<void> {
     return () => dispose.forEach(stop => stop())
   })
 
-  let syncQueued = false
-  let initialSync = true
-  let initializing = true
   const synchronizeLoader = (): void => {
     if (syncQueued) return
     syncQueued = true
     setImmediate(() => {
       void enqueueUpdate(async () => {
         syncQueued = false
-        const transaction = beginPluginUpdate(loaderPackages(ctx), initialSync)
+        const transaction = beginPluginUpdate(patchProviders(), initialSync)
         initialSync = false
         await applyTransaction(transaction)
       }).catch(error => ctx.logger.error(error)).finally(() => {
@@ -402,6 +492,7 @@ export async function apply(ctx: any): Promise<void> {
     })
   }), 'dsh-harmony: patch reload')
   synchronizeLoader()
+  await extensionsReady
 }
 
 export const inject = ['appExit']

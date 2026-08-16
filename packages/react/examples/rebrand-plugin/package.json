@@ -1,0 +1,21 @@
+{
+  "name": "dsh-example-rebrand",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./index.cjs",
+  "dsh": {
+    "bundle": {
+      "patch": "./harmony.patch.yml"
+    },
+    "client": {
+      "immediately": true,
+      "platform": "web"
+    },
+    "harmony": {
+      "patches": ["./patch.cjs"]
+    }
+  },
+  "dependencies": {
+    "dsh-harmony-react": "file:../.."
+  }
+}

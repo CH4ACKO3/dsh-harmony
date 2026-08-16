@@ -175,11 +175,12 @@ dsh shim -> dsh-harmony/bin -> @deepseek-ai/dsh -> WebUI + /api
 ```
 
 A Desktop integration only needs to point its configurable Host entry at
-`dsh-harmony/bin` and bundle Harmony beside its built-in `@deepseek-ai/dsh` in
-the same Node dependency tree. Harmony resolves the official CLI from its peer
-dependency, installs its hooks, and forwards the original arguments. This path
-never installs or modifies the system-global `dsh` shim. See the
-[usage guide](./docs/usage.md#connection-model) for the full responsibility map.
+`dsh-harmony/bin`. When Harmony and the built-in DSH are in separate Node
+dependency trees, set `DSH_HARMONY_DSH_ENTRY` to the built-in
+`@deepseek-ai/dsh/lib/bin.js`; otherwise Harmony resolves the official CLI from
+its peer dependency. Harmony installs its hooks and forwards the original
+arguments. This path never installs or modifies the system-global `dsh` shim.
+See the [usage guide](./docs/usage.md#connection-model) for the full responsibility map.
 
 ### Plugin first
 

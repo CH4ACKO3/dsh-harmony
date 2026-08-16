@@ -13,6 +13,7 @@ import {
   getPatchInspections,
   getPatchStatuses,
   inspectPatchTargets,
+  inspectPatchDependencies,
   installFileTransforms,
   synchronizePluginOrder,
   synchronizeProfile,
@@ -332,6 +333,164 @@ module.exports = [{
 
   expect(() => readFileSync(join(target, 'lib/index.js'), 'utf8')).not.toThrow()
   expect(getPatchStatuses().filter(patch => patch.owner === 'mixed-order-provider').every(patch => patch.state === 'bound')).toBe(true)
+})
+
+test('detects a Source Patch that only matches after a previous provider', () => {
+  const target = join(root, 'differential-target')
+  const provider = join(root, 'differential-provider')
+  const draft = join(root, 'differential-draft')
+  mkdirSync(join(target, 'lib'), { recursive: true })
+  mkdirSync(provider)
+  mkdirSync(draft)
+  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'differential-target', version: '1.0.0' }))
+  writeFileSync(join(target, 'lib/index.js'), 'export const value = 1\n')
+  writeFileSync(join(provider, 'package.json'), JSON.stringify({
+    name: 'differential-provider', dsh: { harmony: { patches: ['./patch.cjs'] } },
+  }))
+  writeFileSync(join(provider, 'patch.cjs'), `
+module.exports = {
+  id: 'introduce-call',
+  target: { package: 'differential-target', files: ['lib/index.js'] },
+  select: 'NumericLiteral[text="1"]', expect: 1,
+  apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), 'provideValue()') },
+}
+`)
+  writeFileSync(join(draft, 'package.json'), JSON.stringify({
+    name: 'differential-draft', dsh: { harmony: { patches: ['./patch.cjs'] } },
+  }))
+  writeFileSync(join(draft, 'patch.cjs'), `
+module.exports = {
+  id: 'consume-call',
+  target: { package: 'differential-target', files: ['lib/index.js'] },
+  select: 'CallExpression[expression.text="provideValue"]', expect: 1,
+  apply() {},
+}
+`)
+  discoverPackage(provider)
+  discoverPackage(draft)
+
+  expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('provideValue()')
+  expect(inspectPatchDependencies('differential-draft')).toEqual([expect.objectContaining({
+    patch: 'differential-draft/consume-call',
+    providerCandidates: ['differential-provider'],
+    target: { package: 'differential-target', file: 'lib/index.js' },
+  })])
+})
+
+test('adds React provenance only after every business patch has composed', () => {
+  const target = join(root, 'trace-target')
+  const provider = join(root, 'trace-provider')
+  const external = join(root, 'trace-external-provider')
+  mkdirSync(join(target, 'lib'), { recursive: true })
+  mkdirSync(provider)
+  mkdirSync(external)
+  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'trace-target', version: '1.0.0' }))
+  writeFileSync(join(target, 'lib/client.js'), 'const r={jsx(type,props,key){return {type,props,key}}};module.exports=(0,r.jsx)(Original,{},"stable-key")\n')
+  writeFileSync(join(provider, 'package.json'), JSON.stringify({
+    name: 'trace-provider', dsh: { harmony: { patches: ['./patch.cjs'] } },
+  }))
+  writeFileSync(join(provider, 'patch.cjs'), `
+module.exports = [{
+  id: 'replace', target: { package: 'trace-target', files: ['lib/client.js'] },
+  select: 'CallExpression[arguments.0.name="Original"]', expect: 1,
+  trace: {
+    select: 'CallExpression[arguments.0.expression.expression.name="require"][arguments.0.expression.arguments.0.text="plugin-a"][arguments.0.argumentExpression.text="A"]',
+    effect: 'replace-element', maxMatches: 1,
+  },
+  apply({ node, sourceFile, edit }) {
+    const type = node.arguments[0]
+    edit.overwrite(type.getStart(sourceFile), type.getEnd(), 'require("plugin-a")["A"]')
+  },
+}, {
+  id: 'wrap', target: { package: 'trace-target', files: ['lib/client.js'] },
+  select: 'CallExpression[arguments.0.expression.expression.name="require"][arguments.0.expression.arguments.0.text="plugin-a"][arguments.0.argumentExpression.text="A"]', expect: 1,
+  trace: {
+    select: 'CallExpression[arguments.0.expression.expression.name="require"][arguments.0.expression.arguments.0.text="plugin-b"][arguments.0.argumentExpression.text="B"]',
+    effect: 'wrap-element', maxMatches: 1,
+  },
+  apply({ node, sourceFile, source, edit }) {
+    const original = source.slice(node.getStart(sourceFile), node.getEnd())
+    edit.overwrite(node.getStart(sourceFile), node.getEnd(), '(0,r.jsx)(require("plugin-b")["B"],{children:' + original + '},"wrapper-key")')
+  },
+}]
+`)
+  writeFileSync(join(external, 'package.json'), JSON.stringify({
+    name: 'trace-external-provider', dsh: { harmony: { patches: ['./patch.cjs'] } },
+  }))
+  writeFileSync(join(external, 'patch.cjs'), `
+module.exports = {
+  id: 'external-props', target: { package: 'trace-target', files: ['lib/client.js'] },
+  select: 'CallExpression[arguments.0.expression.expression.name="require"][arguments.0.expression.arguments.0.text="plugin-b"][arguments.0.argumentExpression.text="B"]', expect: 1,
+  trace: {
+    select: 'CallExpression[arguments.0.expression.expression.name="require"][arguments.0.expression.arguments.0.text="plugin-b"][arguments.0.argumentExpression.text="B"]',
+    effect: 'transform-props', maxMatches: 1,
+  },
+  apply() {},
+}
+`)
+  discoverPackage(provider)
+  discoverPackage(external)
+  const previous = process.env.DSH_HARMONY_REACT_TRACE
+  process.env.DSH_HARMONY_REACT_TRACE = '1'
+  try {
+    const transformed = readFileSync(join(target, 'lib/client.js'), 'utf8')
+    expect(transformed).toContain('__dshHarmonyPatchTrace')
+    expect(transformed).toContain('trace-provider/replace')
+    expect(transformed).toContain('trace-provider/wrap')
+    expect(transformed).toContain('trace-external-provider/external-props')
+    const module = { exports: {} as any }
+    new Function('module', 'exports', 'Original', 'require', transformed)(
+      module,
+      module.exports,
+      function Original() {},
+      (name: string) => function PluginComponent() { return name },
+    )
+    expect(module.exports.key).toBe('wrapper-key')
+    expect(module.exports.props.children.key).toBe('wrapper-key')
+    expect(module.exports.props.children.props.children.key).toBe('stable-key')
+    const inspection = getPatchInspections('trace-target', 'lib/client.js')[0]!
+    expect(inspection.steps).toHaveLength(3)
+    expect(inspection.final).not.toContain('__dshHarmonyPatchTrace')
+    expect(inspection.final).toContain('require("plugin-b")["B"]')
+    expect(getPatchStatuses().find(patch => patch.key === 'trace-provider/wrap')).toMatchObject({
+      declaration: 'patch.cjs', file: 'lib/client.js',
+    })
+  } finally {
+    if (previous === undefined) delete process.env.DSH_HARMONY_REACT_TRACE
+    else process.env.DSH_HARMONY_REACT_TRACE = previous
+  }
+})
+
+test('leaves normal Host browser output uninstrumented', () => {
+  const target = join(root, 'normal-trace-target')
+  const provider = join(root, 'normal-trace-provider')
+  mkdirSync(join(target, 'lib'), { recursive: true })
+  mkdirSync(provider)
+  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'normal-trace-target', version: '1.0.0' }))
+  writeFileSync(join(target, 'lib/client.js'), 'module.exports=(0,r.jsx)(Original,{})\n')
+  writeFileSync(join(provider, 'package.json'), JSON.stringify({
+    name: 'normal-trace-provider', dsh: { harmony: { patches: ['./patch.cjs'] } },
+  }))
+  writeFileSync(join(provider, 'patch.cjs'), `
+module.exports = {
+  id: 'normal-trace', target: { package: 'normal-trace-target', files: ['lib/client.js'] },
+  select: 'CallExpression[arguments.0.name="Original"]', expect: 1,
+  trace: { select: 'CallExpression[arguments.0.name="Original"]', effect: 'wrap-element', maxMatches: 1 },
+  apply({ patch, node, sourceFile, edit }) {
+    edit.appendRight(node.getEnd(), '/*' + patch.key + ':' + patch.owner + '*/')
+  },
+}
+`)
+  discoverPackage(provider)
+  const previous = process.env.DSH_HARMONY_REACT_TRACE
+  delete process.env.DSH_HARMONY_REACT_TRACE
+  try {
+    const transformed = readFileSync(join(target, 'lib/client.js'), 'utf8')
+    expect(transformed).toContain('normal-trace-provider/normal-trace:normal-trace-provider')
+    expect(transformed).not.toContain('__dshHarmonyPatchTrace')
+  } finally {
+    if (previous !== undefined) process.env.DSH_HARMONY_REACT_TRACE = previous
+  }
 })
 
 test('keeps old semantic bindings unchanged while a candidate transaction is pending', () => {

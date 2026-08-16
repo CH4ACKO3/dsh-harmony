@@ -1,0 +1,4 @@
+- insert:
+    - id: example-rebrand
+      name: dsh-example-rebrand
+      inject: [harmony]

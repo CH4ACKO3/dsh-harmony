@@ -23,6 +23,9 @@
     "url": "https://github.com/CH4ACKO3"
   },
   "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
   "exports": {
     ".": {
       "types": "./lib/index.d.ts",
@@ -72,7 +75,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "npm run build && vitest run && node test/hook.e2e.mjs && node test/client.e2e.mjs && node test/first-boot.e2e.mjs && node test/embedded.e2e.mjs && node test/shim.e2e.mjs && node test/bootstrap.e2e.mjs && node test/runtime-gate.e2e.mjs",
+    "test": "npm run build && npm run build --workspaces --if-present && vitest run && node test/hook.e2e.mjs && node test/client.e2e.mjs && node test/first-boot.e2e.mjs && node test/embedded.e2e.mjs && node test/shim.e2e.mjs && node test/bootstrap.e2e.mjs && node test/runtime-gate.e2e.mjs",
     "check": "npm test",
     "prepare": "npm run build",
     "postinstall": "node scripts/postinstall.cjs"

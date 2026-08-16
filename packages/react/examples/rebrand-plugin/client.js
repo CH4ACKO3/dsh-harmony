@@ -1,0 +1,14 @@
+window.__ModuleLoader__.load({
+  id: 'dsh-example-rebrand',
+  factory: (require) => {
+    const module = { exports: {} }
+    const React = require('react')
+
+    function CustomBrand() {
+      return React.createElement('strong', null, 'Custom DSH')
+    }
+
+    module.exports.CustomBrand = CustomBrand
+    return module.exports
+  },
+})

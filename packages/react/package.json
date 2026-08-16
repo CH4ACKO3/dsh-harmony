@@ -1,0 +1,64 @@
+{
+  "name": "dsh-harmony-react",
+  "version": "0.1.0",
+  "description": "React-aware source patch factories for dsh-harmony",
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "harmony",
+    "react",
+    "runtime-patching",
+    "typescript-ast"
+  ],
+  "homepage": "https://github.com/CH4ACKO3/dsh-harmony/tree/main/packages/react#readme",
+  "bugs": {
+    "url": "https://github.com/CH4ACKO3/dsh-harmony/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CH4ACKO3/dsh-harmony.git",
+    "directory": "packages/react"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "CH4ACKO3",
+    "url": "https://github.com/CH4ACKO3"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./studio": {
+      "types": "./lib/studio.d.ts",
+      "default": "./lib/studio.js"
+    }
+  },
+  "files": [
+    "lib",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && vitest run",
+    "check": "npm test",
+    "prepare": "npm run build"
+  },
+  "engines": {
+    "node": "^22.22.3 || >=24.11.1"
+  },
+  "peerDependencies": {
+    "dsh-harmony": "^0.1.2"
+  },
+  "devDependencies": {
+    "@phenomnomnominal/tsquery": "^6.2.0",
+    "@types/node": "^24.10.0",
+    "dsh-harmony": "^0.1.2",
+    "magic-string": "^0.30.21",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  }
+}

@@ -10,6 +10,7 @@ import { tsquery } from '@phenomnomnominal/tsquery'
 import type {
   HarmonyPatch,
   HarmonyPatchInspection,
+  HarmonyPatchDependency,
   HarmonyPatchStatus,
   HarmonySemanticContext,
   HarmonySemanticPatch,
@@ -40,6 +41,7 @@ interface RegisteredPatch {
   owner: string
   key: string
   index: number
+  declaration: string
 }
 
 interface ProviderRecord {
@@ -188,6 +190,7 @@ function freshStatus(registered: RegisteredPatch): HarmonyPatchStatus {
     loaded: false,
     matches: 0,
     generation,
+    declaration: registered.declaration,
   }
 }
 
@@ -287,7 +290,13 @@ function prepareProvider(info: PackageInfo, current?: ProviderRecord, stage = fa
       for (const patch of Array.isArray(value) ? value : [value]) {
         if (ids.has(patch.id)) throw new Error(`dsh-harmony: duplicate patch id ${JSON.stringify(patch.id)} in ${JSON.stringify(info.name)}`)
         ids.add(patch.id)
-        registered.push({ patch, owner: info.name, key: `${info.name}/${patch.id}`, index: index++ })
+        registered.push({
+          patch,
+          owner: info.name,
+          key: `${info.name}/${patch.id}`,
+          index: index++,
+          declaration: relative(info.dir, filename).replaceAll('\\', '/'),
+        })
       }
     }
   } catch (error) {
@@ -671,7 +680,14 @@ function applySourcePatch(
   }
   const edit = new MagicString(source)
   try {
-    for (const node of nodes) patch.apply({ source, sourceFile, node, edit, ts })
+    for (const node of nodes) patch.apply({
+      patch: { key: registered.key, owner: registered.owner },
+      source,
+      sourceFile,
+      node,
+      edit,
+      ts,
+    })
   } catch (cause) {
     const applied = [...new Set(history.map(step => step.owner))]
     throw new Error([
@@ -682,6 +698,80 @@ function applySourcePatch(
     ].join('\n'), { cause })
   }
   return { source: edit.toString(), matches: nodes.length }
+}
+
+interface SourceTraceMetadata {
+  key: string
+  owner: string
+  effect: NonNullable<HarmonySourcePatch['trace']>['effect']
+  declaration: string
+  target: { package: string; file: string }
+  confidence: 'candidate'
+}
+
+function jsxRuntimeExpression(sourceFile: ts.SourceFile, node: ts.Node, source: string): string | undefined {
+  if (!ts.isCallExpression(node)) return undefined
+  let expression: ts.Expression = node.expression
+  while (ts.isParenthesizedExpression(expression)) expression = expression.expression
+  if (!ts.isBinaryExpression(expression) || expression.operatorToken.kind !== ts.SyntaxKind.CommaToken
+    || !ts.isPropertyAccessExpression(expression.right)
+    || (expression.right.name.text !== 'jsx' && expression.right.name.text !== 'jsxs')) return undefined
+  return source.slice(expression.right.expression.getStart(sourceFile), expression.right.expression.getEnd())
+}
+
+function instrumentSourceTraces(
+  filename: string,
+  source: string,
+  target: { package: string; file: string },
+  patches: RegisteredPatch[],
+): string {
+  if (process.env.DSH_HARMONY_REACT_TRACE !== '1' || patches.length === 0) return source
+  const sourceFile = parse(filename, source)
+  const traced = new Map<string, { node: ts.CallExpression; runtime: string; traces: SourceTraceMetadata[] }>()
+  for (const registered of patches) {
+    const trace = (registered.patch as HarmonySourcePatch).trace
+    if (trace === undefined) continue
+    let nodes: ts.Node[]
+    try {
+      nodes = tsquery(sourceFile, trace.select)
+    } catch {
+      continue
+    }
+    if (nodes.length === 0 || nodes.length > trace.maxMatches) continue
+    for (const node of nodes) {
+      const runtime = jsxRuntimeExpression(sourceFile, node, source)
+      if (!ts.isCallExpression(node) || runtime === undefined) continue
+      const key = `${node.getStart(sourceFile)}:${node.getEnd()}`
+      const current = traced.get(key) ?? { node, runtime, traces: [] }
+      current.traces.push({
+        key: registered.key,
+        owner: registered.owner,
+        effect: trace.effect,
+        declaration: registered.declaration,
+        target,
+        confidence: 'candidate',
+      })
+      traced.set(key, current)
+    }
+  }
+  if (traced.size === 0) return source
+
+  const helper = uniqueIdentifier(sourceFile, '__dshHarmonyPatchTrace')
+  const edit = new MagicString(source)
+  for (const { node, runtime, traces } of traced.values()) {
+    const key = node.arguments[2]
+    const keyArgument = key === undefined ? '' : `, ${source.slice(key.getStart(sourceFile), key.getEnd())}`
+    edit.prependLeft(
+      node.getStart(sourceFile),
+      `(0, ${runtime}.jsx)(${helper}, { traces: ${JSON.stringify(traces)}, children: `,
+    )
+    edit.appendRight(node.getEnd(), ` }${keyArgument})`)
+  }
+  const firstStatement = sourceFile.statements.find(statement => !ts.isExpressionStatement(statement)
+    || !ts.isStringLiteral(statement.expression))
+  const insertion = firstStatement?.getStart(sourceFile) ?? source.length
+  edit.appendLeft(insertion, `function ${helper}(props){return props.children}\n${helper}.__dshHarmonyPatchTrace=true;\n`)
+  return edit.toString()
 }
 
 type SemanticFunction = ts.FunctionDeclaration | ts.MethodDeclaration
@@ -818,6 +908,7 @@ function buildTransform(
 
   const steps: HarmonyPatchInspection['steps'] = []
   const history: Array<{ owner: string; source: string }> = []
+  const traceable: RegisteredPatch[] = []
   const original = output
   const semantic = new Map<string, { bindingKey: string; patches: RegisteredPatch[] }>()
   for (const registered of applicable) {
@@ -863,6 +954,7 @@ function buildTransform(
       output = result.source
       history.push({ owner: registered.owner, source: output })
       steps.push({ key: registered.key, owner: registered.owner, matches: result.matches, source: output })
+      if ((registered.patch as HarmonySourcePatch).trace !== undefined) traceable.push(registered)
       if (recordStatus) updateStatus(registered, { state: 'bound', matches: result.matches, file: relativeFile, error: undefined, generation: transformGeneration })
     } catch (error) {
       if (recordStatus) updateStatus(registered, {
@@ -876,12 +968,13 @@ function buildTransform(
     }
   }
 
+  const runtimeOutput = instrumentSourceTraces(filename, output, { package: pkg.name, file: relativeFile }, traceable)
   return {
     filename,
     generation: transformGeneration,
     packageVersion: pkg.version,
     source,
-    output,
+    output: runtimeOutput,
     inspection: { package: pkg.name, file: relativeFile, original: source, final: output, steps },
   }
 }
@@ -996,6 +1089,41 @@ export function getPatchStatuses(): HarmonyPatchStatus[] {
 export function getPatchInspections(packageName?: string, file?: string): HarmonyPatchInspection[] {
   return [...transformCache.values()].filter(record => record.generation === generation).map(record => record.inspection)
     .filter(item => (packageName === undefined || item.package === packageName) && (file === undefined || item.file === file))
+}
+
+export function inspectPatchDependencies(owner: string): HarmonyPatchDependency[] {
+  const registered = new Map([...providers.values()].flatMap(provider => provider.patches).map(item => [item.key, item]))
+  const dependencies: HarmonyPatchDependency[] = []
+  for (const record of transformCache.values()) {
+    if (record.generation !== generation) continue
+    const pkg = packageFor(record.filename)!
+    const relativeFile = relative(pkg.dir, record.filename).replaceAll('\\', '/')
+    const target = `${pkg.name}/${relativeFile}`
+    const base = pkg.name === '@deepseek-ai/dsh-client-ui-settings-general' && relativeFile === 'lib/client.js'
+      ? customizeSettings(record.filename, record.source)
+      : record.source
+    const previousOwners: string[] = []
+    for (const step of record.inspection.steps) {
+      if (step.owner === owner) {
+        const item = registered.get(step.key)
+        if (item !== undefined && patchKind(item.patch) === 'source') {
+          try {
+            applySourcePatch(record.filename, target, base, base, item, [])
+          } catch (error) {
+            const candidates = [...new Set(previousOwners.filter(candidate => candidate !== owner))]
+            if (candidates.length > 0) dependencies.push({
+              patch: item.key,
+              target: { package: pkg.name, file: relativeFile },
+              providerCandidates: candidates,
+              reason: error instanceof Error ? error.message : String(error),
+            })
+          }
+        }
+      }
+      previousOwners.push(step.owner)
+    }
+  }
+  return dependencies
 }
 
 export function inspectPatchTargets(continueOnError = false): HarmonyPatchInspection[] {
