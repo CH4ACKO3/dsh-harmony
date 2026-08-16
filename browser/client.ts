@@ -811,8 +811,8 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
               h('div', { className: 'dshHarmonyPreview' },
                 selectedPlugin.name === harmonyPlugin
                   ? h(React.Fragment, null,
-                    h('img', { className: 'dshHarmonyPreviewImage dshHarmonyPreviewImageLight', src: '/dsh-harmony/assets/harmony-preview-light.png', alt: '' }),
-                    h('img', { className: 'dshHarmonyPreviewImage dshHarmonyPreviewImageDark', src: '/dsh-harmony/assets/harmony-preview.png', alt: '' }))
+                    h('img', { className: 'dshHarmonyPreviewImage dshHarmonyPreviewImageLight', src: '/dsh-harmony/assets/harmony-preview-light.webp', alt: '' }),
+                    h('img', { className: 'dshHarmonyPreviewImage dshHarmonyPreviewImageDark', src: '/dsh-harmony/assets/harmony-preview.webp', alt: '' }))
                   : h(React.Fragment, null,
                     h('div', { className: 'dshHarmonyPreviewMark', 'aria-hidden': 'true' }, selectedPlugin.name.replace(/^@[^/]+\//, '').charAt(0).toUpperCase()),
                     h('span', { className: 'dshHarmonyPreviewLabel' }, t('preview')))),

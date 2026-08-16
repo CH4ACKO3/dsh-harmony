@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
 import { pathToFileURL } from 'node:url'
 import { afterAll, beforeAll, expect, test } from 'vitest'
 import {
@@ -22,6 +23,7 @@ import {
 import { apply as applyHarmonyPlugin, reloadEntries } from './plugin.js'
 
 const root = mkdtempSync(join(tmpdir(), 'dsh-harmony-'))
+const WATCH_READY_DELAY = 750
 const active = process.env.DSH_HARMONY_ACTIVE
 beforeAll(() => {
   process.env.DSH_HARMONY_ACTIVE = '1'
@@ -1045,16 +1047,20 @@ module.exports = {
   synchronizeProfile(profile)
   const errors: unknown[] = []
   const stop = watchProfile(() => { beginPluginUpdate(['watched-provider']).commit() }, error => errors.push(error))
-  expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 2')
-  writePatch(3)
-  await expect.poll(
-    () => readFileSync(join(target, 'lib/index.js'), 'utf8'),
-    { timeout: 5000 },
-  ).toContain('value = 3')
-  writeFileSync(patchFile, 'throw new Error("invalid patch")\n')
-  await expect.poll(() => errors.length, { timeout: 5000 }).toBeGreaterThan(0)
-  expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 3')
-  stop()
+  try {
+    await delay(WATCH_READY_DELAY)
+    expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 2')
+    writePatch(3)
+    await expect.poll(
+      () => readFileSync(join(target, 'lib/index.js'), 'utf8'),
+      { timeout: 5000 },
+    ).toContain('value = 3')
+    writeFileSync(patchFile, 'throw new Error("invalid patch")\n')
+    await expect.poll(() => errors.length, { timeout: 5000 }).toBeGreaterThan(0)
+    expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 3')
+  } finally {
+    stop()
+  }
 })
 
 test('watches a newly declared patch file after its first load fails', async () => {
@@ -1083,13 +1089,16 @@ module.exports = {
   synchronizeProfile(profile)
   const errors: unknown[] = []
   const stop = watchProfile(() => { beginPluginUpdate(['watched-path-provider']).commit() }, error => errors.push(error))
-  expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 2')
-  writeFileSync(manifest, JSON.stringify({
-    name: 'watched-path-provider',
-    dsh: { harmony: { patches: ['./new.cjs'] } },
-  }))
-  await expect.poll(() => errors.length, { timeout: 5000 }).toBeGreaterThan(0)
-  writeFileSync(join(provider, 'new.cjs'), `
+  try {
+    await delay(WATCH_READY_DELAY)
+    expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 2')
+    writeFileSync(manifest, JSON.stringify({
+      name: 'watched-path-provider',
+      dsh: { harmony: { patches: ['./new.cjs'] } },
+    }))
+    await expect.poll(() => errors.length, { timeout: 5000 }).toBeGreaterThan(0)
+    await delay(WATCH_READY_DELAY)
+    writeFileSync(join(provider, 'new.cjs'), `
 module.exports = {
   id: 'test-patch',
   target: { package: 'watched-path-target', files: ['lib/index.js'] },
@@ -1097,11 +1106,13 @@ module.exports = {
   apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '3') },
 }
 `)
-  await expect.poll(
-    () => readFileSync(join(target, 'lib/index.js'), 'utf8'),
-    { timeout: 5000 },
-  ).toContain('value = 3')
-  stop()
+    await expect.poll(
+      () => readFileSync(join(target, 'lib/index.js'), 'utf8'),
+      { timeout: 5000 },
+    ).toContain('value = 3')
+  } finally {
+    stop()
+  }
 })
 
 test('names both providers when an earlier patch removes a later selector', () => {

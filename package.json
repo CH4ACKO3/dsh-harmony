@@ -45,8 +45,8 @@
         "en": "Harmony"
       },
       "summary": {
-        "zh-CN": "在运行时补丁、替换和装饰 DSH 插件，并提供 Patch 排序、检查和热重载。",
-        "en": "Patch, replace, and decorate DSH plugins at runtime with Patch ordering, inspection, and hot reload."
+        "zh-CN": "一个用于在运行时修补、替换和装饰 DeepSeek Harness 插件的库。",
+        "en": "A library for patching, replacing and decorating DeepSeek Harness plugins during runtime"
       },
       "category": "plugin-development"
     },
@@ -93,6 +93,7 @@
     "node": "^22.22.3 || >=24.11.1"
   },
   "dependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
     "@phenomnomnominal/tsquery": "^6.2.0",
     "magic-string": "^0.30.21",
     "semver": "^7.8.5",
