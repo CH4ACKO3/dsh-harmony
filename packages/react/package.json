@@ -1,6 +1,6 @@
 {
   "name": "dsh-harmony-react",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "React-aware source patch factories for dsh-harmony",
   "keywords": [
     "deepseek",
@@ -51,12 +51,12 @@
     "node": "^22.22.3 || >=24.11.1"
   },
   "peerDependencies": {
-    "dsh-harmony": "^0.1.2"
+    "dsh-harmony": "^0.1.4"
   },
   "devDependencies": {
     "@phenomnomnominal/tsquery": "^6.2.0",
     "@types/node": "^24.10.0",
-    "dsh-harmony": "^0.1.2",
+    "dsh-harmony": "file:../..",
     "magic-string": "^0.30.21",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"

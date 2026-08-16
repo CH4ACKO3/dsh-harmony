@@ -16,6 +16,7 @@ import {
   inspectPatchTargets,
   inspectPatchDependencies,
   installFileTransforms,
+  retainedGenerationCount,
   synchronizePluginOrder,
   synchronizeProfile,
   watchProfile,
@@ -578,23 +579,35 @@ module.exports = {
   writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'toggle-target', version: '1.0.0' }))
   writeFileSync(join(target, 'lib/index.js'), 'export const value = 1\n')
   synchronizeProfile(profile)
+  expect(retainedGenerationCount()).toBe(1)
 
   expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 2')
   const state = readFileSync(join(profile, 'harmony.json'), 'utf8')
   const transaction = beginProfileUpdate({ disabled: ['toggle-provider/toggle'] })
+  expect(retainedGenerationCount()).toBe(2)
   expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 1')
   transaction.rollback()
+  expect(retainedGenerationCount()).toBe(1)
   expect(readFileSync(join(profile, 'harmony.json'), 'utf8')).toBe(state)
   expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 2')
 
   const retry = beginProfileUpdate({ disabled: ['toggle-provider/toggle'] })
   expect(retry.generation).toBeGreaterThan(transaction.generation)
   retry.rollback()
+  expect(retainedGenerationCount()).toBe(1)
 
   const committed = beginProfileUpdate({ disabled: ['toggle-provider/toggle'] })
   committed.commit()
+  expect(retainedGenerationCount()).toBe(1)
   expect(getPatchStatuses().find(patch => patch.key === 'toggle-provider/toggle')?.state).toBe('disabled')
   expect(JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8')).disabled).toEqual(['toggle-provider/toggle'])
+
+  for (let index = 0; index < 32; index += 1) {
+    const update = beginProfileUpdate({ disabled: index % 2 === 0 ? [] : ['toggle-provider/toggle'] })
+    expect(retainedGenerationCount()).toBe(2)
+    update.commit()
+    expect(retainedGenerationCount()).toBe(1)
+  }
 })
 
 test('customizes the official Settings shell bundle while Harmony is active', () => {

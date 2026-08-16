@@ -32,8 +32,8 @@ const { resolveCommandPath } = require('../scripts/install-shim.cjs') as {
   resolveCommandPath(prefix: string, platform?: NodeJS.Platform): string
 }
 
-function sendJson(response: ServerResponse, value: unknown): void {
-  response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
+function sendJson(response: ServerResponse, value: unknown, status = 200): void {
+  response.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
   response.end(JSON.stringify(value))
 }
 
@@ -168,6 +168,7 @@ export async function waitForRuntimeChoice(ctx: Context): Promise<void> {
         response.end()
         return
       }
+      if (status.state === 'working') return sendJson(response, status, 409)
       const result = await act(action)
       sendJson(response, status)
       if (status.state === 'removed') setImmediate(() => appExit(0))
