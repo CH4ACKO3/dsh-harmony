@@ -30,11 +30,11 @@
   [简体中文](README.zh-CN.md) / [English](README.md)
 </div>
 
-<!-- AGENTS: Before installing, authoring, reviewing, or debugging Harmony Patches, read .agents/skills/use-dsh-harmony/SKILL.md. -->
+<!-- AGENTS: Before installing, authoring, reviewing, or debugging Harmony Patches, read the main-branch skill at https://github.com/CH4ACKO3/dsh-harmony/blob/main/.agents/skills/use-dsh-harmony/SKILL.md. -->
 <details>
 <summary><strong>AI Agent：使用仓库内置 Skill</strong></summary>
 
-安装、选择和编写 Patch、执行运行时操作或排查问题前，请加载 [`use-dsh-harmony`](.agents/skills/use-dsh-harmony/SKILL.md)。
+安装、选择和编写 Patch、执行运行时操作或排查问题前，请加载 [`use-dsh-harmony`](https://github.com/CH4ACKO3/dsh-harmony/blob/main/.agents/skills/use-dsh-harmony/SKILL.md)。
 
 </details>
 

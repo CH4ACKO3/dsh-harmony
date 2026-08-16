@@ -1,4 +1,0 @@
-interface:
-  display_name: "Use dsh-harmony"
-  short_description: "Install, author, and operate Harmony Patches"
-  default_prompt: "Use $use-dsh-harmony to choose and implement the right Harmony Patch for this DeepSeek Harness plugin."
