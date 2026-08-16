@@ -58,10 +58,10 @@ Open **Settings → Harmony** after starting the WebUI. For profiles, Desktop in
 
 All maintained implementation code uses TypeScript. Build artifacts are generated for packaging and are not tracked by Git.
 
+Documentation sources and local preview tooling live on the [`docs`](https://github.com/CH4ACKO3/dsh-harmony/tree/docs) branch.
+
 ```sh
 npm test
-npm run docs:dev
-npm run docs:build
 ```
 
 ## License

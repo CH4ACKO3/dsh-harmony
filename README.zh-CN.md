@@ -58,10 +58,10 @@ dsh web
 
 所有维护中的实现源码均使用 TypeScript。用于发布的编译产物由构建生成，不纳入 Git 跟踪。
 
+文档源码与本地预览工具位于 [`docs`](https://github.com/CH4ACKO3/dsh-harmony/tree/docs) 分支。
+
 ```sh
 npm test
-npm run docs:dev
-npm run docs:build
 ```
 
 ## 许可证
