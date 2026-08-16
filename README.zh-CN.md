@@ -8,7 +8,7 @@
   <p>
     <strong>DeepSeek Harness 插件的运行时 Patch 协调层。</strong>
     <br />
-    无需维护 Fork 或改写安装文件，即可修补、替换和装饰 Host 与 WebUI 插件。
+    一个用于在运行时修补、替换和装饰 DeepSeek Harness 插件的库。
   </p>
 
   <p>

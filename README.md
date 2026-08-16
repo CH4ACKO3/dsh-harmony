@@ -8,7 +8,7 @@
   <p>
     <strong>Runtime Patch coordination for DeepSeek Harness plugins.</strong>
     <br />
-    Patch, replace, and decorate Host and WebUI plugins without maintaining forks or rewriting installed files.
+    A library for patching, replacing and decorating DeepSeek Harness plugins during runtime.
   </p>
 
   <p>
