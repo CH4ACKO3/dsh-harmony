@@ -81,7 +81,7 @@
     "test": "npm run build && npm run build --workspaces --if-present && tsc -p tsconfig.test.json && vitest run && node test/hook.e2e.ts && node test/client.e2e.ts && node test/first-boot.e2e.ts && node test/embedded.e2e.ts && node test/shim.e2e.ts && node test/bootstrap.e2e.ts && node test/runtime-gate.e2e.ts",
     "check": "npm test",
     "prepare": "npm run build",
-    "postinstall": "node scripts/postinstall.cjs"
+    "postinstall": "node -e \"if (process.env.npm_config_global === 'true') import('./scripts/postinstall.cjs')\""
   },
   "repository": {
     "type": "git",

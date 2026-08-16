@@ -1,7 +1,12 @@
 node_modules/
 /lib/
+/browser-dist/
+/scripts/
 coverage/
 *.tgz
 PRODUCT.md
 /examples/ch4acko3-brand/
 /test/brand-demo.e2e.mjs
+/packages/react/examples/rebrand-plugin/client.js
+/packages/react/examples/rebrand-plugin/index.cjs
+/packages/react/examples/rebrand-plugin/patch.cjs
