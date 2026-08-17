@@ -2,7 +2,7 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { findPackageJSON } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import type { HarmonyProvider } from './order.js'
+import { orderViolations, type HarmonyOrderViolation, type HarmonyProvider } from './order.js'
 
 export interface InstalledPlugin extends HarmonyProvider {
   dir: string
@@ -28,6 +28,37 @@ export interface HarmonyProfile {
   disabled: string[]
   plugins: InstalledPlugin[]
   incompatibilities: HarmonyIncompatibility[]
+}
+
+export interface HarmonyProfilePluginView {
+  name: string
+  version: string
+  description: string
+  harmony: boolean
+  patches: string[]
+  patchCount?: number
+  before: string[]
+  after: string[]
+  conflicts: string[]
+  author: string
+  contributors: string[]
+  homepage: string
+  bugs: string
+  license: string
+}
+
+export interface HarmonyProfileView {
+  dir: string
+  order: string[]
+  disabled: string[]
+  plugins: HarmonyProfilePluginView[]
+  orderViolations: HarmonyOrderViolation[]
+  incompatibilities: HarmonyIncompatibility[]
+}
+
+export interface HarmonyProfileUpdate {
+  order?: string[]
+  disabled?: string[]
 }
 
 export const HARMONY_STATE_FILE = 'harmony.json'
@@ -151,4 +182,90 @@ export function synchronizeHarmonyProfile(profileDir: string, requested?: string
     plugins,
     incompatibilities: providerIncompatibilities(plugins, state.disabled),
   }
+}
+
+function stringList(value: unknown, field: string): string[] {
+  if (!Array.isArray(value) || value.some(item => typeof item !== 'string' || item.length === 0)) {
+    throw new TypeError(`dsh-harmony: profile ${field} must be an array of non-empty strings`)
+  }
+  return [...value]
+}
+
+function profileOrder(current: string[], input: unknown): string[] {
+  const order = pinHarmonyOrder(input === undefined ? [...current] : stringList(input, 'order'))
+  const expected = new Set(current)
+  const seen = new Set<string>()
+  for (const name of order) {
+    if (!expected.has(name)) throw new Error(`dsh-harmony: profile order contains unknown package ${JSON.stringify(name)}`)
+    if (seen.has(name)) throw new Error(`dsh-harmony: profile order contains duplicate package ${JSON.stringify(name)}`)
+    seen.add(name)
+  }
+  const missing = current.filter(name => !seen.has(name))
+  if (missing.length > 0) {
+    throw new Error(`dsh-harmony: profile order omits installed package${missing.length === 1 ? '' : 's'} ${missing.map(name => JSON.stringify(name)).join(', ')}`)
+  }
+  return order
+}
+
+export function prepareHarmonyProfileUpdate(profile: HarmonyProfile, input: HarmonyProfileUpdate): HarmonyProfile {
+  if (typeof input !== 'object' || input === null) throw new TypeError('dsh-harmony: profile update must be an object')
+  const order = profileOrder(profile.order, input.order)
+  const disabled = [...new Set(input.disabled === undefined ? profile.disabled : stringList(input.disabled, 'disabled'))]
+  const ordered = new Set(order)
+  return {
+    ...profile,
+    order,
+    disabled,
+    incompatibilities: providerIncompatibilities(profile.plugins.filter(plugin => ordered.has(plugin.name)), disabled),
+  }
+}
+
+export function createHarmonyProfileView(
+  profile: HarmonyProfile,
+  patchCounts: ReadonlyMap<string, number> = new Map(),
+): HarmonyProfileView {
+  return {
+    dir: profile.dir,
+    order: [...profile.order],
+    disabled: [...profile.disabled],
+    orderViolations: orderViolations(profile.order, profile.plugins),
+    incompatibilities: profile.incompatibilities.map(item => ({ ...item })),
+    plugins: profile.plugins.map(({
+      name, version, description, patches, before, after, conflicts, author, contributors, homepage, bugs, license,
+    }) => ({
+      name,
+      version,
+      description,
+      harmony: patches.length > 0,
+      patches: [...patches],
+      ...(patchCounts.has(name) ? { patchCount: patchCounts.get(name)! } : {}),
+      before: [...before],
+      after: [...after],
+      conflicts: [...conflicts],
+      author,
+      contributors: [...contributors],
+      homepage,
+      bugs,
+      license,
+    })),
+  }
+}
+
+export function readHarmonyProfile(profileDir: string): HarmonyProfileView {
+  return createHarmonyProfileView(synchronizeHarmonyProfile(profileDir, undefined, false))
+}
+
+/** Validate and normalize an update for a stopped profile without writing it. */
+export function preflightHarmonyProfileUpdate(profileDir: string, input: HarmonyProfileUpdate): HarmonyProfileView {
+  return createHarmonyProfileView(prepareHarmonyProfileUpdate(
+    synchronizeHarmonyProfile(profileDir, undefined, false),
+    input,
+  ))
+}
+
+/** Atomically update a stopped profile. Running profiles must use HarmonyService.updateProfile(). */
+export function updateHarmonyProfile(profileDir: string, input: HarmonyProfileUpdate): HarmonyProfileView {
+  const candidate = prepareHarmonyProfileUpdate(synchronizeHarmonyProfile(profileDir, undefined, false), input)
+  saveHarmonyState(profileDir, { order: candidate.order, disabled: candidate.disabled })
+  return createHarmonyProfileView(candidate)
 }

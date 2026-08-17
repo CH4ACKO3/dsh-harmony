@@ -2,6 +2,11 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from 'vitest'
+import {
+  preflightHarmonyProfileUpdate,
+  readHarmonyProfile,
+  updateHarmonyProfile,
+} from './index.js'
 import { synchronizeHarmonyProfile } from './profile.js'
 
 test('profile order appends installed providers and removes uninstalled providers', () => {
@@ -87,5 +92,61 @@ test('treats a missing disabled list as empty', () => {
   writeFileSync(join(profile, 'harmony.json'), JSON.stringify({ order: [] }))
 
   expect(synchronizeHarmonyProfile(profile).disabled).toEqual([])
+  rmSync(profile, { recursive: true })
+})
+
+test('reads, preflights, and atomically updates a stopped profile', () => {
+  const profile = mkdtempSync(join(tmpdir(), 'dsh-harmony-profile-api-'))
+  for (const name of ['first', 'second']) {
+    mkdirSync(join(profile, 'node_modules', name), { recursive: true })
+    writeFileSync(join(profile, 'node_modules', name, 'package.json'), JSON.stringify({
+      name,
+      version: '1.0.0',
+      dsh: { harmony: { patches: [`./${name}.patch.cjs`], after: name === 'first' ? ['second'] : [] } },
+    }))
+  }
+  writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: { first: '1', second: '1' } }))
+  writeFileSync(join(profile, 'harmony.json'), JSON.stringify({ order: ['first'], disabled: [] }))
+
+  const before = readFileSync(join(profile, 'harmony.json'), 'utf8')
+  const view = readHarmonyProfile(profile)
+  expect(view).toMatchObject({
+    dir: profile,
+    order: ['first', 'second'],
+    disabled: [],
+    orderViolations: [{ before: 'second', after: 'first', declaredBy: 'first' }],
+  })
+  expect(view.plugins.find(plugin => plugin.name === 'first')).toMatchObject({
+    harmony: true,
+    patches: ['./first.patch.cjs'],
+  })
+  expect(readFileSync(join(profile, 'harmony.json'), 'utf8')).toBe(before)
+
+  expect(preflightHarmonyProfileUpdate(profile, {
+    order: ['second', 'first'],
+    disabled: ['first/*', 'first/*'],
+  })).toMatchObject({
+    order: ['second', 'first'],
+    disabled: ['first/*'],
+    orderViolations: [],
+    incompatibilities: [],
+  })
+  expect(readFileSync(join(profile, 'harmony.json'), 'utf8')).toBe(before)
+
+  expect(() => preflightHarmonyProfileUpdate(profile, { order: ['first', 'first'] }))
+    .toThrow('duplicate package "first"')
+  expect(() => preflightHarmonyProfileUpdate(profile, { order: ['first'] }))
+    .toThrow('omits installed package "second"')
+  expect(() => preflightHarmonyProfileUpdate(profile, { order: ['first', 'unknown'] }))
+    .toThrow('unknown package "unknown"')
+  expect(() => preflightHarmonyProfileUpdate(profile, { disabled: [1] as unknown as string[] }))
+    .toThrow('disabled must be an array of non-empty strings')
+
+  const updated = updateHarmonyProfile(profile, { order: ['second', 'first'], disabled: ['first/*'] })
+  expect(updated).toMatchObject({ order: ['second', 'first'], disabled: ['first/*'] })
+  expect(JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8'))).toEqual({
+    order: ['second', 'first'],
+    disabled: ['first/*'],
+  })
   rmSync(profile, { recursive: true })
 })

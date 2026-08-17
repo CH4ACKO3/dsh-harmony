@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { pathToFileURL } from 'node:url'
 import { afterAll, beforeAll, expect, test } from 'vitest'
+import type { HarmonyService } from './index.js'
 import {
   beginProfileUpdate,
   beginPluginUpdate,
@@ -1750,8 +1751,12 @@ module.exports = [{
   ]
   const routes = new Map<string, any>()
   const disposers: Array<() => void> = []
+  let harmony!: HarmonyService
+  let graphRevision = 0
   await applyHarmonyPlugin({
-    provide() {},
+    provide(name: string, service: HarmonyService) {
+      if (name === 'harmony') harmony = service
+    },
     logger: { error() {} },
     on() {},
     effect(start: () => any) {
@@ -1761,10 +1766,14 @@ module.exports = [{
     inject(services: string[], start: (ctx: any) => any) {
       const injected = services.includes('webServer')
         ? { webServer: { register(route: any) { routes.set(route.path, route.handler); return () => {} } } }
-        : { clientModules: { rebuilt(name: string) {
-          if (failClient === name) throw new Error('client rebuild failed')
-          clientRebuilds.push({ name, order: [...currentProfile().order] })
-        } } }
+        : { clientModules: {
+            rebuilt(name: string) {
+              if (failClient === name) throw new Error('client rebuild failed')
+              graphRevision += 1
+              clientRebuilds.push({ name, order: [...currentProfile().order] })
+            },
+            graph() { return { rev: `graph-${graphRevision}`, entries: [] } },
+          } }
       const dispose = start(injected)
       if (typeof dispose === 'function') disposers.push(dispose)
     },
@@ -1789,6 +1798,17 @@ module.exports = [{
     return JSON.parse(result.body).reload
   }
   const desired = ['dsh-harmony', 'web-transaction-target', 'web-transaction-provider']
+  expect(harmony.profile()).toMatchObject({
+    dir: profile,
+    order: ['dsh-harmony', 'web-transaction-provider', 'web-transaction-target'],
+    plugins: expect.arrayContaining([
+      expect.objectContaining({ name: 'web-transaction-provider', patchCount: 3, patches: ['./patch.cjs'] }),
+    ]),
+  })
+  await expect(harmony.updateProfile({ order: desired.slice(0, -1) }))
+    .rejects.toThrow('omits installed package "web-transaction-provider"')
+  expect(readFileSync(join(profile, 'harmony.json'), 'utf8')).toBe(stateBefore)
+
   failNext = true
   const failed = response()
   await routes.get('/dsh-harmony/order')(request(desired), failed)
@@ -1806,6 +1826,19 @@ module.exports = [{
     author: 'Patch Author', patchCount: 3,
   })
   expect(JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8')).order).toEqual(desired)
+
+  const serviceUpdate = await harmony.updateProfile({ disabled: ['web-transaction-provider/transactional'] })
+  expect(serviceUpdate).toMatchObject({
+    generation: expect.any(Number),
+    reload: { state: 'succeeded' },
+    clientGraphRev: `graph-${graphRevision}`,
+    profile: {
+      order: desired,
+      disabled: ['web-transaction-provider/transactional'],
+    },
+  })
+  expect(JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8')).disabled)
+    .toEqual(['web-transaction-provider/transactional'])
 
   const committedState = readFileSync(join(profile, 'harmony.json'), 'utf8')
   clientRebuilds.length = 0

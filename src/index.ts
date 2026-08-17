@@ -1,5 +1,7 @@
 import type MagicString from 'magic-string'
 import type ts from 'typescript'
+import type { HarmonyReloadStatus } from './installer.js'
+import type { HarmonyProfileUpdate, HarmonyProfileView } from './profile.js'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -10,9 +12,18 @@ declare module '@deepseek-ai/cordis' {
 export interface HarmonyService {
   readonly binEntry: string
   readonly profileDir: string
+  profile(): HarmonyProfileView
+  updateProfile(input: HarmonyProfileUpdate): Promise<HarmonyProfileUpdateResult>
   inspect(input?: HarmonyInspectInput): HarmonyInspection
   inspectDependencies(owner: string): HarmonyPatchDependency[]
   reloadPlugin(name: string): Promise<void>
+}
+
+export interface HarmonyProfileUpdateResult {
+  profile: HarmonyProfileView
+  generation: number
+  reload: HarmonyReloadStatus
+  clientGraphRev?: string
 }
 
 export interface HarmonyInspectInput {
@@ -113,3 +124,16 @@ export interface HarmonyPatchInspection {
 export { apply, inject } from './plugin.js'
 export { discoverHarmonyExtensions, loadHarmonyExtensions } from './extension.js'
 export type { HarmonyExtension } from './extension.js'
+export {
+  preflightHarmonyProfileUpdate,
+  readHarmonyProfile,
+  updateHarmonyProfile,
+} from './profile.js'
+export type {
+  HarmonyIncompatibility,
+  HarmonyProfilePluginView,
+  HarmonyProfileUpdate,
+  HarmonyProfileView,
+} from './profile.js'
+export type { HarmonyReloadStatus } from './installer.js'
+export type { HarmonyOrderViolation } from './order.js'

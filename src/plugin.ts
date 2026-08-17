@@ -9,6 +9,8 @@ import { publishRuntimeAddress } from './control.js'
 import { loadHarmonyExtensions } from './extension.js'
 import { registerActiveRuntimeRoute, waitForRuntimeChoice } from './installer.js'
 import type { HarmonyReloadStatus } from './installer.js'
+import type { HarmonyProfileUpdate, HarmonyProfileUpdateResult, HarmonyProfileView } from './index.js'
+import { createHarmonyProfileView, prepareHarmonyProfileUpdate } from './profile.js'
 import {
   beginProfileUpdate,
   beginPluginUpdate,
@@ -55,33 +57,11 @@ function loaderPackages(ctx: Context): string[] {
   return [...packages]
 }
 
-function profileView(ctx: Context) {
+function profileView(): HarmonyProfileView {
   const profile = currentProfile()
-  const patchCounts = new Map<string, number>()
+  const patchCounts = new Map(profile.plugins.map(plugin => [plugin.name, 0]))
   for (const patch of getPatchStatuses()) patchCounts.set(patch.owner, (patchCounts.get(patch.owner) ?? 0) + 1)
-  return {
-    dir: profile.dir,
-    order: profile.order,
-    disabled: profile.disabled,
-    incompatibilities: profile.incompatibilities,
-    plugins: profile.plugins.map(({
-      name, version, description, patches, before, after, conflicts, author, contributors, homepage, bugs, license,
-    }) => ({
-      name,
-      version,
-      description,
-      harmony: patches.length > 0,
-      patchCount: patchCounts.get(name) ?? 0,
-      before,
-      after,
-      conflicts,
-      author,
-      contributors,
-      homepage,
-      bugs,
-      license,
-    })),
-  }
+  return createHarmonyProfileView(profile, patchCounts)
 }
 
 function sendJson(response: ServerResponse, value: unknown): void {
@@ -317,6 +297,21 @@ export async function apply(ctx: Context): Promise<void> {
     await applyTransaction(transaction)
   })
 
+  const updateProfile = async (input: () => HarmonyProfileUpdate): Promise<HarmonyProfileUpdateResult> => {
+    const generation = await enqueueUpdate(async () => {
+      const candidate = prepareHarmonyProfileUpdate(currentProfile(), input())
+      const transaction = beginProfileUpdate({ order: candidate.order, disabled: candidate.disabled })
+      await applyTransaction(transaction)
+      return transaction.generation
+    })
+    return {
+      profile: profileView(),
+      generation,
+      reload: { ...reloadStatus },
+      ...(clientModules === undefined ? {} : { clientGraphRev: clientModules.graph().rev }),
+    }
+  }
+
   ctx.inject(['clientModules'], (clientCtx) => {
     clientModules = clientCtx.clientModules
     return () => { clientModules = undefined }
@@ -325,6 +320,8 @@ export async function apply(ctx: Context): Promise<void> {
   ctx.provide('harmony', {
     binEntry: fileURLToPath(new URL('./bin.js', import.meta.url)),
     profileDir,
+    profile: profileView,
+    updateProfile: (input: HarmonyProfileUpdate) => updateProfile(() => input),
     inspect(input: { package?: string; file?: string } = {}) {
       return {
         patches: getPatchStatuses(),
@@ -347,19 +344,16 @@ export async function apply(ctx: Context): Promise<void> {
   }, 'dsh-harmony: extensions')
 
   ctx.inject(['webServer'], (webCtx) => {
-    const update = (input: () => { order?: string[]; disabled?: string[] }): Promise<void> => enqueueUpdate(
-      () => applyTransaction(beginProfileUpdate(input())),
-    )
     const dispose = [webCtx.webServer.register({
       kind: 'exact',
       path: '/dsh-harmony/order',
       async handler(request: IncomingMessage, response: ServerResponse) {
-        if (request.method === 'GET') return sendJson(response, profileView(ctx))
+        if (request.method === 'GET') return sendJson(response, profileView())
         if (request.method === 'POST') {
           try {
             const { order } = await readJson(request) as { order: string[] }
-            await update(() => ({ order }))
-            return sendJson(response, profileView(ctx))
+            const result = await updateProfile(() => ({ order }))
+            return sendJson(response, result.profile)
           } catch (error) {
             return sendError(response, error)
           }
@@ -375,7 +369,7 @@ export async function apply(ctx: Context): Promise<void> {
         if (request.method === 'POST') {
           try {
             const { key, owner, enabled } = await readJson(request) as { key?: string; owner?: string; enabled: boolean }
-            await update(() => {
+            await updateProfile(() => {
               const disabled = new Set(currentProfile().disabled)
               if (owner !== undefined) {
                 const providerKey = `${owner}/*`

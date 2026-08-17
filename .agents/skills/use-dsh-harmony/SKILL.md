@@ -129,6 +129,39 @@ Require all intended Patches to reach `bound`. Treat `status` exit code `1` as f
 
 Use Settings or `dsh harmony` to reorder and enable or disable Patches. Do not edit `$DSH_HOME/profiles/<name>/harmony.json` while the profile is running; UI and CLI changes are preflighted and committed transactionally.
 
+## Control a profile from another plugin
+
+Use the Cordis service for a running profile. `order` must be a complete permutation of the current order; omitted fields keep their current values. The result identifies the committed Patch generation, reload status, and client graph revision when the client module service is available:
+
+```ts
+export const inject = ['harmony']
+
+export async function apply(ctx) {
+  const current = ctx.harmony.profile()
+  const result = await ctx.harmony.updateProfile({
+    order: current.order,
+    disabled: ['my-provider/optional-patch'],
+  })
+  ctx.logger.info(`Harmony generation ${result.generation}: ${result.reload.state}`)
+}
+```
+
+For a profile whose Host is stopped, use the public filesystem API instead of importing `lib/profile.js` or editing `harmony.json` directly:
+
+```ts
+import {
+  preflightHarmonyProfileUpdate,
+  readHarmonyProfile,
+  updateHarmonyProfile,
+} from 'dsh-harmony'
+
+const current = readHarmonyProfile(profileDir)
+const candidate = preflightHarmonyProfileUpdate(profileDir, { order: current.order })
+const saved = updateHarmonyProfile(profileDir, { disabled: candidate.disabled })
+```
+
+Offline preflight validates and normalizes profile state without writing it. It does not start a Host or bind target Patches; runtime binding still happens when that profile starts. Never call `updateHarmonyProfile()` while the profile is running; use `ctx.harmony.updateProfile()` so reload and disk state commit or roll back together.
+
 ## Diagnose failures
 
 Check these in order:
