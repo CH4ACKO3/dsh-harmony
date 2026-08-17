@@ -48,7 +48,7 @@ dsh web
 已安装的插件源码（不修改）
   → 收集已启用的 Patch Provider
   → 解析 Provider 顺序与冲突
-  → 预检全部源码变换
+  → 检查全部源码变换并跳过失败 Patch
   → 执行新的运行时 generation
 ```
 
@@ -56,7 +56,7 @@ dsh web
 | --- | --- | --- |
 | 原始源码 | 已安装的插件包 | Harmony 从不写入 |
 | Patch 流水线 | Harmony Provider | 确定的顺序与精确匹配检查 |
-| 运行时 generation | Harness Loader | 仅在预检成功后替换 |
+| 运行时 generation | Harness Loader | 仅在目标重载成功后替换 |
 
 浏览器目标使用 Harness HMR，Node 目标通过 Loader Tree 重载。两者共享同一份 Provider 顺序、Patch 状态和检查链路。
 

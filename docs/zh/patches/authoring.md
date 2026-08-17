@@ -146,4 +146,4 @@ export function apply(ctx) {
 }
 ```
 
-服务提供 `binEntry`、`profileDir`、`inspect(input?)`、`inspectDependencies(owner)` 和 `prepareDraft(input)`。包还导出 `HarmonyDraftRuntime`、扩展发现工具及其 TypeScript 类型，供下游工具复用。
+服务提供 `binEntry`、`profileDir`、`inspect(input?)`、`inspectDependencies(owner)` 和 `reloadPlugin(name)`；后者用于以事务方式重载一个 Loader 插件及其 Patch 声明。包还导出扩展发现工具及其 TypeScript 类型。Preview 与 Draft 生命周期 API 属于 WebUI Studio，而不是 Harmony。

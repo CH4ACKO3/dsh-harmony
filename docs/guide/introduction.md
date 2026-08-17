@@ -43,7 +43,7 @@ Harmony installs its CommonJS and ESM transform hooks, then forwards the origina
 - **Global order** combines manual provider order with declared `before` and `after` constraints.
 - **Transactions** preflight provider changes, order changes, and enablement before committing a reload.
 - **Inspection** exposes original source, each intermediate Patch result, and final runtime source.
-- **Tooling APIs** let plugins and build tools query status or prepare isolated Draft runtimes.
+- **Tooling APIs** let plugins and build tools query status or transactionally reload a plugin and its Patch declarations.
 
 ## Host and browser targets
 
@@ -53,6 +53,6 @@ Browser targets such as `lib/client.js` use Harness's existing `clientModules.re
 
 ## Safety boundary
 
-Every update uses the complete ordered Patch set for its affected targets. If selector matching, target resolution, or Patch application fails, Harmony keeps the previous Loader Tree and profile state. Uninstalling Harmony returns execution to the original files because no target package needs restoration.
+Every update evaluates the complete ordered Patch set for its affected targets. A Patch that cannot match or apply is skipped and reported without taking down the Host. Provider declaration failures and target reload failures keep the previous Loader Tree and profile state. Uninstalling Harmony returns execution to the original files because no target package needs restoration.
 
 Next: [install the runtime](/guide/installation) or [write a Patch](/patches/authoring).

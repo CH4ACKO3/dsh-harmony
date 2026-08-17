@@ -43,7 +43,7 @@ Harmony 先安装 CommonJS 和 ESM 变换 Hook，再原样转发 CLI 参数。�
 - **全局顺序**：将手动 Provider 顺序与 `before`、`after` 约束结合。
 - **事务**：提交重载前预检 Provider、顺序和启停状态变化。
 - **检查**：展示原始源码、每一步 Patch 结果和最终运行时源码。
-- **工具 API**：让插件与构建工具查询状态或创建隔离的 Draft 运行时。
+- **工具 API**：让插件与构建工具查询状态，或以事务方式重载插件及其 Patch 声明。
 
 ## Host 与浏览器目标
 
@@ -53,6 +53,6 @@ Node 目标通过 Loader Tree 重载。同一目标包中的相对 ESM 导入共
 
 ## 安全边界
 
-每次更新都会用完整、有序的 Patch 集合预检所有受影响目标。如果目标解析、选择器匹配或 Patch 应用失败，Harmony 会保留上一代 Loader Tree 和 profile 状态。卸载 Harmony 后直接恢复执行原始文件，无需还原任何目标包。
+每次更新都会用完整、有序的 Patch 集合检查所有受影响目标。无法匹配或应用的单个 Patch 会被跳过并报告，不会拖垮 Host。Provider 声明加载失败或目标插件重载失败时，Harmony 才会保留上一代 Loader Tree 和 profile 状态。卸载 Harmony 后直接恢复执行原始文件，无需还原任何目标包。
 
 下一步：[安装运行时](/zh/guide/installation)或[编写 Patch](/zh/patches/authoring)。

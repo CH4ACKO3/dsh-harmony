@@ -6,6 +6,8 @@ Harmony 修改编译后的运行时代码，因此保证范围止于明确边界
 
 Provider Patch 文件必须使用 CommonJS，以便实时 Loader 更新路径同步收集。
 
+源码 Patch 的 `apply()` 抛错时，Harmony 会丢弃该 Patch 的内存编辑，并从上一个源码结果继续；但无法撤销 Patch 代码自行执行的文件写入、网络请求、全局修改或其它副作用。Patch 声明与 `apply()` 应保持确定性且不产生副作用。
+
 ## Loader 回滚
 
 Harmony 会在替换当前 Loader Fiber 之前求值候选插件模块。如果模块求值或启动失败，Harmony 会恢复原有 Fiber 和 CommonJS 缓存，但无法撤销已经在模块顶层发生的副作用。每次 ESM 重载都会使用不同的 generation URL，因此 Node.js 会保留这些模块实例，直到 Host 进程退出。
@@ -22,7 +24,7 @@ Harmony 会在替换当前 Loader Fiber 之前求值候选插件模块。如果�
 
 语义处理器在 Node.js 中执行，因此 `lib/client.js` 等浏览器 Bundle 必须使用源码 Patch。
 
-同一函数只能有一个启用的语义 `replace`，冲突事务会被拒绝。
+同一函数只采用 Provider 顺序中的第一个已启用语义 `replace`；后续替换会被标记为 `failed` 并跳过。
 
 ## Provider 顺序
 

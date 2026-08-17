@@ -81,7 +81,9 @@ Inspection never writes transformed source to the target package.
 
 Harmony watches the Loader profile, `harmony.json`, and declared provider files. Provider additions, Patch edits, order changes, enablement changes, and Loader-tree updates enter one serialized transaction queue.
 
-Before commit, Harmony applies the complete ordered Patch set to every affected target. A failed preflight preserves the previous runtime generation and profile state, so an older rollback cannot overwrite a newer committed update.
+Before commit, Harmony applies the complete ordered Patch set to every affected target. A Patch that cannot match or apply is marked `failed`, logged as skipped, and does not stop later Patches or the Host. Provider declaration failures and target reload failures still preserve the previous runtime generation and profile state, so an older rollback cannot overwrite a newer committed update.
+
+A failed Patch is a declaration that loaded successfully but cannot safely transform its current target: for example, the target package, version, or file is unavailable; `select` and `expect` do not agree with the compiled source; `apply()` throws; a Semantic Patch targets an unsupported shape; or a later `replace` conflicts with the first replacement. Failure to import a Patch plugin, duplicate Patch IDs, and failure to reload the target plugin are transaction failures instead, so Harmony rolls back the candidate generation.
 
 Node target changes rebuild the affected Loader groups. Browser target changes use Harness HMR and reload only the changed client plugin.
 
@@ -95,4 +97,4 @@ Harmony reports:
 - incompatible providers declared through `conflicts`;
 - constraints that the current manual order violates.
 
-Errors name the provider, stable Patch key, target package, and target file. Use `status` to locate the failing Patch, then `inspect` to compare its input with the output of earlier providers.
+Warnings name the provider, stable Patch key, target package, and target file. Use `status` to locate the skipped Patch, then `inspect` to compare its input with the output of earlier providers. `status` exits with code `1` while any Patch is failed even though the Host remains available.

@@ -77,7 +77,9 @@ dsh harmony inspect
 
 Harmony 监听 Loader profile、`harmony.json` 和声明的 Provider 文件。Provider 增删、Patch 编辑、顺序变化、启停变化与 Loader Tree 更新进入同一条串行事务队列。
 
-提交前，Harmony 会把完整有序 Patch 集合应用到所有受影响目标。预检失败会保留上一代运行时与 profile 状态，旧回滚也无法覆盖较新的已提交更新。
+提交前，Harmony 会把完整有序 Patch 集合应用到所有受影响目标。无法匹配或应用的单个 Patch 会被标记为 `failed`、记录跳过警告，并且不会阻止后续 Patch 或 Host 运行。Provider 声明加载失败或目标重载失败仍会保留上一代运行时与 profile 状态，旧回滚也无法覆盖较新的已提交更新。
+
+这里的失败 Patch，是指声明已经成功加载，但无法安全改写当前目标：例如目标包、版本或文件不可用，`select` 与 `expect` 不再符合编译产物，`apply()` 抛错，Semantic Patch 遇到不支持的目标结构，或排序靠后的 `replace` 与第一个替换发生冲突。Patch 插件无法导入、Patch ID 重复以及目标插件无法重载属于事务失败，Harmony 会回滚候选 generation。
 
 Node 目标重建受影响 Loader Group；浏览器目标通过 Harness HMR 只重载变化的客户端插件。
 
@@ -91,4 +93,4 @@ Harmony 会明确报告：
 - `conflicts` 声明的 Provider 同时启用；
 - 当前手动顺序违反了约束。
 
-错误会给出 Provider、稳定 Patch 键、目标包和文件。先用 `status` 定位，再用 `inspect` 比较当前 Patch 输入与早期 Provider 输出。
+警告会给出 Provider、稳定 Patch 键、目标包和文件。先用 `status` 定位被跳过的 Patch，再用 `inspect` 比较当前 Patch 输入与早期 Provider 输出。只要存在 `failed` Patch，`status` 仍以状态码 `1` 退出，但 Host 可以继续运行。

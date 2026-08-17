@@ -153,6 +153,6 @@ The service exposes:
 - `binEntry` and `profileDir` for the active runtime;
 - `inspect(input?)` for Patch status and transformed target snapshots;
 - `inspectDependencies(owner)` for relationships inferred between Patches;
-- `prepareDraft(input)` for an isolated Draft runtime.
+- `reloadPlugin(name)` for transactionally reloading one Loader plugin and its Patch declarations.
 
-The package also exports `HarmonyDraftRuntime`, extension discovery helpers, and their TypeScript types for downstream tooling.
+The package also exports extension discovery helpers and their TypeScript types for downstream tooling. Preview and Draft lifecycle APIs belong to WebUI Studio rather than Harmony.

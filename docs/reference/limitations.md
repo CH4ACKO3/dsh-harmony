@@ -6,6 +6,8 @@ Harmony changes compiled runtime code, so its guarantees stop at explicit bounda
 
 Provider Patch files must be CommonJS modules. Harmony's live Loader update path collects them synchronously.
 
+When a Source Patch's `apply()` throws, Harmony discards that Patch's in-memory edits and continues from the previous source. It cannot undo file writes, network calls, global mutations, or other side effects performed by Patch code. Keep Patch declarations and `apply()` functions deterministic and side-effect free.
+
 ## Loader rollback
 
 Harmony evaluates a candidate plugin module before replacing its active Loader Fiber. If module evaluation or startup fails, Harmony restores the previous Fiber and CommonJS cache, but it cannot undo side effects that ran at module scope. Each ESM reload uses a distinct generation URL, so Node.js retains those module instances until the Host process exits.
@@ -22,7 +24,7 @@ Semantic Patches support named function declarations and class methods. Paramete
 
 Semantic handlers execute in Node.js. Browser bundles such as `lib/client.js` require Source Patches.
 
-Only one enabled semantic `replace` Patch may target a function. A conflicting transaction is rejected.
+Only the first enabled semantic `replace` Patch in provider order may target a function. Later replacements are marked `failed` and skipped.
 
 ## Provider order
 

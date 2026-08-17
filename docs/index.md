@@ -48,7 +48,7 @@ After startup, open **Settings → Harmony** or run `dsh harmony` in another ter
 installed plugin source (unchanged)
   → collect enabled Patch providers
   → resolve provider order and conflicts
-  → preflight every source transformation
+  → evaluate every transformation and skip failed Patches
   → execute the new runtime generation
 ```
 
@@ -56,7 +56,7 @@ installed plugin source (unchanged)
 | --- | --- | --- |
 | Original source | Installed plugin package | Never written by Harmony |
 | Patch pipeline | Harmony providers | Deterministic order and exact match checks |
-| Runtime generation | Harness Loader | Replaced only after successful preflight |
+| Runtime generation | Harness Loader | Replaced only after the target reload succeeds |
 
 Browser targets use Harness HMR. Node targets reload through the Loader Tree. Both use the same provider order, Patch state, and inspection trail.
 
