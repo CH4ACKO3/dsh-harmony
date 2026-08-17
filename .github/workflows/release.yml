@@ -44,3 +44,27 @@ jobs:
       - name: Verify tag version
         run: test "${GITHUB_REF_NAME#react-v}" = "$(node -p "require('./packages/react/package.json').version")"
       - run: npm publish --workspace dsh-harmony-react --provenance --access public
+
+  github-release:
+    needs: [core, react]
+    if: ${{ always() && (needs.core.result == 'success' || needs.react.result == 'success') }}
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          package_name=dsh-harmony
+          tag_pattern='v*'
+          if [[ "$GITHUB_REF_NAME" == react-v* ]]; then
+            package_name=dsh-harmony-react
+            tag_pattern='react-v*'
+          fi
+          previous_tag=$(git tag --list "$tag_pattern" --sort=-version:refname | sed -n '2p')
+          gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --notes-start-tag "$previous_tag" --title "$package_name $GITHUB_REF_NAME"
