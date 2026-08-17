@@ -51,7 +51,7 @@
     "node": "^22.22.3 || >=24.11.1"
   },
   "peerDependencies": {
-    "dsh-harmony": "^0.2.0"
+    "dsh-harmony": "^0.3.0"
   },
   "devDependencies": {
     "@phenomnomnominal/tsquery": "^6.2.0",
