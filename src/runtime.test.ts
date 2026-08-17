@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { Readable } from 'node:stream'
 import { setTimeout as delay } from 'node:timers/promises'
 import { pathToFileURL } from 'node:url'
 import { afterAll, beforeAll, expect, test } from 'vitest'
@@ -1854,10 +1855,10 @@ module.exports = [{
   await new Promise<void>(resolve => setImmediate(resolve))
 
   const stateBefore = readFileSync(join(profile, 'harmony.json'), 'utf8')
-  const request = (order: string[]) => ({
-    method: 'POST',
-    async *[Symbol.asyncIterator]() { yield Buffer.from(JSON.stringify({ order })) },
-  })
+  const request = (order: string[]) => Object.assign(
+    Readable.from([Buffer.from(JSON.stringify({ order }))]),
+    { method: 'POST' },
+  )
   const response = () => ({
     status: 0,
     body: '',

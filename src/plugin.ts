@@ -7,6 +7,7 @@ import type { Context, Fiber } from '@deepseek-ai/cordis'
 import type { Loader } from '@deepseek-ai/cordis-plugin-loader'
 import { publishRuntimeAddress } from './control.js'
 import { loadHarmonyExtensions } from './extension.js'
+import { readJson, RequestBodyTooLargeError } from './http.js'
 import { registerActiveRuntimeRoute, waitForRuntimeChoice } from './installer.js'
 import type { HarmonyReloadStatus } from './installer.js'
 import type { HarmonyProfileUpdate, HarmonyProfileUpdateResult, HarmonyProfileView } from './index.js'
@@ -69,14 +70,10 @@ function sendJson(response: ServerResponse, value: unknown): void {
   response.end(JSON.stringify(value))
 }
 
-async function readJson(request: IncomingMessage): Promise<unknown> {
-  const chunks: Buffer[] = []
-  for await (const chunk of request) chunks.push(Buffer.from(chunk))
-  return JSON.parse(Buffer.concat(chunks).toString())
-}
-
 function sendError(response: ServerResponse, error: unknown): void {
-  response.writeHead(500, { 'content-type': 'application/json; charset=utf-8' })
+  response.writeHead(error instanceof RequestBodyTooLargeError ? 413 : 500, {
+    'content-type': 'application/json; charset=utf-8',
+  })
   response.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }))
 }
 

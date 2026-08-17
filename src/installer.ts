@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import type { AppExit } from '@deepseek-ai/dsh-cmdline'
 import type { WebServer } from '@deepseek-ai/dsh-host-webserver'
 import type { Context } from '@deepseek-ai/cordis'
+import { readJson, RequestBodyTooLargeError } from './http.js'
 
 type RuntimeAction = 'install' | 'install-restart' | 'remove' | 'ignore'
 type RuntimeState = 'missing' | 'desktop-inactive' | 'working' | 'installed' | 'removed' | 'ignored' | 'error'
@@ -159,9 +160,14 @@ export async function waitForRuntimeChoice(ctx: Context): Promise<void> {
         response.end()
         return
       }
-      const chunks: Buffer[] = []
-      for await (const chunk of request) chunks.push(Buffer.from(chunk))
-      const { action } = JSON.parse(Buffer.concat(chunks).toString()) as { action: RuntimeAction }
+      let action: RuntimeAction
+      try {
+        const body = await readJson<{ action: RuntimeAction }>(request)
+        action = body.action
+      } catch (error) {
+        if (error instanceof RequestBodyTooLargeError) return sendJson(response, { error: error.message }, 413)
+        throw error
+      }
       if (!['install', 'install-restart', 'remove', 'ignore'].includes(action)
         || (desktopInactive && (action === 'install' || action === 'install-restart'))) {
         response.writeHead(400)

@@ -1110,6 +1110,26 @@ function activeTypeScriptLoader(
   return active ? pkg : undefined
 }
 
+function resolveTypeScriptDependency(
+  specifier: string,
+  parentUrl: string | undefined,
+  requestedGeneration: number,
+): string | undefined {
+  if (!specifier.startsWith('.') || parentUrl === undefined || !parentUrl.startsWith('file:')) return undefined
+  const parent = canonicalFilename(fileURLToPath(parentUrl))
+  const parentPackage = activeTypeScriptLoader(parent, requestedGeneration)
+  if (parentPackage === undefined) return undefined
+  const resolved = ts.resolveModuleName(
+    specifier,
+    parent,
+    { allowJs: true, module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext },
+    ts.sys,
+  ).resolvedModule?.resolvedFileName
+  if (resolved === undefined || !isTypeScript(resolved) || /\.d\.[cm]?ts$/.test(resolved)) return undefined
+  const filename = canonicalFilename(resolved)
+  return packageFor(filename)?.dir === parentPackage.dir ? filename : undefined
+}
+
 function transpileTypeScript(filename: string, source: string, pkg: PackageInfo): {
   format: 'module' | 'commonjs'
   source: string
@@ -1388,11 +1408,27 @@ export function installModuleHooks(): void {
       if (specifier === 'dsh-harmony/package.json') return { url: manifestUrl, shortCircuit: true }
       const marker = '?dsh-harmony='
       const index = specifier.lastIndexOf(marker)
-      const result = nextResolve(index === -1 ? specifier : specifier.slice(0, index), context)
+      const cleanSpecifier = index === -1 ? specifier : specifier.slice(0, index)
       let nextGeneration = index === -1 ? undefined : specifier.slice(index + marker.length)
+      const inherited = context.parentURL?.startsWith('file:')
+        ? new URL(context.parentURL).searchParams.get('dsh-harmony') ?? undefined
+        : undefined
+      let result
+      try {
+        result = nextResolve(cleanSpecifier, context)
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ERR_MODULE_NOT_FOUND') throw error
+        const filename = resolveTypeScriptDependency(
+          cleanSpecifier,
+          context.parentURL,
+          Number(nextGeneration ?? inherited ?? generation),
+        )
+        if (filename === undefined) throw error
+        result = { url: pathToFileURL(filename).href, shortCircuit: true }
+        nextGeneration ??= inherited
+      }
       if (nextGeneration === undefined && context.parentURL?.startsWith('file:') && result.url.startsWith('file:')) {
         const parentUrl = new URL(context.parentURL)
-        const inherited = parentUrl.searchParams.get('dsh-harmony') ?? undefined
         if (inherited !== undefined) {
           const parentPackage = packageFor(fileURLToPath(parentUrl))
           const childPackage = packageFor(fileURLToPath(result.url))

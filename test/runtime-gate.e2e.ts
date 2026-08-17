@@ -5,6 +5,7 @@ import { createServer } from 'node:net'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { delimiter, join, resolve } from 'node:path'
+import { JSON_BODY_LIMIT } from '../lib/http.js'
 
 const root = mkdtempSync(join(tmpdir(), 'dsh-harmony-runtime-gate-'))
 const home = join(root, 'home')
@@ -124,6 +125,13 @@ const runtime = await startRuntime({ HARMONY_TEST_NPM_DELAY_MS: '300' })
 const url = runtime.url
 const status = await waitForState(runtime, 'missing')
 assert.equal(status.state, 'missing')
+const oversized = await fetch(`${url}/dsh-harmony/runtime`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: Buffer.alloc(JSON_BODY_LIMIT + 1),
+})
+assert.equal(oversized.status, 413)
+assert.equal((await waitForState(runtime, 'missing')).state, 'missing')
 const client = await fetch(`${url}/plugins/dsh-harmony/client.js`)
 assert.equal(client.ok, true, runtime.output())
 assert.match(await client.text(), /Install and restart/)

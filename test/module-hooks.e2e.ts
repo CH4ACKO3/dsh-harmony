@@ -24,6 +24,7 @@ const files = {
   idempotent: join(target, 'lib/idempotent.js'),
   typescriptEntry: join(target, 'index.ts'),
   typescriptHelper: join(target, 'lib/helper.ts'),
+  typescriptValue: join(target, 'lib/value.ts'),
 }
 
 try {
@@ -42,10 +43,14 @@ try {
     writeFileSync(filename, 'export const value = 1\n')
   }
   writeFileSync(files.typescriptEntry, `
-import { helper } from './lib/helper.ts'
+import { helper } from './lib/helper.js'
 export const value: number = helper() + 1
 `)
-  writeFileSync(files.typescriptHelper, 'export function helper(): number { return 1 }\n')
+  writeFileSync(files.typescriptHelper, `
+import { value } from './value'
+export function helper(): number { return value }
+`)
+  writeFileSync(files.typescriptValue, 'export const value: number = 1\n')
   writeFileSync(join(unrelated, 'package.json'), JSON.stringify({
     name: 'unrelated-typescript-target', version: '1.0.0', type: 'module', main: 'index.ts',
   }))
