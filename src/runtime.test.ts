@@ -17,6 +17,7 @@ import {
   inspectPatchDependencies,
   installFileTransforms,
   retainedGenerationCount,
+  subscribePatchStatuses,
   synchronizePluginOrder,
   synchronizeProfile,
   watchProfile,
@@ -102,7 +103,7 @@ module.exports = {
   expect(await readFile(join(target, 'lib/index.js'), 'utf8')).toContain('return 2')
 })
 
-test('enforces exact match counts and exposes a failed patch status', () => {
+test('skips a Patch with the wrong match count and continues applying later Patches', () => {
   const target = join(root, 'expect-target')
   const provider = join(root, 'expect-provider')
   mkdirSync(join(target, 'lib'), { recursive: true })
@@ -114,22 +115,29 @@ test('enforces exact match counts and exposes a failed patch status', () => {
     dsh: { harmony: { patches: ['./patch.cjs'] } },
   }))
   writeFileSync(join(provider, 'patch.cjs'), `
-module.exports = {
+module.exports = [{
   id: 'one-number',
   target: { package: 'expect-target', files: ['lib/index.js'] },
   select: 'NumericLiteral',
   expect: 1,
   apply() {},
-}
+}, {
+  id: 'replace-two',
+  target: { package: 'expect-target', files: ['lib/index.js'] },
+  select: 'NumericLiteral[text="2"]',
+  expect: 1,
+  apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '3') },
+}]
 `)
   discoverPackage(provider)
 
-  expect(() => readFileSync(join(target, 'lib/index.js'), 'utf8')).toThrow('expected 1 match(es)')
+  expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('[1, 3]')
   expect(getPatchStatuses().find(patch => patch.key === 'expect-provider/one-number')).toMatchObject({
     state: 'failed',
     matches: 2,
     file: 'lib/index.js',
   })
+  expect(getPatchStatuses().find(patch => patch.key === 'expect-provider/replace-two')?.state).toBe('bound')
 })
 
 test('collects failed statuses without aborting the status inspection pass', () => {
@@ -170,6 +178,44 @@ module.exports = [{
   expect(getPatchStatuses().find(patch => patch.key === 'status-provider/missing-package')).toMatchObject({
     state: 'failed', matches: 0, loaded: false,
   })
+})
+
+test('reports lazy Patch failures only after their generation is committed', () => {
+  const profile = join(root, 'lazy-failure-profile')
+  const provider = join(profile, 'node_modules', 'lazy-failure-provider')
+  const target = join(profile, 'node_modules', 'lazy-failure-target')
+  mkdirSync(provider, { recursive: true })
+  mkdirSync(join(target, 'lib'), { recursive: true })
+  writeFileSync(join(profile, 'package.json'), JSON.stringify({
+    dependencies: { 'lazy-failure-provider': '1', 'lazy-failure-target': '1' },
+  }))
+  writeFileSync(join(provider, 'package.json'), JSON.stringify({
+    name: 'lazy-failure-provider', dsh: { harmony: { patches: ['./patch.cjs'] } },
+  }))
+  writeFileSync(join(provider, 'patch.cjs'), `
+module.exports = {
+  id: 'wrong-count', target: { package: 'lazy-failure-target', files: ['lib/index.js'] },
+  select: 'NumericLiteral', expect: 1, apply() {},
+}
+`)
+  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'lazy-failure-target', version: '1.0.0' }))
+  writeFileSync(join(target, 'lib/index.js'), 'export const values = [1, 2]\n')
+  synchronizeProfile(profile)
+
+  let changes = 0
+  const stop = subscribePatchStatuses(() => { changes += 1 })
+  const rolledBack = beginPluginUpdate(['lazy-failure-provider', 'lazy-failure-target'], true)
+  readFileSync(join(target, 'lib/index.js'), 'utf8')
+  expect(changes).toBe(0)
+  rolledBack.rollback()
+
+  const committed = beginPluginUpdate(['lazy-failure-provider', 'lazy-failure-target'], true)
+  committed.commit()
+  readFileSync(join(target, 'lib/index.js'), 'utf8')
+  expect(changes).toBe(1)
+  readFileSync(join(target, 'lib/index.js'), 'utf8')
+  expect(changes).toBe(1)
+  stop()
 })
 
 test('uses target version ranges and the first existing candidate file', () => {
@@ -530,13 +576,13 @@ module.exports = {
   expect(module.exports.answer()).toBe(2)
 })
 
-test('rejects multiple semantic replacements for the same function', () => {
+test('keeps the first semantic replacement and skips later conflicts', () => {
   const target = join(root, 'replace-target')
   const provider = join(root, 'replace-provider')
   mkdirSync(join(target, 'lib'), { recursive: true })
   mkdirSync(provider)
   writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'replace-target', version: '1.0.0' }))
-  writeFileSync(join(target, 'lib/index.js'), 'function answer() { return 1 }\n')
+  writeFileSync(join(target, 'lib/index.js'), 'function answer() { return 1 }; module.exports = { answer }\n')
   writeFileSync(join(provider, 'package.json'), JSON.stringify({
     name: 'replace-provider',
     dsh: { harmony: { patches: ['./patch.cjs'] } },
@@ -551,8 +597,14 @@ module.exports = ['first', 'second'].map(id => ({
 `)
   discoverPackage(provider)
 
-  expect(() => readFileSync(join(target, 'lib/index.js'), 'utf8')).toThrow('replace conflict')
-  expect(getPatchStatuses().filter(patch => patch.owner === 'replace-provider').every(patch => patch.state === 'failed')).toBe(true)
+  const transformed = readFileSync(join(target, 'lib/index.js'), 'utf8')
+  const module = { exports: {} as any }
+  new Function('module', 'exports', transformed)(module, module.exports)
+  expect(module.exports.answer()).toBe(2)
+  expect(getPatchStatuses().find(patch => patch.key === 'replace-provider/first')?.state).toBe('bound')
+  expect(getPatchStatuses().find(patch => patch.key === 'replace-provider/second')).toMatchObject({
+    state: 'failed', error: expect.stringContaining('replace conflict'),
+  })
 })
 
 test('stages disabled patches and restores runtime and disk state on rollback', () => {
@@ -768,12 +820,23 @@ test('reconciles the existing Loader tree when Harmony activates', async () => {
     dsh: { harmony: { patches: ['./patch.cjs'], conflicts: ['incompatible-loader-provider'] } },
   }))
   writeFileSync(join(provider, 'patch.cjs'), `
-module.exports = {
+module.exports = [{
   id: 'test-patch',
   target: { package: 'initial-loader-target', files: ['lib/index.js'] },
   select: 'SourceFile',
   apply() {},
-}
+}, {
+  id: 'wrong-count',
+  target: { package: 'initial-loader-target', files: ['lib/index.js'] },
+  select: 'NumericLiteral',
+  expect: 2,
+  apply() {},
+}, {
+  id: 'missing-target',
+  target: { package: 'initial-loader-target-absent', files: ['lib/index.js'] },
+  select: 'SourceFile',
+  apply() {},
+}]
 `)
   writeFileSync(join(incompatible, 'package.json'), JSON.stringify({
     name: 'incompatible-loader-provider',
@@ -798,7 +861,7 @@ module.exports = {
     options: { name: 'initial-loader-target' },
     fiber: { uid: 1, runtime: { callback: previousPlugin } },
     loader: { unwrapExports(value: unknown) { return value } },
-    parent: { tree: { async import() { return nextPlugin } } },
+    parent: { tree: { async import() { readFileSync(join(target, 'lib/index.js'), 'utf8'); return nextPlugin } } },
     getOuterStack() { return [] },
     async _dispose() { this.fiber = undefined },
     async _start(plugin: unknown) {
@@ -831,9 +894,11 @@ module.exports = {
   await new Promise<void>(resolve => setImmediate(resolve))
   await new Promise<void>(resolve => setImmediate(resolve))
   expect(started).toEqual([nextPlugin])
-  expect(warnings).toEqual([
-    'dsh-harmony: "initial-loader-provider" declares "incompatible-loader-provider" incompatible; both remain loaded',
-  ])
+  expect(warnings[0]).toBe('dsh-harmony: "initial-loader-provider" declares "incompatible-loader-provider" incompatible; both remain loaded')
+  expect(warnings[1]).toContain('skipped Patch "initial-loader-provider/wrong-count"')
+  expect(warnings[1]).toContain('expected 2 match(es)')
+  expect(warnings[2]).toContain('skipped Patch "initial-loader-provider/missing-target"')
+  expect(warnings[2]).toContain('is not installed')
   for (const dispose of disposers) dispose()
 })
 
@@ -1128,7 +1193,7 @@ module.exports = {
   }
 })
 
-test('names both providers when an earlier patch removes a later selector', () => {
+test('names both providers while skipping a Patch whose selector was removed earlier', () => {
   const profile = join(root, 'conflict-profile')
   const target = join(root, 'conflict-target')
   const remover = join(profile, 'node_modules', 'remover')
@@ -1152,7 +1217,7 @@ module.exports = {
   id: 'test-patch',
   target: { package: 'conflict-target', files: ['lib/index.js'] },
   select: 'NumericLiteral',
-  apply({ node, edit }) { edit.remove(node.getStart(), node.getEnd()) },
+  apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), 'undefined') },
 }
 `)
   writeFileSync(join(reader, 'patch.cjs'), `
@@ -1166,7 +1231,10 @@ module.exports = {
 
   synchronizeProfile(profile)
 
-  expect(() => readFileSync(join(target, 'lib/index.js'), 'utf8')).toThrowError(/reader[\s\S]*remover/)
+  expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = undefined')
+  expect(getPatchStatuses().find(patch => patch.key === 'reader/test-patch')).toMatchObject({
+    state: 'failed', error: expect.stringMatching(/reader[\s\S]*remover/),
+  })
 })
 
 test('reloads a provider whose patch target changes', () => {

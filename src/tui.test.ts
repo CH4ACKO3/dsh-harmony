@@ -27,7 +27,7 @@ test('TUI shows provider order, declarations, and the conflicting pair', () => {
   expect(output).toContain('仅警告，插件仍会加载')
 })
 
-test('TUI rejects a conflicting order before changing harmony.json', async () => {
+test('TUI saves an order even when one Patch will be skipped', async () => {
   const profile = mkdtempSync(join(tmpdir(), 'dsh-harmony-tui-'))
   const reader = join(profile, 'node_modules', 'reader')
   const remover = join(profile, 'node_modules', 'remover')
@@ -59,15 +59,9 @@ module.exports = {
   writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'tui-target', version: '1.0.0' }))
   writeFileSync(join(target, 'lib/index.js'), 'export const value = 1\n')
   synchronizeProfile(profile)
-  const previous = readFileSync(join(profile, 'harmony.json'), 'utf8')
 
-  await expect(saveHarmonyTuiOrder(profile, ['remover', 'reader', 'tui-target'])).rejects.toThrow('reader/read')
-  expect(readFileSync(join(profile, 'harmony.json'), 'utf8')).toBe(previous)
-
-  writeFileSync(join(profile, 'harmony.json'), JSON.stringify({
-    order: ['remover', 'reader', 'tui-target'], disabled: [],
-  }))
-  synchronizeProfile(profile)
+  await saveHarmonyTuiOrder(profile, ['remover', 'reader', 'tui-target'])
+  expect(JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8')).order).toEqual(['remover', 'reader', 'tui-target'])
   await saveHarmonyTuiOrder(profile, ['reader', 'remover', 'tui-target'])
   expect(JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8')).order).toEqual(['reader', 'remover', 'tui-target'])
   rmSync(profile, { recursive: true })

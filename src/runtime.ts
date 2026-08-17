@@ -84,6 +84,8 @@ const packageCache = new Map<string, PackageInfo | undefined>()
 const runtimeRequire = createRequire(import.meta.url)
 const stagedProviderCaches = new Map<string, () => void>()
 const listeners = new Set<(targets: PatchTargets, generation: number) => void>()
+const patchStatusListeners = new Set<() => void>()
+const pendingStatusGenerations = new Set<number>()
 let transformCache = new Map<string, TransformRecord>()
 let patchStatuses = new Map<string, HarmonyPatchStatus>()
 let semanticBindings = new Map<string, RegisteredPatch[]>()
@@ -228,7 +230,13 @@ function pruneSemanticBindings(activeGeneration: number): void {
 }
 
 function updateStatus(registered: RegisteredPatch, value: Partial<HarmonyPatchStatus>): void {
-  patchStatuses.set(registered.key, { ...(patchStatuses.get(registered.key) ?? freshStatus(registered)), ...value })
+  const previous = patchStatuses.get(registered.key) ?? freshStatus(registered)
+  const next = { ...previous, ...value }
+  patchStatuses.set(registered.key, next)
+  if (!pendingStatusGenerations.has(next.generation)
+    && (previous.state !== next.state || previous.error !== next.error)) {
+    for (const listener of patchStatusListeners) listener()
+  }
 }
 
 function notify(targets: PatchTargets): void {
@@ -485,6 +493,7 @@ export function beginPluginUpdate(installed: string[], force = false): ProfileTr
   }
   generation = ++generationSequence
   const candidateGeneration = generation
+  pendingStatusGenerations.add(candidateGeneration)
   transformCache = new Map()
   semanticBindings = new Map(previous.bindings)
   resetPatchStatuses()
@@ -501,6 +510,7 @@ export function beginPluginUpdate(installed: string[], force = false): ProfileTr
       refreshWatchedFiles?.()
       stagedProviderCaches.clear()
       retainGeneration(candidateGeneration)
+      pendingStatusGenerations.delete(candidateGeneration)
       active = false
     },
     rollback() {
@@ -513,6 +523,7 @@ export function beginPluginUpdate(installed: string[], force = false): ProfileTr
       transformCache = previous.cache
       patchStatuses = previous.statuses
       semanticBindings = previous.bindings
+      pendingStatusGenerations.delete(candidateGeneration)
       for (const restore of [...stagedProviderCaches.values()].reverse()) restore()
       stagedProviderCaches.clear()
       refreshWatchedFiles?.()
@@ -539,6 +550,7 @@ export function beginProfileUpdate(input: { order?: string[]; disabled?: string[
   disabledPatchKeys = disabled
   generation = ++generationSequence
   const candidateGeneration = generation
+  pendingStatusGenerations.add(candidateGeneration)
   transformCache = new Map()
   semanticBindings = new Map(previous.bindings)
   resetPatchStatuses()
@@ -553,6 +565,7 @@ export function beginProfileUpdate(input: { order?: string[]; disabled?: string[
       pruneSemanticBindings(candidateGeneration)
       saveHarmonyState(activeProfileDir!, { order, disabled: [...disabled] })
       retainGeneration(candidateGeneration)
+      pendingStatusGenerations.delete(candidateGeneration)
       active = false
     },
     rollback() {
@@ -563,6 +576,7 @@ export function beginProfileUpdate(input: { order?: string[]; disabled?: string[
       transformCache = previous.cache
       patchStatuses = previous.statuses
       semanticBindings = previous.bindings
+      pendingStatusGenerations.delete(candidateGeneration)
       retainGeneration(previous.generation)
       active = false
     },
@@ -603,6 +617,11 @@ export function watchProfile(onChange: () => void | Promise<void>, onError: (err
 export function subscribe(listener: (targets: PatchTargets, generation: number) => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)
+}
+
+export function subscribePatchStatuses(listener: () => void): () => void {
+  patchStatusListeners.add(listener)
+  return () => patchStatusListeners.delete(listener)
 }
 
 function orderedPatches(input: RegisteredPatch[], order = providerOrder): RegisteredPatch[] {
@@ -935,7 +954,7 @@ function buildTransform(
       if (relativeFile === 'lib/client.js') {
         const error = new Error(`dsh-harmony: semantic patch ${JSON.stringify(registered.key)} targets a browser bundle; use a source patch for lib/client.js`)
         if (recordStatus) updateStatus(registered, { state: 'failed', file: relativeFile, error: error.message, generation: transformGeneration })
-        throw error
+        continue
       }
       const functionName = (registered.patch as HarmonySemanticPatch).target.function
       const current = semantic.get(functionName)
@@ -950,21 +969,16 @@ function buildTransform(
           if (bind) semanticBindings.set(bindingKey, [registered])
         } else {
           matches = semanticMatchCount(filename, output, functionName, registered)
+          assertNoReplaceConflict(functionName, [...current.patches, registered])
           current.patches.push(registered)
-          assertNoReplaceConflict(functionName, current.patches)
           if (bind) semanticBindings.set(current.bindingKey, [...current.patches])
         }
         history.push({ owner: registered.owner, source: output })
         steps.push({ key: registered.key, owner: registered.owner, matches, source: output })
         if (recordStatus) updateStatus(registered, { state: 'bound', matches, file: relativeFile, error: undefined, generation: transformGeneration })
       } catch (error) {
-        if (recordStatus && error instanceof Error && error.message.startsWith('dsh-harmony: replace conflict')) {
-          for (const item of current?.patches ?? []) {
-            updateStatus(item, { state: 'failed', file: relativeFile, error: error.message, generation: transformGeneration })
-          }
-        }
         if (recordStatus) updateStatus(registered, { state: 'failed', file: relativeFile, error: error instanceof Error ? error.message : String(error), generation: transformGeneration })
-        throw error
+        continue
       }
       continue
     }
@@ -983,7 +997,7 @@ function buildTransform(
         error: error instanceof Error ? error.message : String(error),
         generation: transformGeneration,
       })
-      throw error
+      continue
     }
   }
 
@@ -1166,7 +1180,6 @@ function inspectTargets(order: string[], disabled: Set<string>, continueOnError:
           updateStatus(item, { state: 'failed', loaded: false, matches: 0, error: error.message, file: undefined, generation })
         }
       }
-      if (!continueOnError) throw error
       continue
     }
     const pkg = readPackageInfo(dirname(manifest))

@@ -141,7 +141,7 @@ Check these in order:
 6. Resolve duplicate semantic `replace` ownership, overlapping source edits, or violated provider order.
 7. Treat `conflicts` as compatibility warnings and contradictory `before`/`after` constraints as ordering problems.
 
-On failed preflight, preserve the previous runtime generation and diagnose the candidate. Never repair a failure by modifying the installed target package or weakening `expect` without verifying the new compiled structure.
+Harmony skips an individual Patch that cannot match or apply, marks it `failed`, and continues with later Patches. Treat the warning and `status` exit code `1` as work to fix even though the Host remains available. A provider declaration that cannot load or a target reload that cannot commit still rolls back the candidate generation. Never repair a failure by modifying the installed target package or weakening `expect` without verifying the new compiled structure.
 
 ## Completion check
 

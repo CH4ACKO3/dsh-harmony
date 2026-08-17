@@ -1,6 +1,5 @@
 import type MagicString from 'magic-string'
 import type ts from 'typescript'
-import type { DraftHandle, DraftPackage } from './draft-runtime.js'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -13,7 +12,7 @@ export interface HarmonyService {
   readonly profileDir: string
   inspect(input?: HarmonyInspectInput): HarmonyInspection
   inspectDependencies(owner: string): HarmonyPatchDependency[]
-  prepareDraft(input: DraftPackage): Promise<DraftHandle>
+  reloadPlugin(name: string): Promise<void>
 }
 
 export interface HarmonyInspectInput {
@@ -112,7 +111,5 @@ export interface HarmonyPatchInspection {
 }
 
 export { apply, inject } from './plugin.js'
-export { HarmonyDraftRuntime } from './draft-runtime.js'
-export type { ClientGraph, DraftHandle, DraftPackage, DraftRuntimeAdapter, DraftState } from './draft-runtime.js'
 export { discoverHarmonyExtensions, loadHarmonyExtensions } from './extension.js'
 export type { HarmonyExtension } from './extension.js'

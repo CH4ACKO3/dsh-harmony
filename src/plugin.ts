@@ -6,8 +6,6 @@ import type { WebServer } from '@deepseek-ai/dsh-host-webserver'
 import type { Context, Fiber } from '@deepseek-ai/cordis'
 import type { Loader } from '@deepseek-ai/cordis-plugin-loader'
 import { publishRuntimeAddress } from './control.js'
-import { HarmonyDraftRuntime } from './draft-runtime.js'
-import type { DraftPackage } from './draft-runtime.js'
 import { loadHarmonyExtensions } from './extension.js'
 import { registerActiveRuntimeRoute, waitForRuntimeChoice } from './installer.js'
 import type { HarmonyReloadStatus } from './installer.js'
@@ -18,9 +16,11 @@ import {
   getPatchInspections,
   getPatchStatuses,
   inspectPatchDependencies,
+  inspectPatchTargets,
   packageNameOf,
   prepareModuleReload,
   subscribe,
+  subscribePatchStatuses,
   watchProfile,
 } from './runtime.js'
 import type { PatchTargets, ProfileTransaction } from './runtime.js'
@@ -189,7 +189,6 @@ export async function apply(ctx: Context): Promise<void> {
   const profileDir = currentProfile().dir
   const pendingHost = new Set<string>()
   const pendingClient = new Set<string>()
-  const stagedProviders = new Set<string>()
   let pendingGeneration = 0
   let clientModules: ClientModuleRegistry | undefined
   let queued = false
@@ -199,6 +198,7 @@ export async function apply(ctx: Context): Promise<void> {
   let updateTail = Promise.resolve()
   const reloadingEntries = new Set<object>()
   let incompatibilitySignature = ''
+  let patchFailures = new Map<string, string>()
   let reloadSequence = 0
   let reloadStatus: HarmonyReloadStatus = { sequence: 0, state: 'idle' }
 
@@ -213,6 +213,16 @@ export async function apply(ctx: Context): Promise<void> {
         `dsh-harmony: ${JSON.stringify(item.declaredBy)} declares ${JSON.stringify(item.conflictsWith)} incompatible; both remain loaded`,
       )
     }
+  }
+
+  const warnPatchFailures = (): void => {
+    const failures = getPatchStatuses().filter(patch => patch.state === 'failed')
+    const next = new Map(failures.map(patch => [patch.key, patch.error ?? 'unknown error']))
+    for (const patch of failures) {
+      if (patchFailures.get(patch.key) === next.get(patch.key)) continue
+      ctx.logger.warn?.(`dsh-harmony: skipped Patch ${JSON.stringify(patch.key)}: ${patch.error ?? 'unknown error'}`)
+    }
+    patchFailures = next
   }
 
   const enqueueUpdate = <T>(task: () => Promise<T>): Promise<T> => {
@@ -262,6 +272,7 @@ export async function apply(ctx: Context): Promise<void> {
     const rebuiltClients: string[] = []
     const modules = clientModules
     try {
+      inspectPatchTargets(true)
       restoreEntries = await reload(hostEntries(transaction.targets), transaction.generation)
       for (const [packageName, files] of transaction.targets) {
         if (!files.has('lib/client.js') || modules === undefined) continue
@@ -270,6 +281,7 @@ export async function apply(ctx: Context): Promise<void> {
       }
       transaction.commit()
       warnIncompatibilities(transaction.profile)
+      warnPatchFailures()
     } catch (error) {
       const rollbackErrors = []
       try {
@@ -294,71 +306,22 @@ export async function apply(ctx: Context): Promise<void> {
     }
   }
 
-  const patchProviders = (): string[] => loaderPackages(ctx).filter(name => !stagedProviders.has(name))
-  const setProviderStaged = async (name: string, staged: boolean): Promise<void> => {
-    const wasStaged = stagedProviders.has(name)
-    if (staged) stagedProviders.add(name)
-    else stagedProviders.delete(name)
-    try {
-      await enqueueUpdate(() => applyTransaction(beginPluginUpdate(patchProviders(), true)))
-    } catch (error) {
-      if (wasStaged) stagedProviders.add(name)
-      else stagedProviders.delete(name)
-      throw error
+  const refreshPatches = (force = true, reload?: string): Promise<void> => enqueueUpdate(async () => {
+    const transaction = beginPluginUpdate(loaderPackages(ctx), force)
+    if (reload !== undefined) {
+      const files = transaction.targets.get(reload) ?? new Set<string>()
+      files.add('lib/index.js')
+      files.add('lib/client.js')
+      transaction.targets.set(reload, files)
     }
-  }
+    await applyTransaction(transaction)
+  })
 
   ctx.inject(['clientModules'], (clientCtx) => {
     clientModules = clientCtx.clientModules
     return () => { clientModules = undefined }
   })
 
-  const draftRuntime = new HarmonyDraftRuntime({
-    profileDir,
-    setProviderStaged,
-    async ensureLoaderEntry(name) {
-      const entries = [...ctx.loader.entries()].filter(entry => packageNameOf(entry.options.name) === name)
-      if (entries.length > 1) throw new Error(`dsh-harmony: Draft ${JSON.stringify(name)} has multiple Loader entries`)
-      if (entries.length === 1) return { id: entries[0].id, created: false }
-      return { id: await ctx.loader.create({ name }), created: true }
-    },
-    removeLoaderEntry: id => ctx.loader.remove(id),
-    clientGraph() {
-      if (clientModules === undefined) throw new Error('dsh-harmony: client module graph is unavailable')
-      return clientModules.graph()
-    },
-    async waitForClientEntry(name) {
-      if (clientModules === undefined) throw new Error('dsh-harmony: client module graph is unavailable')
-      const modules = clientModules
-      const current = modules.graph()
-      if (current.entries.some(entry => entry.id === name)) return current
-      return await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          stop()
-          reject(new Error(`dsh-harmony: Draft ${JSON.stringify(name)} did not enter the client graph`))
-        }, 10_000)
-        const stop = modules.onGraphChanged(() => {
-          const graph = modules.graph()
-          if (!graph.entries.some(entry => entry.id === name)) return
-          clearTimeout(timeout)
-          stop()
-          resolve(graph)
-        })
-      })
-    },
-    async applyBuild(name) {
-      return enqueueUpdate(async () => {
-        const transaction = beginPluginUpdate(patchProviders(), true)
-        const files = transaction.targets.get(name) ?? new Set<string>()
-        files.add('lib/index.js')
-        files.add('lib/client.js')
-        transaction.targets.set(name, files)
-        await applyTransaction(transaction)
-        if (clientModules === undefined) throw new Error('dsh-harmony: client module graph is unavailable')
-        return clientModules.graph()
-      })
-    },
-  })
   ctx.provide('harmony', {
     binEntry: fileURLToPath(new URL('./bin.js', import.meta.url)),
     profileDir,
@@ -369,9 +332,8 @@ export async function apply(ctx: Context): Promise<void> {
       }
     },
     inspectDependencies: (owner: string) => inspectPatchDependencies(owner),
-    prepareDraft: (input: DraftPackage) => draftRuntime.prepareDraft(input),
+    reloadPlugin: (name: string) => refreshPatches(true, name),
   })
-  ctx.effect(() => () => draftRuntime.dispose(), 'dsh-harmony: Draft runtime')
   let disposeExtensions: (() => Promise<void>) | undefined
   let extensionsDisposed = false
   const extensionsReady = loadHarmonyExtensions(ctx, profileDir).then(async dispose => {
@@ -473,17 +435,16 @@ export async function apply(ctx: Context): Promise<void> {
     if (syncQueued) return
     syncQueued = true
     setImmediate(() => {
-      void enqueueUpdate(async () => {
-        syncQueued = false
-        const transaction = beginPluginUpdate(patchProviders(), initialSync)
-        initialSync = false
-        await applyTransaction(transaction)
-      }).catch(error => ctx.logger.error(error)).finally(() => {
+      syncQueued = false
+      const force = initialSync
+      initialSync = false
+      void refreshPatches(force).catch(error => ctx.logger.error(error)).finally(() => {
         initializing = false
       })
     })
   }
   ctx.effect(() => watchProfile(synchronizeLoader, (error) => ctx.logger.error(error)), 'dsh-harmony: profile order watch')
+  ctx.effect(() => subscribePatchStatuses(warnPatchFailures), 'dsh-harmony: Patch failure warnings')
   ctx.on('internal/plugin', (fiber: Fiber) => {
     if (fiber.entry === undefined || !reloadingEntries.has(fiber.entry)) synchronizeLoader()
   })
