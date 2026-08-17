@@ -86,6 +86,7 @@ const stagedProviderCaches = new Map<string, () => void>()
 const listeners = new Set<(targets: PatchTargets, generation: number) => void>()
 const patchStatusListeners = new Set<() => void>()
 const pendingStatusGenerations = new Set<number>()
+const moduleSourcesLoading = new Set<string>()
 let transformCache = new Map<string, TransformRecord>()
 let patchStatuses = new Map<string, HarmonyPatchStatus>()
 let semanticBindings = new Map<string, RegisteredPatch[]>()
@@ -1240,6 +1241,7 @@ export function installFileTransforms(): void {
     const filename = filenameOf(path)
     if (filename === undefined || !isJavaScript(filename) || (!Buffer.isBuffer(value) && typeof value !== 'string')) return value
     if (typeof value === 'string' && !isUtf8Read(args[0])) return value
+    if (moduleSourcesLoading.has(filename)) return value
     const output = transform(filename, value.toString())
     return Buffer.isBuffer(value) ? Buffer.from(output) : output
   }) as typeof fs.readFileSync
@@ -1248,6 +1250,7 @@ export function installFileTransforms(): void {
     const filename = filenameOf(path)
     if (filename === undefined || !isJavaScript(filename) || (!Buffer.isBuffer(value) && typeof value !== 'string')) return value
     if (typeof value === 'string' && !isUtf8Read(args[0])) return value
+    if (moduleSourcesLoading.has(filename)) return value
     const output = transform(filename, value.toString())
     return Buffer.isBuffer(value) ? Buffer.from(output) : output
   }) as typeof fs.promises.readFile
@@ -1279,10 +1282,17 @@ export function installModuleHooks(): void {
       return { ...result, url: url.href, shortCircuit: true }
     },
     load(url, context, nextLoad) {
-      const result = nextLoad(url, context)
-      if (url.startsWith('file:') && (result.format === 'module' || result.format === 'commonjs') && result.source != null) {
+      const filename = url.startsWith('file:') ? fileURLToPath(url) : undefined
+      if (filename !== undefined) moduleSourcesLoading.add(filename)
+      let result
+      try {
+        result = nextLoad(url, context)
+      } finally {
+        if (filename !== undefined) moduleSourcesLoading.delete(filename)
+      }
+      if (filename !== undefined && (result.format === 'module' || result.format === 'commonjs') && result.source != null) {
         const requested = Number(new URL(url).searchParams.get('dsh-harmony') ?? generation)
-        result.source = transform(fileURLToPath(url), result.source.toString(), requested)
+        result.source = transform(filename, result.source.toString(), requested)
       }
       return result
     },

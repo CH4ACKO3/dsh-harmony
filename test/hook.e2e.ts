@@ -1,10 +1,16 @@
 import assert from 'node:assert/strict'
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname, join } from 'node:path'
 import { reloadEntries } from '../lib/plugin.js'
-import { beginProfileUpdate, getPatchStatuses, installModuleHooks, synchronizeProfile } from '../lib/runtime.js'
+import {
+  beginProfileUpdate,
+  getPatchStatuses,
+  installFileTransforms,
+  installModuleHooks,
+  synchronizeProfile,
+} from '../lib/runtime.js'
 
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), 'fixtures')
 const profile = mkdtempSync(join(tmpdir(), 'dsh-harmony-hook-'))
@@ -24,6 +30,7 @@ writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: {
   'hook-provider': '1', 'hook-provider-cjs': '1', 'hook-target': '1', 'hook-target-cjs': '1',
 } }))
 installModuleHooks()
+installFileTransforms()
 
 const targetEntry = pathToFileURL(join(modules, 'hook-target/lib/index.js')).href
 const cjsEntry = join(modules, 'hook-target-cjs/lib/index.cjs')
@@ -37,6 +44,10 @@ const generation = getPatchStatuses().find(patch => patch.owner === 'hook-provid
 assert.ok(generation !== undefined)
 const target = await import(`${targetEntry}?dsh-harmony=${generation}`)
 assert.equal(target.answer(), 2)
+const targetStatus = getPatchStatuses().find(patch => patch.key === 'hook-provider/test-patch')
+assert.equal(targetStatus?.state, 'bound')
+assert.equal(targetStatus?.matches, 1)
+assert.match(readFileSync(join(modules, 'hook-target/lib/helper.js'), 'utf8'), /return 2/)
 const candidate = beginProfileUpdate({ disabled: ['hook-provider/lazy-patch'] })
 assert.equal(await target.lazyAnswer(), 2)
 candidate.rollback()
