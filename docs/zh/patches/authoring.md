@@ -67,6 +67,27 @@ module.exports = {
 
 传给 `edit` 的位置都以当前 Patch 收到的源码为准。`files` 是备选包内相对路径，Harmony 使用第一个存在的文件；`version` 是 SemVer 范围；`expect` 要求精确匹配数。
 
+## 加载器 Patch
+
+当目标包发布的是 TypeScript，而不是 Node 可以直接从 `node_modules` 执行的 JavaScript 时，使用加载器 Patch：
+
+```js
+/** @type {import('dsh-harmony').HarmonyPatch} */
+module.exports = {
+  id: 'load-published-typescript',
+  target: {
+    package: 'typescript-only-plugin',
+    version: '^1.0.0',
+    files: ['index.ts'],
+  },
+  loader: 'typescript',
+}
+```
+
+目标文件是绑定与状态检查使用的兼容性锚点。绑定后，Harmony 会在 Node 默认加载器运行前，读取并转译该包内的 `.ts`、`.tsx`、`.mts` 和 `.cts` 模块；其它包仍保持 Node 的默认行为。
+
+如果还需要修改 TypeScript 源码，请另行声明源码 Patch。精确到文件的源码 Patch 会先修改当前模块，加载器 Patch 再转译它以及包内的 TypeScript 依赖。
+
 ## 语义 Patch
 
 具名函数声明和类方法可以直接装饰，无需手写 AST 编辑：

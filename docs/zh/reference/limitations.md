@@ -18,6 +18,10 @@ Harmony 会在替换当前 Loader Fiber 之前求值候选插件模块。如果�
 
 源码选择器依赖目标包的编译结果。升级可能改变名称、嵌套、JSX 输出或 Bundler Helper，而可见功能保持不变。请锁定兼容的 `target.version`、保持精确 `expect`，并在发布检查中运行 `dsh harmony status`。
 
+## TypeScript 加载
+
+`typescript` 加载器 Patch 只转译语法，不执行类型检查，也不会读取目标包的 `tsconfig.json`。运行时导入仍须符合 Node 的解析规则；Harmony 不会增加 TypeScript 路径别名，也不会推断缺失的扩展名。加载范围仅限声明的目标包与版本中的 TypeScript 文件。
+
 ## 语义目标
 
 语义 Patch 支持具名函数声明和类方法；参数必须是具名 Identifier；不支持 Generator。

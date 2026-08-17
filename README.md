@@ -68,7 +68,7 @@ Open **Settings → Harmony** after starting the WebUI. For profiles, Desktop in
 | --- | --- |
 | Runtime architecture | [What is Harmony?](https://ch4acko3.github.io/dsh-harmony/guide/introduction) |
 | Installation and profiles | [Installation](https://ch4acko3.github.io/dsh-harmony/guide/installation) |
-| Writing source and semantic Patches | [Patch authoring](https://ch4acko3.github.io/dsh-harmony/patches/authoring) |
+| Writing source, semantic, and loader Patches | [Patch authoring](https://ch4acko3.github.io/dsh-harmony/patches/authoring) |
 | Order, status, inspection, and reload | [Operations](https://ch4acko3.github.io/dsh-harmony/guide/operations) |
 | React-aware patches with `dsh-harmony-react` | [React integration](https://ch4acko3.github.io/dsh-harmony/integrations/react) |
 | Studio previews | [Studio integration](https://ch4acko3.github.io/dsh-harmony/integrations/studio) |

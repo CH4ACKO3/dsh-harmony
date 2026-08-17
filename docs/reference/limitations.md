@@ -18,6 +18,10 @@ Plugins intended for live reload should not create timers or listeners, write fi
 
 Source selectors depend on the compiled shape of the target package. A target upgrade may change names, nesting, JSX output, or bundler helpers without changing the visible feature. Pin a compatible `target.version`, keep `expect` exact, and run `dsh harmony status` in release checks.
 
+## TypeScript loading
+
+A `typescript` Loader Patch transpiles syntax without type-checking and does not load the target package's `tsconfig.json`. Runtime imports must still follow Node's resolution rules; Harmony does not add TypeScript path aliases or infer missing extensions. Loading is limited to TypeScript files inside the declared target package and version.
+
 ## Semantic targets
 
 Semantic Patches support named function declarations and class methods. Parameters must be named identifiers; generators are not supported.

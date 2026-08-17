@@ -68,7 +68,7 @@ dsh web
 | --- | --- |
 | 运行时架构 | [Harmony 是什么？](https://ch4acko3.github.io/dsh-harmony/zh/guide/introduction) |
 | 安装与 profile | [安装](https://ch4acko3.github.io/dsh-harmony/zh/guide/installation) |
-| 编写源码与语义 Patch | [Patch 编写指南](https://ch4acko3.github.io/dsh-harmony/zh/patches/authoring) |
+| 编写源码、语义与加载器 Patch | [Patch 编写指南](https://ch4acko3.github.io/dsh-harmony/zh/patches/authoring) |
 | 排序、状态、检查和重载 | [运行操作](https://ch4acko3.github.io/dsh-harmony/zh/guide/operations) |
 | 使用 `dsh-harmony-react` 编写 React Patch | [React 集成](https://ch4acko3.github.io/dsh-harmony/zh/integrations/react) |
 | Studio 预览 | [Studio 集成](https://ch4acko3.github.io/dsh-harmony/zh/integrations/studio) |

@@ -69,6 +69,27 @@ module.exports = {
 
 Positions passed to `edit` refer to the source received by this Patch. `files` contains alternative package-relative targets; Harmony selects the first existing file. `version` is a semver range, and `expect` requires an exact match count.
 
+## Loader Patch
+
+Use a Loader Patch when a target package publishes TypeScript instead of JavaScript that Node can execute from `node_modules`:
+
+```js
+/** @type {import('dsh-harmony').HarmonyPatch} */
+module.exports = {
+  id: 'load-published-typescript',
+  target: {
+    package: 'typescript-only-plugin',
+    version: '^1.0.0',
+    files: ['index.ts'],
+  },
+  loader: 'typescript',
+}
+```
+
+The target file is the compatibility anchor used for binding and status. Once bound, Harmony reads and transpiles `.ts`, `.tsx`, `.mts`, and `.cts` modules inside that exact package before Node's default loader runs. Other packages retain Node's default behavior.
+
+Declare Source Patches separately when the TypeScript also needs modification. Exact-file Source Patches run before the current module is transpiled, while the Loader Patch covers its package-local TypeScript imports.
+
 ## Semantic Patch
 
 Named function declarations and class methods can be decorated without writing AST edits:

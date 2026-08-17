@@ -40,6 +40,7 @@ Harmony 先安装 CommonJS 和 ESM 变换 Hook，再原样转发 CLI 参数。�
 
 - **源码 Patch**：通过 TypeScript AST 变换 `lib/index.js`、`lib/client.js` 或其他编译目标。
 - **语义 Patch**：对具名函数和类方法执行 `before`、`after`、`around` 或 `replace`。
+- **加载器 Patch**：在 Node 默认加载器运行前，转译显式指定目标包所发布的 TypeScript。
 - **全局顺序**：将手动 Provider 顺序与 `before`、`after` 约束结合。
 - **事务**：提交重载前预检 Provider、顺序和启停状态变化。
 - **检查**：展示原始源码、每一步 Patch 结果和最终运行时源码。

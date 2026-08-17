@@ -40,6 +40,7 @@ Harmony installs its CommonJS and ESM transform hooks, then forwards the origina
 
 - **Source Patches** transform `lib/index.js`, `lib/client.js`, or another compiled target through the TypeScript AST.
 - **Semantic Patches** apply `before`, `after`, `around`, or `replace` to named functions and class methods.
+- **Loader Patches** transpile an explicitly targeted package's published TypeScript before Node's default loader runs.
 - **Global order** combines manual provider order with declared `before` and `after` constraints.
 - **Transactions** preflight provider changes, order changes, and enablement before committing a reload.
 - **Inspection** exposes original source, each intermediate Patch result, and final runtime source.
