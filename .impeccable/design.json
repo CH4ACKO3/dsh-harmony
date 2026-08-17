@@ -1,21 +1,110 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-08-16T15:14:58Z",
+  "generatedAt": "2026-08-17T01:14:52Z",
   "title": "Design System: dsh-harmony Documentation",
   "extensions": {
     "colorMeta": {
-      "cobalt": { "role": "primary", "displayName": "Runtime Cobalt", "canonical": "#075ff7", "tonalRamp": ["#0c47b2", "#0752d6", "#075ff7", "#56b7ff"] },
-      "cool-paper": { "role": "neutral", "displayName": "Cool Paper", "canonical": "#f9fbff", "tonalRamp": ["#edf3fc", "#f1f5fc", "#f9fbff"] },
-      "ink": { "role": "neutral", "displayName": "Service Ink", "canonical": "#10233f", "tonalRamp": ["#10233f", "#40536d", "#63738a"] }
+      "cobalt": {
+        "role": "primary",
+        "displayName": "Runtime Cobalt",
+        "canonical": "#075ff7",
+        "tonalRamp": ["oklch(15% 0.12 258)", "oklch(26% 0.12 258)", "oklch(38% 0.12 258)", "oklch(50% 0.12 258)", "oklch(62% 0.12 258)", "oklch(74% 0.12 258)", "oklch(86% 0.12 258)", "oklch(95% 0.12 258)"]
+      },
+      "cobalt-hover": {
+        "role": "primary",
+        "displayName": "Runtime Cobalt Hover",
+        "canonical": "#0752d6",
+        "tonalRamp": ["oklch(15% 0.12 258)", "oklch(26% 0.12 258)", "oklch(38% 0.12 258)", "oklch(50% 0.12 258)", "oklch(62% 0.12 258)", "oklch(74% 0.12 258)", "oklch(86% 0.12 258)", "oklch(95% 0.12 258)"]
+      },
+      "cobalt-deep": {
+        "role": "primary",
+        "displayName": "Deep Cobalt",
+        "canonical": "#0c47b2",
+        "tonalRamp": ["oklch(15% 0.12 258)", "oklch(26% 0.12 258)", "oklch(38% 0.12 258)", "oklch(50% 0.12 258)", "oklch(62% 0.12 258)", "oklch(74% 0.12 258)", "oklch(86% 0.12 258)", "oklch(95% 0.12 258)"]
+      },
+      "cool-paper": {
+        "role": "neutral",
+        "displayName": "Cool Paper",
+        "canonical": "#f9fbff",
+        "tonalRamp": ["oklch(15% 0.015 250)", "oklch(26% 0.015 250)", "oklch(38% 0.015 250)", "oklch(50% 0.015 250)", "oklch(62% 0.015 250)", "oklch(74% 0.015 250)", "oklch(86% 0.015 250)", "oklch(95% 0.015 250)"]
+      },
+      "cool-paper-alt": {
+        "role": "neutral",
+        "displayName": "Alternate Cool Paper",
+        "canonical": "#f1f5fc",
+        "tonalRamp": ["oklch(15% 0.015 250)", "oklch(26% 0.015 250)", "oklch(38% 0.015 250)", "oklch(50% 0.015 250)", "oklch(62% 0.015 250)", "oklch(74% 0.015 250)", "oklch(86% 0.015 250)", "oklch(95% 0.015 250)"]
+      },
+      "cool-surface": {
+        "role": "neutral",
+        "displayName": "Cool Surface",
+        "canonical": "#edf3fc",
+        "tonalRamp": ["oklch(15% 0.018 250)", "oklch(26% 0.018 250)", "oklch(38% 0.018 250)", "oklch(50% 0.018 250)", "oklch(62% 0.018 250)", "oklch(74% 0.018 250)", "oklch(86% 0.018 250)", "oklch(95% 0.018 250)"]
+      },
+      "quiet-control": {
+        "role": "neutral",
+        "displayName": "Quiet Control",
+        "canonical": "#e6ecf4",
+        "tonalRamp": ["oklch(15% 0.018 250)", "oklch(26% 0.018 250)", "oklch(38% 0.018 250)", "oklch(50% 0.018 250)", "oklch(62% 0.018 250)", "oklch(74% 0.018 250)", "oklch(86% 0.018 250)", "oklch(95% 0.018 250)"]
+      },
+      "surface-white": {
+        "role": "neutral",
+        "displayName": "Surface White",
+        "canonical": "#ffffff",
+        "tonalRamp": ["oklch(15% 0 0)", "oklch(26% 0 0)", "oklch(38% 0 0)", "oklch(50% 0 0)", "oklch(62% 0 0)", "oklch(74% 0 0)", "oklch(86% 0 0)", "oklch(95% 0 0)"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Service Ink",
+        "canonical": "#10233f",
+        "tonalRamp": ["oklch(15% 0.05 255)", "oklch(26% 0.05 255)", "oklch(38% 0.05 255)", "oklch(50% 0.05 255)", "oklch(62% 0.05 255)", "oklch(74% 0.05 255)", "oklch(86% 0.05 255)", "oklch(95% 0.05 255)"]
+      },
+      "ink-secondary": {
+        "role": "neutral",
+        "displayName": "Secondary Ink",
+        "canonical": "#40536d",
+        "tonalRamp": ["oklch(15% 0.035 255)", "oklch(26% 0.035 255)", "oklch(38% 0.035 255)", "oklch(50% 0.035 255)", "oklch(62% 0.035 255)", "oklch(74% 0.035 255)", "oklch(86% 0.035 255)", "oklch(95% 0.035 255)"]
+      },
+      "ink-muted": {
+        "role": "neutral",
+        "displayName": "Muted Ink",
+        "canonical": "#63738a",
+        "tonalRamp": ["oklch(15% 0.025 255)", "oklch(26% 0.025 255)", "oklch(38% 0.025 255)", "oklch(50% 0.025 255)", "oklch(62% 0.025 255)", "oklch(74% 0.025 255)", "oklch(86% 0.025 255)", "oklch(95% 0.025 255)"]
+      },
+      "code-navy": {
+        "role": "neutral",
+        "displayName": "Code Navy",
+        "canonical": "#0b1f3a",
+        "tonalRamp": ["oklch(15% 0.06 255)", "oklch(26% 0.06 255)", "oklch(38% 0.06 255)", "oklch(50% 0.06 255)", "oklch(62% 0.06 255)", "oklch(74% 0.06 255)", "oklch(86% 0.06 255)", "oklch(95% 0.06 255)"]
+      },
+      "halo-cobalt": {
+        "role": "primary",
+        "displayName": "Pale Cobalt Halo",
+        "canonical": "rgba(45, 102, 255, 0.11)",
+        "tonalRamp": ["oklch(15% 0.12 258 / 0.11)", "oklch(26% 0.12 258 / 0.11)", "oklch(38% 0.12 258 / 0.11)", "oklch(50% 0.12 258 / 0.11)", "oklch(62% 0.12 258 / 0.11)", "oklch(74% 0.12 258 / 0.11)", "oklch(86% 0.12 258 / 0.11)", "oklch(95% 0.12 258 / 0.11)"]
+      },
+      "halo-cyan": {
+        "role": "secondary",
+        "displayName": "Pale Cyan Halo",
+        "canonical": "rgba(70, 178, 255, 0.065)",
+        "tonalRamp": ["oklch(15% 0.09 235 / 0.065)", "oklch(26% 0.09 235 / 0.065)", "oklch(38% 0.09 235 / 0.065)", "oklch(50% 0.09 235 / 0.065)", "oklch(62% 0.09 235 / 0.065)", "oklch(74% 0.09 235 / 0.065)", "oklch(86% 0.09 235 / 0.065)", "oklch(95% 0.09 235 / 0.065)"]
+      }
     },
     "typographyMeta": {
-      "display": { "displayName": "Document Title", "purpose": "Page titles, including the documentation index." },
+      "display": { "displayName": "Compact Brand and Document Title", "purpose": "Document titles and the homepage brand statement." },
       "headline": { "displayName": "Section Heading", "purpose": "Technical document sections." },
-      "body": { "displayName": "Technical Reading", "purpose": "Long-form guides, tables, and descriptions." },
+      "body": { "displayName": "Technical Reading", "purpose": "Long-form guides, capability descriptions, tables, and supporting copy." },
       "mono": { "displayName": "Runtime Mono", "purpose": "Commands, code, file paths, provider IDs, and generations." }
     },
+    "shadows": [
+      { "name": "brand-mark-separation", "value": "0 18px 22px rgba(12, 71, 178, 0.18)", "purpose": "Separates only the homepage Harmony mark from its pale two-ellipse halo." }
+    ],
+    "motion": [
+      { "name": "state-color", "value": "color 0.25s, border-color 0.25s, background-color 0.25s", "purpose": "Restrained hover feedback for links, actions, and capability panels; never an entrance or decorative animation." }
+    ],
     "breakpoints": [
-      { "name": "mobile", "value": "767px" }
+      { "name": "compact", "value": "640px" },
+      { "name": "document-shell", "value": "768px" },
+      { "name": "wide", "value": "960px" }
     ]
   },
   "components": [
@@ -24,34 +113,87 @@
       "kind": "nav",
       "description": "Compact access to the guide, API, React integration, and package registry.",
       "html": "<nav class=\"ds-nav\"><a href=\"#\">Guide</a><a href=\"#\">Patch API</a><a href=\"#\">React</a><a href=\"#\">npm ↗</a></nav>",
-      "css": ".ds-nav { display: flex; gap: 24px; align-items: center; font: 650 14px/1.2 'Atkinson Hyperlegible Next', sans-serif; } .ds-nav a { color: #10233f; text-decoration: none; } .ds-nav a:hover { color: #075ff7; } .ds-nav a:focus-visible { outline: 3px solid rgba(7,95,247,.56); outline-offset: 3px; }"
+      "css": ".ds-nav { display: flex; gap: 24px; align-items: center; font: 650 14px/1.2 'Atkinson Hyperlegible Next Variable', sans-serif; } .ds-nav a { color: #10233f; text-decoration: none; transition: color 0.25s; } .ds-nav a:hover { color: #075ff7; } .ds-nav a:focus-visible { outline: 3px solid rgba(7, 95, 247, 0.62); outline-offset: 3px; }"
+    },
+    {
+      "name": "Homepage Brand Hero",
+      "kind": "custom",
+      "description": "The compact index-only brand block lets the Harmony mark lead into the exact library definition and two documentation actions across a quiet vertical rule.",
+      "html": "<section class=\"ds-home-hero\"><div class=\"ds-hero-mark-stage\" aria-hidden=\"true\"><svg class=\"ds-hero-mark\" viewBox=\"0 0 120 120\"><ellipse cx=\"60\" cy=\"47\" rx=\"38\" ry=\"21\" fill=\"none\" stroke=\"#075ff7\" stroke-width=\"13\" transform=\"rotate(90 60 60)\"/><ellipse cx=\"52\" cy=\"69\" rx=\"38\" ry=\"21\" fill=\"none\" stroke=\"#ffffff\" stroke-width=\"13\" transform=\"rotate(30 60 60)\"/><ellipse cx=\"68\" cy=\"69\" rx=\"38\" ry=\"21\" fill=\"none\" stroke=\"#1684ff\" stroke-width=\"13\" transform=\"rotate(-30 60 60)\"/></svg></div><div class=\"ds-hero-copy\"><h1><span>Harmony</span>Runtime Patches for DeepSeek Harness plugins.</h1><p>A library for patching, replacing and decorating DeepSeek Harness plugins during runtime.</p><div class=\"ds-hero-actions\"><a class=\"ds-hero-primary\" href=\"#\">Install Harmony</a><a class=\"ds-hero-alt\" href=\"#\">Write a Patch</a></div></div></section>",
+      "css": ".ds-home-hero { display: grid; grid-template-columns: 320px minmax(0, 1fr); align-items: center; max-width: 1040px; padding: 72px 0 44px; color: #10233f; font-family: 'Atkinson Hyperlegible Next Variable', sans-serif; } .ds-hero-copy { border-left: 1px solid rgba(20, 59, 112, 0.16); padding-left: 64px; } .ds-hero-copy h1 { display: flex; flex-direction: column; margin: 0; max-width: 780px; font-size: clamp(2rem, 4vw, 2.625rem); line-height: 1.08; letter-spacing: -0.03em; } .ds-hero-copy h1 span { color: #075ff7; } .ds-hero-copy p { max-width: 660px; margin: 12px 0 0; color: #40536d; font-size: 17px; line-height: 1.55; } .ds-hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; } .ds-hero-actions a { display: inline-block; border-radius: 20px; padding: 0 20px; color: #10233f; background: #e6ecf4; font-size: 14px; font-weight: 600; line-height: 40px; text-decoration: none; transition: color 0.25s, background-color 0.25s; } .ds-hero-actions .ds-hero-primary { color: #ffffff; background: #0c47b2; } .ds-hero-actions .ds-hero-primary:hover { background: #0752d6; } .ds-hero-actions .ds-hero-alt:hover { background: #d8e1ed; } .ds-hero-actions a:focus-visible { outline: 3px solid rgba(7, 95, 247, 0.62); outline-offset: 3px; } .ds-hero-mark-stage { position: relative; display: grid; place-items: center; width: 256px; height: 256px; isolation: isolate; } .ds-hero-mark-stage::before, .ds-hero-mark-stage::after { position: absolute; z-index: -1; content: ''; filter: blur(30px); } .ds-hero-mark-stage::before { width: 216px; height: 156px; border-radius: 58% 42% 54% 46%; background: rgba(45, 102, 255, 0.11); transform: translate(-12px, -8px) rotate(-7deg); } .ds-hero-mark-stage::after { width: 178px; height: 198px; border-radius: 46% 54% 42% 58%; background: rgba(70, 178, 255, 0.065); transform: translate(22px, 14px) rotate(9deg); } .ds-hero-mark { width: 224px; height: 224px; filter: drop-shadow(0 18px 22px rgba(12, 71, 178, 0.18)); } @media (max-width: 959px) { .ds-home-hero { grid-template-columns: 1fr; justify-items: center; padding-top: 48px; text-align: center; } .ds-hero-copy { border-left: 0; padding-left: 0; } .ds-hero-mark-stage { grid-row: 1; width: 208px; height: 208px; } .ds-hero-mark { width: 184px; height: 184px; } .ds-hero-actions { justify-content: center; } }"
+    },
+    {
+      "name": "Primary Documentation Action",
+      "kind": "button",
+      "refersTo": "button-brand",
+      "description": "The compact solid-cobalt path from the homepage to installation.",
+      "html": "<a class=\"ds-btn-primary\" href=\"#\">Install Harmony</a>",
+      "css": ".ds-btn-primary { display: inline-block; border: 1px solid transparent; border-radius: 20px; padding: 0 20px; color: #ffffff; background: #0c47b2; font: 600 14px/38px 'Atkinson Hyperlegible Next Variable', sans-serif; text-align: center; text-decoration: none; white-space: nowrap; transition: color 0.25s, background-color 0.25s; } .ds-btn-primary:hover { background: #0752d6; } .ds-btn-primary:active { background: #075ff7; transition-duration: 0.1s; } .ds-btn-primary:focus-visible { outline: 3px solid rgba(7, 95, 247, 0.62); outline-offset: 3px; }"
+    },
+    {
+      "name": "Secondary Documentation Action",
+      "kind": "button",
+      "refersTo": "button-alt",
+      "description": "The quiet companion path from the homepage to Patch authoring.",
+      "html": "<a class=\"ds-btn-alt\" href=\"#\">Write a Patch</a>",
+      "css": ".ds-btn-alt { display: inline-block; border: 1px solid transparent; border-radius: 20px; padding: 0 20px; color: #10233f; background: #e6ecf4; font: 600 14px/38px 'Atkinson Hyperlegible Next Variable', sans-serif; text-align: center; text-decoration: none; white-space: nowrap; transition: color 0.25s, background-color 0.25s; } .ds-btn-alt:hover { background: #d8e1ed; } .ds-btn-alt:active { background: #c9d4e3; transition-duration: 0.1s; } .ds-btn-alt:focus-visible { outline: 3px solid rgba(7, 95, 247, 0.62); outline-offset: 3px; }"
+    },
+    {
+      "name": "Capability Panel",
+      "kind": "card",
+      "refersTo": "capability-panel",
+      "description": "One of exactly four icon-free homepage routes arranged as a two-column technical index on wider screens.",
+      "html": "<a class=\"ds-capability\" href=\"#\"><strong>Source Patches</strong><span>Match compiled TypeScript AST nodes, then rewrite exact in-memory ranges.</span><em>Author a Source Patch →</em></a>",
+      "css": ".ds-capability { display: flex; flex-direction: column; min-height: 176px; border: 1px solid rgba(20, 59, 112, 0.16); border-radius: 10px; padding: 24px; color: #10233f; background: #edf3fc; font-family: 'Atkinson Hyperlegible Next Variable', sans-serif; text-decoration: none; transition: border-color 0.25s; } .ds-capability:hover { border-color: color-mix(in srgb, #075ff7 44%, rgba(20, 59, 112, 0.16)); } .ds-capability:focus-visible { outline: 3px solid rgba(7, 95, 247, 0.62); outline-offset: 3px; } .ds-capability strong { font-size: 16px; font-weight: 600; line-height: 24px; letter-spacing: -0.015em; } .ds-capability span { flex: 1; padding-top: 8px; color: #40536d; font-size: 14px; font-weight: 500; line-height: 24px; } .ds-capability em { padding-top: 8px; color: #075ff7; font-size: 14px; font-style: normal; font-weight: 500; }"
     },
     {
       "name": "Code Block",
       "kind": "card",
-      "refersTo": "code-block",
-      "description": "Runnable commands and source examples within technical documents.",
+      "refersTo": "code-block-light",
+      "description": "Theme-aware runnable commands and source examples within technical documents.",
       "html": "<pre class=\"ds-code\"><code>npm install -g dsh-harmony</code></pre>",
-      "css": ".ds-code { margin: 0; padding: 20px 24px; overflow: auto; border: 1px solid rgba(127,172,233,.18); border-radius: 10px; color: #eef5ff; background: #0b1f3a; font: 460 14px/1.55 'Source Code Pro', monospace; } .ds-code:focus-visible { outline: 3px solid rgba(7,95,247,.56); outline-offset: 3px; }"
+      "css": ".ds-code { margin: 0; padding: 20px 24px; overflow: auto; border: 1px solid rgba(20, 59, 112, 0.16); border-radius: 10px; color: #10233f; background: #edf3fc; font: 460 14px/1.55 'Source Code Pro Variable', monospace; } .ds-code:focus-visible { outline: 3px solid rgba(7, 95, 247, 0.62); outline-offset: 3px; }"
     },
     {
       "name": "Reference Table",
       "kind": "custom",
-      "description": "Task routing, compatibility data, and runtime guarantees.",
+      "description": "Task routing, compatibility data, and runtime guarantees on ordinary documents.",
       "html": "<table class=\"ds-table\"><thead><tr><th>Task</th><th>Guide</th></tr></thead><tbody><tr><td>Write a Patch</td><td><a href=\"#\">Patch authoring</a></td></tr></tbody></table>",
-      "css": ".ds-table { width: 100%; border-collapse: separate; border-spacing: 0; overflow: hidden; border: 1px solid rgba(20,59,112,.16); border-radius: 8px; color: #10233f; font: 460 16px/1.5 'Atkinson Hyperlegible Next', sans-serif; } .ds-table th, .ds-table td { padding: 10px 14px; border-bottom: 1px solid rgba(20,59,112,.16); text-align: left; } .ds-table th { color: #40536d; background: #edf3fc; } .ds-table a { color: #075ff7; text-underline-offset: .18em; } .ds-table a:focus-visible { outline: 3px solid rgba(7,95,247,.56); outline-offset: 3px; }"
+      "css": ".ds-table { width: 100%; border-collapse: separate; border-spacing: 0; overflow: hidden; border: 1px solid rgba(20, 59, 112, 0.16); border-radius: 8px; color: #10233f; font: 460 16px/1.5 'Atkinson Hyperlegible Next Variable', sans-serif; } .ds-table th, .ds-table td { padding: 10px 14px; border-bottom: 1px solid rgba(20, 59, 112, 0.16); text-align: left; } .ds-table th { color: #40536d; background: #edf3fc; } .ds-table a { color: #075ff7; text-underline-offset: 0.18em; } .ds-table a:focus-visible { outline: 3px solid rgba(7, 95, 247, 0.62); outline-offset: 3px; }"
     }
   ],
   "narrative": {
     "northStar": "Layered Tracing Film",
-    "overview": "A precise technical reference on cool paper. The standard documentation shell, clear typography, cobalt links, command blocks, and compact tables keep runtime Patch behavior calm and inspectable.",
-    "keyCharacteristics": ["Standard documentation shell", "Cool technical paper", "One cobalt accent", "Highly legible variable type", "Flat code and data surfaces"],
-    "rules": [
-      { "name": "The One Accent Rule", "body": "Cobalt marks links, focus, and brand identity; neutral surfaces carry everything else.", "section": "colors" },
-      { "name": "The Whole-Word Rule", "body": "Technical nouns and transformation terms wrap between words, never inside them.", "section": "typography" },
-      { "name": "The Paper-First Rule", "body": "Hierarchy comes from type, spacing, and one-pixel boundaries rather than elevation.", "section": "elevation" }
+    "overview": "The documentation behaves like a precise service manual. The original plugin remains conceptually visible while each Patch adds a controlled, reversible layer. The result feels native to DeepSeek Harness: calm, exact, and built for sustained technical reading.\n\nOrdinary pages let the standard documentation shell lead. The index is the controlled exception: a concise technical brand portal where readers identify Harmony, choose the Patch layer they need, and enter installation or authoring without crossing into a product-marketing page.\n\nExpression comes from the interlocked Harmony mark, cool paper surfaces, solid cobalt actions, flat capability panels, and unusually clear typography. Decoration never competes with instructions, source examples, or runtime state.",
+    "keyCharacteristics": [
+      "Cool white paper with cobalt reserved for actions, links, and brand emphasis.",
+      "Compact headings paired with highly legible long-form text.",
+      "An asymmetric homepage brand block followed directly by a two-column capability index.",
+      "Persistent navigation, page outline, tables, and copyable command blocks on ordinary documents.",
+      "No promotional proof, decorative motion, or ornamental content systems."
     ],
-    "dos": ["Keep prose near a 72ch measure.", "Put requirements and runnable commands first on the index.", "Keep English and Simplified Chinese navigation equivalent.", "Keep tables and code independently scrollable on mobile."],
-    "donts": ["Do not use a marketing Hero on the documentation index.", "Do not add decorative motion or background geometry.", "Do not turn each concept into a rounded card.", "Do not introduce dashboard or game-mod styling."]
+    "rules": [
+      { "name": "The One Accent Rule", "body": "Cobalt marks actionable links, focus, and brand identity; neutral surfaces carry everything else.", "section": "colors" },
+      { "name": "The Whole-Word Rule", "body": "Technical nouns and key transformation terms must receive enough width to wrap between words, never inside them.", "section": "typography" },
+      { "name": "The Homepage Exception Rule", "body": "Only the documentation index may use the compact brand Hero and four capability panels; ordinary documents retain the standard VitePress shell.", "section": "layout" },
+      { "name": "The Paper-First Rule", "body": "Documentation surfaces stay flat; hierarchy comes from type, spacing, and one-pixel boundaries.", "section": "elevation" },
+      { "name": "The Halo Exception Rule", "body": "Only the homepage mark may sit over the broad, pale, slightly asymmetric two-ellipse halo; keep both ellipses diffuse and visibly weaker than the cobalt actions.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do preserve a 72ch maximum prose measure and clear heading hierarchy on ordinary documents.",
+      "Do reserve the compact Hero and exactly four capability panels for the documentation index.",
+      "Do pair the Harmony mark with the exact library definition and direct installation or authoring actions.",
+      "Do keep English and Simplified Chinese homepage structure equivalent.",
+      "Do keep the two-ellipse homepage halo broad, pale, and slightly asymmetric.",
+      "Do respect reduced-motion preferences and visible keyboard focus."
+    ],
+    "donts": [
+      "Don't expand the index into a full-size marketing landing page or product showcase.",
+      "Don't add promotional proof, metrics, testimonials, screenshot walls, or benchmark claims.",
+      "Don't add icons to turn the capability panels into generic feature cards.",
+      "Don't intensify the halo, repeat it behind content, or use it as a general elevation effect.",
+      "Don't use decorative motion, animated backgrounds, or attention-seeking transitions.",
+      "Don't introduce dense dashboard styling or decorative game-mod motifs."
+    ]
   }
 }

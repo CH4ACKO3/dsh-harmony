@@ -63,11 +63,11 @@ const chineseSidebar = [
 ]
 
 const designContract = `<!--
-THESIS: Harmony documentation reads like layered tracing film: the original module stays visible while each Patch adds a precise, reversible overlay.
-OWN-WORLD: Cool white sheets, cobalt and cyan paths, translucent layers, compact status labels, and typography optimized for long technical reading.
-STORY: Readers understand where Harmony sits, install it safely, author a Patch, and inspect the resulting runtime without returning to a monolithic README.
-FIRST VIEWPORT: The standard documentation shell presents the library definition, supported versions, and a copyable installation path without promotional artwork.
-FORM: Layered service manual, grounded direction 5, seed be380533.
+THESIS: Harmony opens as a concise technical brand page: the runtime Patch model is immediately visible, while detailed guidance remains in the documentation hierarchy.
+OWN-WORLD: Cool paper, solid cobalt accents, flat capability panels, compact actions, and typography optimized for sustained technical reading.
+STORY: Readers identify Harmony, choose the Patch layer they need, and enter installation or authoring without crossing a product-marketing page.
+FIRST VIEWPORT: A left-led brand block pairs the Harmony mark with its exact library definition and two documentation actions; a two-column capability index follows directly.
+FORM: Short technical documentation portal derived from the established layered service manual, seed be380533.
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
 -->`
 
