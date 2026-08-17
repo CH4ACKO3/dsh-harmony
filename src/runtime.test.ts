@@ -104,6 +104,78 @@ module.exports = {
   expect(await readFile(join(target, 'lib/index.js'), 'utf8')).toContain('return 2')
 })
 
+test('supports Buffer paths and treats file-prefixed strings as paths', () => {
+  const target = join(root, 'pathlike-target')
+  const provider = join(root, 'pathlike-provider')
+  mkdirSync(join(target, 'lib'), { recursive: true })
+  mkdirSync(provider)
+  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'pathlike-target' }))
+  writeFileSync(join(target, 'lib/buffer.js'), 'export const value = 1\n')
+  writeFileSync(join(target, 'file:target.js'), 'export const value = 1\n')
+  writeFileSync(join(provider, 'package.json'), JSON.stringify({
+    name: 'pathlike-provider',
+    dsh: { harmony: { patches: ['./patch.cjs'] } },
+  }))
+  writeFileSync(join(provider, 'patch.cjs'), `
+module.exports = [{
+  id: 'buffer-path', target: { package: 'pathlike-target', files: ['lib/buffer.js'] },
+  select: 'NumericLiteral', expect: 1,
+  apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '2') },
+}, {
+  id: 'file-prefix', target: { package: 'pathlike-target', files: ['file:target.js'] },
+  select: 'NumericLiteral', expect: 1,
+  apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '2') },
+}]
+`)
+  discoverPackage(provider)
+
+  expect(readFileSync(Buffer.from(join(target, 'lib/buffer.js')), 'utf8')).toContain('value = 2')
+  const previousDirectory = process.cwd()
+  process.chdir(target)
+  try {
+    expect(readFileSync('file:target.js', 'utf8')).toContain('value = 2')
+  } finally {
+    process.chdir(previousDirectory)
+  }
+})
+
+test('does not re-enter a transformation when a Patch reads its own target', () => {
+  const target = join(root, 'reentrant-target')
+  const provider = join(root, 'reentrant-provider')
+  const filename = join(target, 'lib/index.js')
+  mkdirSync(join(target, 'lib'), { recursive: true })
+  mkdirSync(provider)
+  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'reentrant-target' }))
+  writeFileSync(filename, 'export const value = 1\n')
+  writeFileSync(join(provider, 'package.json'), JSON.stringify({
+    name: 'reentrant-provider',
+    dsh: { harmony: { patches: ['./patch.cjs'] } },
+  }))
+  writeFileSync(join(provider, 'patch.cjs'), `
+module.exports = {
+  id: 'self-read', target: { package: 'reentrant-target', files: ['lib/index.js'] },
+  select: 'NumericLiteral', expect: 1,
+  apply({ node, edit }) {
+    globalThis.__dshHarmonyReentrantApplications = (globalThis.__dshHarmonyReentrantApplications ?? 0) + 1
+    if (globalThis.__dshHarmonyReentrantApplications === 1) {
+      globalThis.__dshHarmonyReentrantSource = require('node:fs').readFileSync(${JSON.stringify(filename)}, 'utf8')
+    }
+    edit.overwrite(node.getStart(), node.getEnd(), '2')
+  },
+}
+`)
+  discoverPackage(provider)
+
+  try {
+    expect(readFileSync(filename, 'utf8')).toContain('value = 2')
+    expect((globalThis as any).__dshHarmonyReentrantApplications).toBe(1)
+    expect((globalThis as any).__dshHarmonyReentrantSource).toContain('value = 1')
+  } finally {
+    delete (globalThis as any).__dshHarmonyReentrantApplications
+    delete (globalThis as any).__dshHarmonyReentrantSource
+  }
+})
+
 test('skips a Patch with the wrong match count and continues applying later Patches', () => {
   const target = join(root, 'expect-target')
   const provider = join(root, 'expect-provider')

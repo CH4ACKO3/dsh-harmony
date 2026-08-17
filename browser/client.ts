@@ -274,8 +274,9 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       key: string
       owner: string
       target: { package: string; version?: string; files: string[] }
-      kind: 'source' | 'semantic'
+      kind: 'source' | 'semantic' | 'loader'
       operation?: 'before' | 'after' | 'around' | 'replace'
+      loader?: 'typescript'
       state: 'pending' | 'bound' | 'disabled' | 'failed'
       loaded: boolean
       matches: number
@@ -540,7 +541,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
                   h('div', { className: 'dshHarmonyPatchHeader' },
                     h('div', null,
                       h('h3', { className: 'dshHarmonyTitle' }, patch.key),
-                      h('p', { className: 'dshHarmonyScope' }, `${stateLabel(patch.state)} · ${patch.kind}${patch.operation ? ` / ${patch.operation}` : ''}`)),
+                      h('p', { className: 'dshHarmonyScope' }, `${stateLabel(patch.state)} · ${patch.kind}${patch.operation ? ` / ${patch.operation}` : patch.loader ? ` / ${patch.loader}` : ''}`)),
                     h('div', { className: 'dshHarmonyPatchChain' },
                       h('button', {
                         className: 'dshHarmonySecondary', type: 'button', disabled: busy === patch.key,

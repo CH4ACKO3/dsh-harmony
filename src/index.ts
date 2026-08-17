@@ -58,6 +58,12 @@ export interface HarmonySourcePatch {
   apply(context: HarmonyPatchContext): void
 }
 
+export interface HarmonyLoaderPatch {
+  id: string
+  target: HarmonyPatchTarget
+  loader: 'typescript'
+}
+
 export interface HarmonySourceTrace {
   select: string
   effect: 'replace-element' | 'wrap-element' | 'insert-before' | 'insert-after' | 'transform-props'
@@ -81,7 +87,7 @@ export interface HarmonySemanticPatch {
   handler(context: HarmonySemanticContext): unknown
 }
 
-export type HarmonyPatch = HarmonySourcePatch | HarmonySemanticPatch
+export type HarmonyPatch = HarmonySourcePatch | HarmonySemanticPatch | HarmonyLoaderPatch
 
 export interface HarmonyPatchContext {
   patch: { key: string; owner: string }
@@ -97,8 +103,9 @@ export interface HarmonyPatchStatus {
   id: string
   owner: string
   target: HarmonyPatchTarget
-  kind: 'source' | 'semantic'
+  kind: 'source' | 'semantic' | 'loader'
   operation?: HarmonySemanticOperation
+  loader?: HarmonyLoaderPatch['loader']
   state: 'pending' | 'bound' | 'disabled' | 'failed'
   loaded: boolean
   matches: number

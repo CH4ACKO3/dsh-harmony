@@ -1,6 +1,6 @@
 {
   "name": "dsh-harmony",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "A library for patching, replacing and decorating DeepSeek Harness plugins during runtime",
   "keywords": [
     "deepseek",
@@ -73,11 +73,12 @@
     "README.zh-CN.md"
   ],
   "scripts": {
-    "build": "npm run build:core && npm run build:browser && npm run build:scripts",
+    "clean": "node -e \"const fs=require('node:fs'); for (const path of ['lib','browser-dist','scripts']) fs.rmSync(path,{recursive:true,force:true})\"",
+    "build": "npm run clean && npm run build:core && npm run build:browser && npm run build:scripts",
     "build:core": "tsc -p tsconfig.json",
     "build:browser": "tsc -p tsconfig.browser.json",
     "build:scripts": "tsc -p tsconfig.scripts.json",
-    "test": "npm run build && npm run build --workspaces --if-present && tsc -p tsconfig.test.json && vitest run && node test/hook.e2e.ts && node test/client.e2e.ts && node test/first-boot.e2e.ts && node test/embedded.e2e.ts && node test/shim.e2e.ts && node test/bootstrap.e2e.ts && node test/runtime-gate.e2e.ts",
+    "test": "npm run build && npm run build --workspaces --if-present && tsc -p tsconfig.test.json && vitest run && node test/hook.e2e.ts && node test/module-hooks.e2e.ts && node test/client.e2e.ts && node test/first-boot.e2e.ts && node test/embedded.e2e.ts && node test/shim.e2e.ts && node test/bootstrap.e2e.ts && node test/runtime-gate.e2e.ts",
     "test:package": "node test/package.e2e.ts",
     "check": "npm test",
     "prepare": "npm run build",

@@ -1,6 +1,6 @@
 ---
 name: use-dsh-harmony
-description: Install and operate dsh-harmony, choose between Source, Semantic, React-aware, and Studio Patches, author Patch provider plugins, inspect transformed runtime source, control order and enablement, and troubleshoot failed or incompatible Patches. Use when an agent is asked to install Harmony, modify DeepSeek Harness Host or WebUI plugins without forks, create, review, or debug Harmony providers, integrate dsh-harmony-react or Studio previews, or diagnose Harmony status, ordering, reload, version, selector, or profile issues.
+description: Install and operate dsh-harmony, choose between Source, Semantic, Loader, React-aware, and Studio Patches, author Patch provider plugins, inspect transformed runtime source, control order and enablement, and troubleshoot failed or incompatible Patches. Use when an agent is asked to install Harmony, modify DeepSeek Harness Host or WebUI plugins without forks, create, review, or debug Harmony providers, integrate dsh-harmony-react or Studio previews, or diagnose Harmony status, ordering, reload, version, selector, or profile issues.
 ---
 
 # Use dsh-harmony
@@ -16,6 +16,7 @@ Identify the active profile, target package, installed version, compiled target 
 | Patch a browser bundle such as `lib/client.js` | Source Patch |
 | Match syntax, literals, imports, or arbitrary compiled structure | Source Patch |
 | Decorate a named Node.js function or class method | Semantic Patch |
+| Load a target package that publishes TypeScript instead of runnable JavaScript | Loader Patch, plus exact Source Patches when needed |
 | Replace, wrap, insert, remove, or transform compiled React elements | A `dsh-harmony-react` factory, which produces a Source Patch |
 | Expose explicit preview elements or editable variables to dsh-webui-studio | `dsh-harmony-react/studio` |
 
@@ -85,6 +86,25 @@ module.exports = {
 ```
 
 Always set a target version and an exact `expect` count. Positions passed to `edit` refer to the source produced by all earlier Patches. Keep edits local and non-overlapping; do not write target files.
+
+### Loader Patch
+
+Use a Loader Patch only when the target package publishes TypeScript source that Node cannot load from `node_modules`. It enables Harmony's TypeScript transpiler for that package's `.ts`, `.tsx`, `.mts`, and `.cts` module graph before Node's default loader runs:
+
+```js
+/** @type {import('dsh-harmony').HarmonyPatch} */
+module.exports = {
+  id: 'load-published-typescript',
+  target: {
+    package: 'typescript-only-plugin',
+    version: '^1.0.0',
+    files: ['index.ts'],
+  },
+  loader: 'typescript',
+}
+```
+
+The target file is the compatibility anchor used for binding and status. Loading is limited to TypeScript files inside that exact package and version; unrelated packages retain Node's default behavior. Declare ordinary Source Patches separately when the source also needs modification. Harmony applies those exact-file edits before transpiling the module.
 
 ### Semantic Patch
 

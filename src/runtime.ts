@@ -11,6 +11,7 @@ import type {
   HarmonyPatch,
   HarmonyPatchInspection,
   HarmonyPatchDependency,
+  HarmonyLoaderPatch,
   HarmonyPatchStatus,
   HarmonySemanticContext,
   HarmonySemanticPatch,
@@ -86,7 +87,8 @@ const stagedProviderCaches = new Map<string, () => void>()
 const listeners = new Set<(targets: PatchTargets, generation: number) => void>()
 const patchStatusListeners = new Set<() => void>()
 const pendingStatusGenerations = new Set<number>()
-const moduleSourcesLoading = new Set<string>()
+const moduleSourcesLoading = new Map<string, number>()
+const transformationsInProgress = new Set<string>()
 let transformCache = new Map<string, TransformRecord>()
 let patchStatuses = new Map<string, HarmonyPatchStatus>()
 let semanticBindings = new Map<string, RegisteredPatch[]>()
@@ -97,6 +99,7 @@ let activeProfileDir: string | undefined
 let providerOrder: string[] = []
 let disabledPatchKeys = new Set<string>()
 let refreshWatchedFiles: (() => void) | undefined
+let moduleHooksInstalled = false
 
 const pluginUrl = new URL('./plugin.js', import.meta.url).href
 const indexUrl = new URL('./index.js', import.meta.url).href
@@ -172,7 +175,8 @@ function targetsOf(records: Iterable<ProviderRecord>): PatchTargets {
   return targets
 }
 
-function patchKind(patch: HarmonyPatch): 'source' | 'semantic' {
+function patchKind(patch: HarmonyPatch): 'source' | 'semantic' | 'loader' {
+  if ('loader' in patch) return 'loader'
   return 'select' in patch ? 'source' : 'semantic'
 }
 
@@ -182,6 +186,7 @@ function isPatchDisabled(registered: RegisteredPatch, disabled = disabledPatchKe
 
 function freshStatus(registered: RegisteredPatch): HarmonyPatchStatus {
   const semantic = patchKind(registered.patch) === 'semantic' ? registered.patch as HarmonySemanticPatch : undefined
+  const loader = patchKind(registered.patch) === 'loader' ? registered.patch as HarmonyLoaderPatch : undefined
   return {
     key: registered.key,
     id: registered.patch.id,
@@ -189,6 +194,7 @@ function freshStatus(registered: RegisteredPatch): HarmonyPatchStatus {
     target: registered.patch.target,
     kind: patchKind(registered.patch),
     operation: semantic?.operation,
+    loader: loader?.loader,
     state: isPatchDisabled(registered) ? 'disabled' : 'pending',
     loaded: false,
     matches: 0,
@@ -632,7 +638,12 @@ function orderedPatches(input: RegisteredPatch[], order = providerOrder): Regist
 }
 
 function parse(filename: string, source: string): ts.SourceFile {
-  return ts.createSourceFile(filename, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS)
+  const scriptKind = filename.endsWith('.tsx')
+    ? ts.ScriptKind.TSX
+    : /\.(?:cts|mts|ts)$/.test(filename)
+      ? ts.ScriptKind.TS
+      : ts.ScriptKind.JS
+  return ts.createSourceFile(filename, source, ts.ScriptTarget.Latest, true, scriptKind)
 }
 
 function customizeSettings(filename: string, source: string): string {
@@ -684,7 +695,7 @@ function conflictOwner(filename: string, original: string, selector: string, his
 }
 
 function expectedMatches(registered: RegisteredPatch, matches: number, target: string): void {
-  const expected = registered.patch.expect
+  const expected = 'expect' in registered.patch ? registered.patch.expect : undefined
   if (expected === undefined && matches > 0 || expected === matches) return
   const wanted = expected === undefined ? 'at least 1' : String(expected)
   throw new Error(`dsh-harmony: patch ${JSON.stringify(registered.key)} expected ${wanted} match(es) in ${target}, found ${matches}`)
@@ -942,6 +953,12 @@ function buildTransform(
       if (recordStatus) updateStatus(registered, { state: 'failed', matches: 0, error: `none of the target files exist: ${registered.patch.target.files.join(', ')}`, generation: transformGeneration })
       continue
     }
+    if (patchKind(registered.patch) === 'loader') {
+      if (recordStatus) updateStatus(registered, {
+        state: 'bound', matches: 1, file, error: undefined, generation: transformGeneration,
+      })
+      continue
+    }
     if (file === relativeFile) applicable.push(registered)
   }
 
@@ -1023,6 +1040,96 @@ function isJavaScript(filename: string): boolean {
   return /\.[cm]?js$/.test(filename)
 }
 
+function isTypeScript(filename: string): boolean {
+  return /\.(?:cts|mts|ts|tsx)$/.test(filename)
+}
+
+function isSourceFile(filename: string): boolean {
+  return isJavaScript(filename) || isTypeScript(filename)
+}
+
+function canonicalFilename(filename: string): string {
+  return realpathSync(filename)
+}
+
+function beginModuleSourceLoad(filename: string): void {
+  moduleSourcesLoading.set(filename, (moduleSourcesLoading.get(filename) ?? 0) + 1)
+}
+
+function endModuleSourceLoad(filename: string): void {
+  const count = moduleSourcesLoading.get(filename)!
+  if (count === 1) moduleSourcesLoading.delete(filename)
+  else moduleSourcesLoading.set(filename, count - 1)
+}
+
+function activeTypeScriptLoader(
+  filename: string,
+  requestedGeneration: number,
+): PackageInfo | undefined {
+  if (!isTypeScript(filename)) return undefined
+  packageCache.clear()
+  const pkg = packageFor(filename)
+  const state = generationStates.get(requestedGeneration)
+  if (pkg === undefined || state === undefined) return undefined
+  const recordStatus = requestedGeneration === generation
+  let active = false
+  const candidates = orderedPatches([...state.providers].flatMap(provider => provider.patches), state.order)
+    .filter(registered => patchKind(registered.patch) === 'loader'
+      && (registered.patch as HarmonyLoaderPatch).loader === 'typescript'
+      && registered.patch.target.package === pkg.name)
+  for (const registered of candidates) {
+    if (recordStatus) updateStatus(registered, { loaded: true, generation: requestedGeneration })
+    if (isPatchDisabled(registered, state.disabled)) {
+      if (recordStatus) updateStatus(registered, {
+        state: 'disabled', matches: 0, error: undefined, file: undefined, generation: requestedGeneration,
+      })
+      continue
+    }
+    const incompatible = versionError(registered, pkg)
+    if (incompatible !== undefined) {
+      if (recordStatus) updateStatus(registered, {
+        state: 'failed', matches: 0, error: incompatible, file: undefined, generation: requestedGeneration,
+      })
+      continue
+    }
+    const file = resolvedTargetFile(registered, pkg)
+    if (file === undefined) {
+      if (recordStatus) updateStatus(registered, {
+        state: 'failed', matches: 0,
+        error: `none of the target files exist: ${registered.patch.target.files.join(', ')}`,
+        file: undefined,
+        generation: requestedGeneration,
+      })
+      continue
+    }
+    active = true
+    if (recordStatus) updateStatus(registered, {
+      state: 'bound', matches: 1, file, error: undefined, generation: requestedGeneration,
+    })
+  }
+  return active ? pkg : undefined
+}
+
+function transpileTypeScript(filename: string, source: string, pkg: PackageInfo): {
+  format: 'module' | 'commonjs'
+  source: string
+} {
+  const format = filename.endsWith('.cts') || !filename.endsWith('.mts') && pkg.type !== 'module'
+    ? 'commonjs'
+    : 'module'
+  return {
+    format,
+    source: ts.transpileModule(source, {
+      fileName: filename,
+      compilerOptions: {
+        target: ts.ScriptTarget.ES2023,
+        module: format === 'commonjs' ? ts.ModuleKind.CommonJS : ts.ModuleKind.ESNext,
+        jsx: ts.JsxEmit.ReactJSX,
+      },
+    }).outputText,
+  }
+}
+
 function hasTypelessEsmSyntax(filename: string): boolean {
   const sourceFile = parse(filename, nativeReadFileSync(filename, 'utf8'))
   if (ts.isExternalModule(sourceFile)) return true
@@ -1046,28 +1153,34 @@ function hasTypelessEsmSyntax(filename: string): boolean {
 }
 
 function transform(filename: string, source: string, requestedGeneration = generation): string {
-  if (!isJavaScript(filename)) return source
-  filename = realpathSync(filename)
+  if (!isSourceFile(filename)) return source
+  filename = canonicalFilename(filename)
   if (loadedPatchFiles.has(filename) || loadingPatchFiles.has(filename)) return source
-  packageCache.clear()
-  const pkg = packageFor(filename)
-  if (pkg === undefined) return source
-  const state = generationStates.get(requestedGeneration)
-  if (state === undefined) return source
   const cacheKey = `${requestedGeneration}\0${filename}`
+  if (transformationsInProgress.has(cacheKey)) return source
   const cached = transformCache.get(cacheKey)
-  if (cached?.packageVersion === pkg.version && cached.source === source) return cached.output
-  const result = buildTransform(
-    filename,
-    source,
-    state.order,
-    state.disabled,
-    true,
-    state.providers,
-    requestedGeneration,
-  )
-  transformCache.set(cacheKey, result)
-  return result.output
+  transformationsInProgress.add(cacheKey)
+  try {
+    packageCache.clear()
+    const pkg = packageFor(filename)
+    if (pkg === undefined) return source
+    if (cached?.packageVersion === pkg.version && cached.source === source) return cached.output
+    const state = generationStates.get(requestedGeneration)
+    if (state === undefined) return source
+    const result = buildTransform(
+      filename,
+      source,
+      state.order,
+      state.disabled,
+      true,
+      state.providers,
+      requestedGeneration,
+    )
+    transformCache.set(cacheKey, result)
+    return result.output
+  } finally {
+    transformationsInProgress.delete(cacheKey)
+  }
 }
 
 function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
@@ -1222,8 +1335,15 @@ export function preflightProfileUpdate(input: { order?: string[]; disabled?: str
 }
 
 function filenameOf(path: unknown): string | undefined {
-  if (typeof path === 'string') return path.startsWith('file:') ? fileURLToPath(path) : path
+  if (typeof path === 'string') return path
+  if (Buffer.isBuffer(path)) return path.toString()
   return path instanceof URL && path.protocol === 'file:' ? fileURLToPath(path) : undefined
+}
+
+function moduleSourceText(source: string | ArrayBuffer | NodeJS.TypedArray): string {
+  if (typeof source === 'string') return source
+  if (source instanceof ArrayBuffer) return Buffer.from(source).toString('utf8')
+  return Buffer.from(source.buffer, source.byteOffset, source.byteLength).toString('utf8')
 }
 
 function isUtf8Read(options: unknown): boolean {
@@ -1241,8 +1361,9 @@ export function installFileTransforms(): void {
     const filename = filenameOf(path)
     if (filename === undefined || !isJavaScript(filename) || (!Buffer.isBuffer(value) && typeof value !== 'string')) return value
     if (typeof value === 'string' && !isUtf8Read(args[0])) return value
-    if (moduleSourcesLoading.has(filename)) return value
-    const output = transform(filename, value.toString())
+    const canonical = canonicalFilename(filename)
+    if (moduleSourcesLoading.has(canonical)) return value
+    const output = transform(canonical, value.toString())
     return Buffer.isBuffer(value) ? Buffer.from(output) : output
   }) as typeof fs.readFileSync
   fs.promises.readFile = (async (path: Parameters<typeof fs.promises.readFile>[0], ...args: unknown[]) => {
@@ -1250,14 +1371,16 @@ export function installFileTransforms(): void {
     const filename = filenameOf(path)
     if (filename === undefined || !isJavaScript(filename) || (!Buffer.isBuffer(value) && typeof value !== 'string')) return value
     if (typeof value === 'string' && !isUtf8Read(args[0])) return value
-    if (moduleSourcesLoading.has(filename)) return value
-    const output = transform(filename, value.toString())
+    const canonical = canonicalFilename(filename)
+    if (moduleSourcesLoading.has(canonical)) return value
+    const output = transform(canonical, value.toString())
     return Buffer.isBuffer(value) ? Buffer.from(output) : output
   }) as typeof fs.promises.readFile
   syncBuiltinESMExports()
 }
 
 export function installModuleHooks(): void {
+  if (moduleHooksInstalled) return
   registerHooks({
     resolve(specifier, context, nextResolve) {
       if (specifier === 'dsh-harmony') return { url: indexUrl, shortCircuit: true }
@@ -1282,21 +1405,29 @@ export function installModuleHooks(): void {
       return { ...result, url: url.href, shortCircuit: true }
     },
     load(url, context, nextLoad) {
-      const filename = url.startsWith('file:') ? fileURLToPath(url) : undefined
-      if (filename !== undefined) moduleSourcesLoading.add(filename)
+      const path = url.startsWith('file:') ? fileURLToPath(url) : undefined
+      const filename = path === undefined ? undefined : canonicalFilename(path)
+      const requested = Number(new URL(url).searchParams.get('dsh-harmony') ?? generation)
+      const loader = filename === undefined ? undefined : activeTypeScriptLoader(filename, requested)
+      if (filename !== undefined && loader !== undefined) {
+        const source = nativeReadFileSync(filename, 'utf8')
+        const transformed = transform(filename, source, requested)
+        return { ...transpileTypeScript(filename, transformed, loader), shortCircuit: true }
+      }
+      if (filename !== undefined) beginModuleSourceLoad(filename)
       let result
       try {
         result = nextLoad(url, context)
       } finally {
-        if (filename !== undefined) moduleSourcesLoading.delete(filename)
+        if (filename !== undefined) endModuleSourceLoad(filename)
       }
       if (filename !== undefined && (result.format === 'module' || result.format === 'commonjs') && result.source != null) {
-        const requested = Number(new URL(url).searchParams.get('dsh-harmony') ?? generation)
-        result.source = transform(filename, result.source.toString(), requested)
+        return { ...result, source: transform(filename, moduleSourceText(result.source), requested) }
       }
       return result
     },
   })
+  moduleHooksInstalled = true
 }
 
 export function prepareModuleReload(
