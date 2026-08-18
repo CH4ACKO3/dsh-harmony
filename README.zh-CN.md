@@ -32,15 +32,15 @@
 
 ## 简介
 
-Harmony 提供一种以优雅的方式来修改其它为 DeepSeek Harness 编写的插件的功能。它作为一个外置框架，在运行时将补丁应用到目标插件上，并以修改后的插件集运行 DeepSeek Harness。
+当一个 DeepSeek Harness 插件需要修改另一个插件、又不值得为此维护 Fork 时，可以使用 Harmony。它会在目标插件运行前加载 Patch，在内存中修改编译产物，再让 Harness 运行修改后的代码。
 
-源码 Patch 通过 TSQuery 在 TypeScript AST 中精确匹配目标节点，再使用 MagicString 改写当前内存源码的对应区间。Patch 按排序依次应用，后一个 Patch 继续处理前一个 Patch 的输出，因此针对同一目标的多个修改有机会和谐共处。整个过程不会写回已安装的插件文件。
+Source Patch 使用 TSQuery 查找 TypeScript AST 节点，再用 MagicString 改写对应的源码区间。Patch 逐个执行，后一个会读取前一个留下的结果，因此多个插件可以修改同一目标。安装目录里的文件不会改变。
 
-Provider 可以通过 `before` 和 `after` 声明粗粒度关系，单个 Patch 也可以覆盖所属 Provider 的全局规则。配置同时保存 Provider 顺序和可跨 Provider 任意交错的 Patch 顺序。组合 Patch 则把多个普通 Patch 作为一个排序、开关和跨文件事务单元：任一成员失败，整个组合都不会应用。
+Provider 可以声明自己的 Patch 应排在另一个 Provider 之前或之后；单个 Patch 也可以改用自己的规则。用户还能把不同 Provider 的 Patch 交错排列。若几处修改必须一起成功，可以把它们放进组合 Patch：它们共用一个位置和开关，任何成员失败时都不应用。
 
-浏览器端也会按最终启用的 Patch 顺序重排 Provider 所属的 `<style data-plugin>` 标签。同一 Provider 即使有多个交错的 Patch，仍只拥有一组样式，因此以它最后一个启用 Patch 的位置决定 CSS 层叠位置；Patch 热重载后会再次同步。
+对于浏览器插件，Harmony 还会按 Patch 顺序整理 Provider 所属的 `<style data-plugin>` 标签。每个 Provider 只有一组样式，它在 CSS 层叠中的位置由最后一个启用的 Patch 决定。Patch 重载后，Harmony 会再整理一次。
 
-该功能旨在让 DeepSeek Harness 的表达能力更进一步：创造性、组合性、**修改性**。
+Harmony 为 DeepSeek Harness 插件之间的协作补上了修改能力。
 
 **Respect**
 
@@ -68,9 +68,9 @@ dsh web
 
 ## Patch 模型
 
-Harmony 维护一份全局 `patchOrder`。Provider 级 `before` / `after` 适合表达常见关系；单个 Patch 可以声明自己相对其它 Provider 的位置，并覆盖所属 Provider 的全局规则。用户既可以整体移动一个 Provider，也可以在 **设置 → Harmony** 中把单个 Patch 插入其它 Provider 的多个 Patch 之间。保存前会把完整顺序作为一个排列进行预检。
+Harmony 按一份全局 `patchOrder` 运行所有 Patch。Provider 级 `before` / `after` 负责通常的先后关系；单个 Patch 只要声明其中一项，就改用自己的规则。在 **设置 → Harmony** 中，用户可以移动整个 Provider，也可以把一个 Patch 插到另一个 Provider 的两个 Patch 之间。保存时，Harmony 会检查列表是否恰好包含每个已注册 Patch 一次。
 
-组合 Patch 把多个普通 Patch 暴露为一个排序、启停与事务单元。成员保持声明顺序；任一成员失败，整个组合都不应用。相互独立的 Patch 则保持失败隔离：单个 Patch 失败会被报告并跳过，不会拖垮后续 Patch 或 Host。
+组合 Patch 让多个 Patch 共用一个排序位置和开关。成员按声明顺序执行，而且只有全部成功才会应用。独立 Patch 失败时，Harmony 会报告并跳过它；后续 Patch 和 Host 仍会运行。
 
 ## React-aware Patch
 
@@ -80,14 +80,14 @@ Harmony 维护一份全局 `patchOrder`。Provider 级 `before` / `after` 适合
 npm install dsh-harmony-react
 ```
 
-`element()` 修改具体的 `jsx` / `jsxs` 调用点；`component()` 修改所有调用共享的组件定义。兼容修改按 Harmony 最终 Patch 顺序组合。
+`element()` 修改选中的 `jsx` / `jsxs` 调用点，`component()` 修改这些调用共享的组件定义。它们和其它 Source Patch 使用同一份顺序。
 
 | API | 作用范围 |
 | --- | --- |
 | `element()` | 一个或多个调用点：替换、包裹、插入、变换 Props 或移除 |
 | `component()` | 所有通过已初始化变量或具名函数声明进行的调用：装饰或替换 |
 
-函数声明会被改写为已初始化的 `const`，从而让后续 Component Patch 继续组合；该绑定不再具有声明提升。目标在声明前读取组件时，请改用核心 Source Patch。选择器、Inspect trace 与 Studio 集成参见 [React 集成](https://memorax-ai.github.io/dsh-harmony/zh/integrations/react)。
+为了让后续 Component Patch 继续修改同一定义，Harmony 会把函数声明改写为已初始化的 `const`。新绑定不再提升；如果文件在声明前读取组件，请改用核心 Source Patch。[React 集成](https://memorax-ai.github.io/dsh-harmony/zh/integrations/react)还介绍了选择器、Inspect trace 和 Studio。
 
 ## 文档
 
