@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitepress'
 
-const repository = 'https://github.com/CH4ACKO3/dsh-harmony'
+const repository = 'https://github.com/memorax-ai/dsh-harmony'
 
 const englishSidebar = [
   {
@@ -83,7 +83,7 @@ export default defineConfig({
       dark: 'github-dark',
     },
   },
-  sitemap: { hostname: 'https://ch4acko3.github.io/dsh-harmony/' },
+  sitemap: { hostname: 'https://memorax-ai.github.io/dsh-harmony/' },
   head: [
     ['link', { rel: 'icon', type: 'image/png', href: '/dsh-harmony/harmony-icon.png' }],
     ['meta', { name: 'theme-color', content: '#075ff7' }],

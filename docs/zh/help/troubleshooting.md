@@ -25,7 +25,11 @@ dsh harmony inspect <package> --file <file>
 
 ## 自动排序仍然报告违规
 
-`before` 和 `after` 约束互相冲突。自动排序会返回违规最少的顺序并列出相关 Provider。调整手动顺序或修正 Provider 声明。
+`before` 和 `after` 约束互相冲突。自动排序会返回违规最少的顺序并列出相关 Provider。修正声明、移动 Provider，或在 WebUI 中精确放置单个 Patch。Patch 级关系会覆盖而不是追加 Provider 全局规则。
+
+## Patch 后的函数在声明后正常、声明前失败
+
+`component()` 会把具名函数声明改写为 `const`，以保持定义级装饰和替换可以组合，因此绑定不再具有声明提升。请把该 Patch 改为核心 Source Patch，或让目标首次读取发生在声明之后。
 
 ## 依赖 Harmony 的插件首次启动时没有运行
 
@@ -51,4 +55,4 @@ Harmony 会保留上一代运行状态。通过 **Patch 状态** 或 `status` �
 dsh plugin --profile <name> remove dsh-harmony
 ```
 
-仍无法解决时，请提交 [GitHub Issue](https://github.com/CH4ACKO3/dsh-harmony/issues)，并附上 DSH 版本、Node 版本、profile 名、失败的稳定 Patch 键与相关 `status` 输出。
+仍无法解决时，请提交 [GitHub Issue](https://github.com/memorax-ai/dsh-harmony/issues)，并附上 DSH 版本、Node 版本、profile 名、失败的稳定 Patch 键与相关 `status` 输出。

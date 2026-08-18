@@ -20,7 +20,7 @@ Add Harmony metadata to the provider's `package.json`:
 }
 ```
 
-Patch files must be CommonJS modules. Harmony collects them synchronously during live Loader updates.
+Patch files must be CommonJS modules. A module may export one Patch declaration or an array of declarations. Harmony collects them synchronously during live Loader updates.
 
 If the provider itself cannot run without Harmony, use the existing DSH dependency mechanism:
 
@@ -50,6 +50,7 @@ module.exports = {
   },
   select: 'FunctionDeclaration[name.name="answer"] NumericLiteral',
   expect: 1,
+  after: ['base-patches'],
   apply({ node, sourceFile, edit }) {
     edit.overwrite(node.getStart(sourceFile), node.getEnd(), '42')
   },
@@ -68,6 +69,8 @@ module.exports = {
 | `ts` | TypeScript namespace |
 
 Positions passed to `edit` refer to the source received by this Patch. `files` contains alternative package-relative targets; Harmony selects the first existing file. `version` is a semver range, and `expect` requires an exact match count.
+
+Every Source Patch parses and selects the source produced by earlier Patches. Harmony does not query every Patch against one original AST and then apply all edits later; that would make selectors observe stale structure and create ambiguous ranges.
 
 ## Loader Patch
 
@@ -117,15 +120,55 @@ module.exports = {
 | `around` | Receives `invoke(args?)` and controls whether and how the next layer runs |
 | `replace` | Replaces the target through `invoke(args?)`; only one enabled replacement may own a function |
 
-All `before` handlers run in Patch order. `around` and `replace` form an outer-to-inner chain in Patch order. All `after` handlers then run in Patch order. Source and semantic Patches share the same global provider order.
+All `before` handlers run in Patch order. `around` and `replace` form an outer-to-inner chain in Patch order. All `after` handlers then run in Patch order. Source and semantic Patches share the same global Patch order.
 
 Semantic targets currently require named parameters and do not support generators. Handlers run in Node.js, so browser targets such as `lib/client.js` must use source Patches.
 
+## Composite Patch
+
+Use a composite when several ordinary Patches must share ordering, enablement, and success or failure:
+
+```js
+module.exports = {
+  id: 'feature-set',
+  after: ['base-patches'],
+  patches: [
+    {
+      id: 'host-part',
+      target: { package: 'target-plugin', version: '^1.0.0', files: ['lib/index.js'] },
+      select: 'StringLiteral[text="old"]',
+      expect: 1,
+      apply({ node, sourceFile, edit }) {
+        edit.overwrite(node.getStart(sourceFile), node.getEnd(), JSON.stringify('new'))
+      },
+    },
+    {
+      id: 'client-part',
+      target: { package: 'target-plugin', version: '^1.0.0', files: ['lib/client.js'] },
+      select: 'StringLiteral[text="old"]',
+      expect: 1,
+      apply({ node, sourceFile, edit }) {
+        edit.overwrite(node.getStart(sourceFile), node.getEnd(), JSON.stringify('new'))
+      },
+    },
+  ],
+}
+```
+
+The composite has one stable key, one position in `patchOrder`, and one enablement state. Members keep declaration order. Harmony preflights every resolved member target; if one member cannot bind or apply, none of the composite's members commit. A composite is a transaction boundary, not a request to batch all queries against original source.
+
 ## Ordering constraints
 
-`before` and `after` refer to provider package names. They are sorting constraints, not npm or Cordis dependencies. The manual list remains authoritative; automatic sorting finds a minimum-violation order while preserving existing order when solutions tie.
+`before` and `after` refer to provider package names. They are sorting constraints, not npm or Cordis dependencies.
 
-Patches within one provider execute in declaration order. Providers execute in profile order. Every later source Patch receives the output of the earlier one.
+- Provider-level rules in `package.json` are the default for every owned Patch.
+- Defining `before` or `after` on one Patch replaces the provider-wide rules for that Patch; it does not append to them.
+- The resolved global `patchOrder` may interleave Patches from different providers.
+- With no user override, declaration order remains the stable tie-breaker.
+
+The user order is authoritative. Automatic sorting finds a minimum-violation order while preserving existing order when solutions tie; contradictory rules remain visible as warnings rather than inventing numeric priority.
+
+Changing the provider order regroups owned Patches. Changing `patchOrder` directly preserves the exact cross-provider permutation. Every later Source Patch receives the output of the earlier one.
 
 ## Provider conflicts
 

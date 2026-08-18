@@ -18,7 +18,7 @@ Patch Provider 是一个普通 DSH 插件，通过 `package.json` 声明一个�
 }
 ```
 
-Patch 文件必须使用 CommonJS，以便实时 Loader 更新时同步收集。
+Patch 文件必须使用 CommonJS。一个模块可以导出一个 Patch 声明或声明数组，以便实时 Loader 更新时同步收集。
 
 如果 Provider 本身依赖 Harmony 服务，使用 DSH 已有依赖机制：
 
@@ -48,6 +48,7 @@ module.exports = {
   },
   select: 'FunctionDeclaration[name.name="answer"] NumericLiteral',
   expect: 1,
+  after: ['base-patches'],
   apply({ node, sourceFile, edit }) {
     edit.overwrite(node.getStart(sourceFile), node.getEnd(), '42')
   },
@@ -66,6 +67,8 @@ module.exports = {
 | `ts` | TypeScript 命名空间 |
 
 传给 `edit` 的位置都以当前 Patch 收到的源码为准。`files` 是备选包内相对路径，Harmony 使用第一个存在的文件；`version` 是 SemVer 范围；`expect` 要求精确匹配数。
+
+每个 Source Patch 都会解析并选择早期 Patch 产生的源码。Harmony 不会先让所有 Patch 查询同一棵原始 AST，再统一应用编辑；那会让选择器看到过时结构，并产生含糊的源码区间。
 
 ## 加载器 Patch
 
@@ -115,15 +118,55 @@ module.exports = {
 | `around` | 通过 `invoke(args?)` 控制下一层是否及如何执行 |
 | `replace` | 通过 `invoke(args?)` 替换目标；同一函数只能有一个启用的 Replace |
 
-所有 `before` 按 Patch 顺序执行；`around` 与 `replace` 按顺序形成由外到内的链；所有 `after` 再按 Patch 顺序执行。源码 Patch 与语义 Patch 共享同一全局 Provider 顺序。
+所有 `before` 按 Patch 顺序执行；`around` 与 `replace` 按顺序形成由外到内的链；所有 `after` 再按 Patch 顺序执行。源码 Patch 与语义 Patch 共享同一全局 Patch 顺序。
 
 语义目标当前要求具名参数，不支持 Generator。处理器在 Node.js 中执行，因此 `lib/client.js` 等浏览器目标必须使用源码 Patch。
 
+## 组合 Patch
+
+多个普通 Patch 必须共享排序、启停和成功失败时，使用组合 Patch：
+
+```js
+module.exports = {
+  id: 'feature-set',
+  after: ['base-patches'],
+  patches: [
+    {
+      id: 'host-part',
+      target: { package: 'target-plugin', version: '^1.0.0', files: ['lib/index.js'] },
+      select: 'StringLiteral[text="old"]',
+      expect: 1,
+      apply({ node, sourceFile, edit }) {
+        edit.overwrite(node.getStart(sourceFile), node.getEnd(), JSON.stringify('new'))
+      },
+    },
+    {
+      id: 'client-part',
+      target: { package: 'target-plugin', version: '^1.0.0', files: ['lib/client.js'] },
+      select: 'StringLiteral[text="old"]',
+      expect: 1,
+      apply({ node, sourceFile, edit }) {
+        edit.overwrite(node.getStart(sourceFile), node.getEnd(), JSON.stringify('new'))
+      },
+    },
+  ],
+}
+```
+
+组合 Patch 只有一个稳定键、一个 `patchOrder` 位置和一个启停状态；成员保持声明顺序。Harmony 会预检所有已解析成员目标；任一成员无法绑定或应用时，所有成员都不会提交。组合 Patch 是事务边界，并不表示所有查询都要先在原始源码上批量执行。
+
 ## 顺序约束
 
-`before` 和 `after` 指向 Provider 包名，是排序约束而非 npm 或 Cordis 依赖。手动列表始终有效；自动排序只寻找违反约束最少的顺序。
+`before` 和 `after` 指向 Provider 包名，是排序约束而非 npm 或 Cordis 依赖。
 
-同一 Provider 的 Patch 按声明顺序运行；Provider 按 profile 顺序运行；后续源码 Patch 会收到早期 Patch 的输出。
+- `package.json` 中的 Provider 级规则默认作用于其全部 Patch。
+- 单个 Patch 只要定义 `before` 或 `after`，就会覆盖而不是追加 Provider 全局规则。
+- 最终全局 `patchOrder` 可以交错不同 Provider 的 Patch。
+- 没有用户覆盖时，声明顺序仍是稳定 Tie-breaker。
+
+用户顺序始终有效。自动排序只寻找违反约束最少的顺序，并在多个答案相同时保留现有相对顺序；互相矛盾的规则会保留为警告，而不是引入数值优先级。
+
+修改 Provider 顺序会重新聚合同属 Patch；直接修改 `patchOrder` 则保留精确的跨 Provider 排列。后续 Source Patch 会收到早期 Patch 的输出。
 
 ## Provider 冲突
 

@@ -30,7 +30,11 @@ The target's compiled structure changed. Inspect the original source, update the
 
 ## Automatic sorting still reports violations
 
-The declared `before` and `after` constraints conflict. Automatic sorting returns an order with the fewest violations and names the providers involved. Change the manual order or correct the provider declarations.
+The declared `before` and `after` constraints conflict. Automatic sorting returns an order with the fewest violations and names the providers involved. Correct the declarations, move the provider, or use WebUI to place one Patch precisely. A Patch-level relation replaces its provider-wide rule rather than appending to it.
+
+## A patched function works after its declaration but fails before it
+
+`component()` rewrites a named function declaration to `const` to keep definition-wide decoration and replacement composable. The binding is therefore not hoisted. Replace this Patch with a core Source Patch, or move the target's first read after the declaration.
 
 ## A dependent plugin does not start on first boot
 
@@ -56,4 +60,4 @@ The global package was removed before the profile bundle. Start the profile and 
 dsh plugin --profile <name> remove dsh-harmony
 ```
 
-For unresolved problems, open a [GitHub issue](https://github.com/CH4ACKO3/dsh-harmony/issues) with the DSH version, Node version, profile name, failing stable Patch key, and relevant `status` output.
+For unresolved problems, open a [GitHub issue](https://github.com/memorax-ai/dsh-harmony/issues) with the DSH version, Node version, profile name, failing stable Patch key, and relevant `status` output.

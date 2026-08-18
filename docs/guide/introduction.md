@@ -41,16 +41,19 @@ Harmony installs its CommonJS and ESM transform hooks, then forwards the origina
 - **Source Patches** transform `lib/index.js`, `lib/client.js`, or another compiled target through the TypeScript AST.
 - **Semantic Patches** apply `before`, `after`, `around`, or `replace` to named functions and class methods.
 - **Loader Patches** transpile an explicitly targeted package's published TypeScript before Node's default loader runs.
-- **Global order** combines manual provider order with declared `before` and `after` constraints.
+- **Global Patch order** starts from provider declarations, lets individual Patches override those relations, and accepts an exact user-controlled cross-provider permutation.
+- **Composite Patches** group ordinary Patches into one ordered, toggleable transaction across all resolved files.
 - **Transactions** preflight provider changes, order changes, and enablement before committing a reload.
 - **Inspection** exposes original source, each intermediate Patch result, and final runtime source.
 - **Tooling APIs** let plugins and build tools query status or transactionally reload a plugin and its Patch declarations.
+
+Harmony does not use a numeric priority contest. Provider authors express only relationships they know; users resolve undeclared conflicts by moving a provider or one Patch. Internally, each affected file consumes its own slice of the global order. Files may progress concurrently, but a Patch starts only when every file it affects has reached that Patch, preserving one observable order without serializing unrelated work.
 
 ## Host and browser targets
 
 Node targets reload through the Loader Tree. Relative ESM imports inside the same target package inherit one Patch generation; CommonJS reloads invalidate that package's internal `require` graph.
 
-Browser targets such as `lib/client.js` use Harness's existing `clientModules.rebuilt` path. Harmony recalculates the transformed bundle revision and sends the normal HMR event, so an open WebUI reloads only the affected client plugin.
+Browser targets such as `lib/client.js` use Harness's existing `clientModules.rebuilt` path. Harmony recalculates the transformed bundle revision and sends the normal HMR event, so an open WebUI reloads only the affected client plugin. Provider-owned style tags are then reordered from the final enabled Patch order so CSS cascade follows the same runtime decision.
 
 ## Safety boundary
 

@@ -11,13 +11,13 @@
     "runtime-patching",
     "typescript-ast"
   ],
-  "homepage": "https://github.com/CH4ACKO3/dsh-harmony/tree/main/packages/react#readme",
+  "homepage": "https://github.com/memorax-ai/dsh-harmony/tree/main/packages/react#readme",
   "bugs": {
-    "url": "https://github.com/CH4ACKO3/dsh-harmony/issues"
+    "url": "https://github.com/memorax-ai/dsh-harmony/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/CH4ACKO3/dsh-harmony.git",
+    "url": "git+https://github.com/memorax-ai/dsh-harmony.git",
     "directory": "packages/react"
   },
   "license": "MIT",

@@ -94,7 +94,7 @@ dsh harmony status --profile tui
 dsh harmony inspect target-plugin --file lib/index.js --profile tui
 ```
 
-每个 profile 在 `$DSH_HOME/profiles/<name>/harmony.json` 中保存独立顺序和已停用 Patch ID。
+每个 profile 在 `$DSH_HOME/profiles/<name>/harmony.json` 中保存独立的 Provider `order`、精确的全局 `patchOrder` 和已停用 Patch 键。
 
 ## 更新
 

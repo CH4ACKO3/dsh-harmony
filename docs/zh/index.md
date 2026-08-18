@@ -29,22 +29,22 @@ features:
     link: /zh/patches/authoring#语义-patch
     linkText: 编写语义 Patch
   - title: React-aware Patch
-    details: 通过类型化工厂修改编译后的 jsx 与 jsxs 调用，并可选择为 Studio 提供可编辑预览。
+    details: 使用 element() 修改一个编译后的 jsx 或 jsxs 调用点，或用 component() 装饰、替换定义及其所有调用位置。
     link: /zh/integrations/react
     linkText: 了解 React 集成
   - title: 运行时控制
-    details: 调整 Provider 顺序、启停单个 Patch、检查每一步变换，并以事务方式重载运行时。
+    details: 跨 Provider 交错单个 Patch、拖动整个 Provider 堆、检查变换、撤回编辑，并以事务方式保存。
     link: /zh/guide/operations
     linkText: 操作 Harmony
 ---
 
 ## 修改运行时，而不是安装文件
 
-Harmony 按确定顺序加载 Patch Provider。每个 Patch 都会继续处理前一个 Patch 的输出，因此针对同一目标的独立修改可以组合生效。无法应用的 Patch 会被记录并跳过；Harmony 始终不会改写已安装的插件文件。
+Harmony 会解析出一条确定的全局 Patch 顺序。每个 Source Patch 都会继续处理前一个 Patch 的输出，因此针对同一目标的独立修改可以组合生效。组合 Patch 共享一个位置、启停状态和原子成功边界。无法应用的 Patch 会被记录并跳过；Harmony 始终不会改写已安装的插件文件。
 
 ```text
 已安装源码（保持不变）
-  -> 有序的 Patch Provider
+  -> 全局 Patch 顺序
   -> 经过验证的内存变换
   -> Host 重载或浏览器 HMR
 ```

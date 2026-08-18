@@ -28,13 +28,19 @@ Harmony 会在替换当前 Loader Fiber 之前求值候选插件模块。如果�
 
 语义处理器在 Node.js 中执行，因此 `lib/client.js` 等浏览器 Bundle 必须使用源码 Patch。
 
-同一函数只采用 Provider 顺序中的第一个已启用语义 `replace`；后续替换会被标记为 `failed` 并跳过。
+同一函数只采用全局 Patch 顺序中的第一个已启用语义 `replace`；后续替换会被标记为 `failed` 并跳过。
 
 ## Provider 顺序
 
-`before` 和 `after` 是针对 Provider 包名的顺序偏好。互相矛盾的约束可能没有完美顺序；自动排序只最小化违规，不覆盖手动列表。
+`before` 和 `after` 是针对 Provider 包名的相对关系，不是数值优先级。互相矛盾的约束可能没有完美顺序；自动排序只最小化违规，不覆盖手动 Provider 或 Patch 列表。
 
 `conflicts` 只产生警告，不阻止安装或运行。
+
+## React Component 声明
+
+`component()` 支持已初始化变量和具名函数声明。为了让后续 Component Patch 继续组合，函数声明会被改写为已初始化的 `const` 绑定，因此不再具有声明提升。组件在声明前被引用时，请使用核心 Source Patch。
+
+原始 Component TSQuery 无法可靠识别 JSX 调用点所引用的绑定，因此不会生成 Component 调用路径 trace。Studio 需要 trace 时请使用 `{ name }`。
 
 ## 运行时所有权
 

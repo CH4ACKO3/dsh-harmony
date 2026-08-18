@@ -94,7 +94,7 @@ dsh harmony status --profile tui
 dsh harmony inspect target-plugin --file lib/index.js --profile tui
 ```
 
-Each profile stores its independent order and disabled Patch IDs in `$DSH_HOME/profiles/<name>/harmony.json`.
+Each profile stores its independent provider `order`, exact global `patchOrder`, and disabled Patch keys in `$DSH_HOME/profiles/<name>/harmony.json`.
 
 ## Updating
 

@@ -42,7 +42,13 @@ Each profile stores Harmony state at:
 $DSH_HOME/profiles/<name>/harmony.json
 ```
 
-The file contains the manual plugin order and disabled stable Patch keys. Harmony synchronizes it with installed dependencies: new plugins append to the order and removed plugins disappear.
+The file contains `order`, `patchOrder`, and `disabled`:
+
+- `order` is the coarse provider list used by the terminal TUI;
+- `patchOrder` is the complete ordered permutation of stable Patch keys used at runtime;
+- `disabled` contains individual `provider/id` keys or provider-wide `provider/*` entries.
+
+Harmony synchronizes the state with installed declarations: new providers and Patches are reconciled into the order, while removed entries disappear.
 
 Do not edit the file while the profile is running. Use Web Settings or the TUI so the candidate state is preflighted and committed transactionally.
 
@@ -69,6 +75,8 @@ Provider configuration belongs under `dsh.harmony` in `package.json`:
 | `before` | Provider package names this provider prefers to precede |
 | `after` | Provider package names this provider prefers to follow |
 | `conflicts` | Provider package names that produce an incompatibility warning |
+
+One Patch may also define `before` and `after`. Defining either field replaces the provider-wide rule for that Patch.
 
 ## Environment
 

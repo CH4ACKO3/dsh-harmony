@@ -29,22 +29,22 @@ features:
     link: /patches/authoring#semantic-patch
     linkText: Author a Semantic Patch
   - title: React-aware Patches
-    details: Transform compiled jsx and jsxs calls through typed factories, with optional editable previews for Studio.
+    details: Patch one compiled jsx or jsxs call with element(), or decorate and replace every use of a definition with component().
     link: /integrations/react
     linkText: Explore React integration
   - title: Runtime control
-    details: Order providers, enable or disable individual Patches, inspect every transformation, and reload transactionally.
+    details: Interleave individual Patches across providers, drag whole provider stacks, inspect transformations, undo edits, and save transactionally.
     link: /guide/operations
     linkText: Operate Harmony
 ---
 
 ## Patch the runtime, not the installation
 
-Harmony loads Patch providers in a deterministic order. Each Patch receives the previous Patch's output, so independent modifications can compose against the same target. A Patch that cannot be applied is reported and skipped; installed plugin files are never rewritten.
+Harmony resolves one deterministic global Patch order. Each Source Patch receives the previous Patch's output, so independent modifications can compose against the same target. Composite Patches share one position, enablement state, and atomic success boundary. A Patch that cannot be applied is reported and skipped; installed plugin files are never rewritten.
 
 ```text
 installed source (unchanged)
-  -> ordered Patch providers
+  -> global Patch order
   -> validated in-memory transformations
   -> Host reload or browser HMR
 ```

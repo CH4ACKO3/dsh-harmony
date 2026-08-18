@@ -41,16 +41,19 @@ Harmony 先安装 CommonJS 和 ESM 变换 Hook，再原样转发 CLI 参数。�
 - **源码 Patch**：通过 TypeScript AST 变换 `lib/index.js`、`lib/client.js` 或其他编译目标。
 - **语义 Patch**：对具名函数和类方法执行 `before`、`after`、`around` 或 `replace`。
 - **加载器 Patch**：在 Node 默认加载器运行前，转译显式指定目标包所发布的 TypeScript。
-- **全局顺序**：将手动 Provider 顺序与 `before`、`after` 约束结合。
+- **全局 Patch 顺序**：从 Provider 声明开始，允许单个 Patch 覆盖关系，并接受用户精确控制的跨 Provider 排列。
+- **组合 Patch**：把普通 Patch 组织成一个排序、启停与跨文件事务单元。
 - **事务**：提交重载前预检 Provider、顺序和启停状态变化。
 - **检查**：展示原始源码、每一步 Patch 结果和最终运行时源码。
 - **工具 API**：让插件与构建工具查询状态，或以事务方式重载插件及其 Patch 声明。
+
+Harmony 不使用数值优先级竞争。Provider 作者只表达自己明确知道的相对关系；用户通过移动整个 Provider 或单个 Patch 解决未声明冲突。实现上，每个受影响文件只消费全局顺序中与自身相关的切片。互不相关的文件可以并发前进，但一个 Patch 只有在它影响的全部文件都轮到自己时才会启动，从而在保留单一可观察顺序的同时避免无意义串行。
 
 ## Host 与浏览器目标
 
 Node 目标通过 Loader Tree 重载。同一目标包中的相对 ESM 导入共享一代 Patch；CommonJS 重载会清理该包内部的 `require` 图。
 
-`lib/client.js` 等浏览器目标使用 Harness 现有的 `clientModules.rebuilt` 路径。Harmony 重新计算 Bundle revision 并发送原生 HMR 事件，因此 WebUI 只重载发生变化的客户端插件。
+`lib/client.js` 等浏览器目标使用 Harness 现有的 `clientModules.rebuilt` 路径。Harmony 重新计算 Bundle revision 并发送原生 HMR 事件，因此 WebUI 只重载发生变化的客户端插件。随后还会按最终启用的 Patch 顺序重排 Provider 所属样式标签，让 CSS 层叠遵循同一运行时决策。
 
 ## 安全边界
 

@@ -28,13 +28,19 @@ Semantic Patches support named function declarations and class methods. Paramete
 
 Semantic handlers execute in Node.js. Browser bundles such as `lib/client.js` require Source Patches.
 
-Only the first enabled semantic `replace` Patch in provider order may target a function. Later replacements are marked `failed` and skipped.
+Only the first enabled semantic `replace` Patch in global Patch order may target a function. Later replacements are marked `failed` and skipped.
 
 ## Provider order
 
-`before` and `after` are preferences over provider package names. Contradictory constraints may have no perfect order; automatic sorting minimizes violations but does not override the manual list.
+`before` and `after` are relationships over provider package names, not numeric priorities. Contradictory constraints may have no perfect order; automatic sorting minimizes violations but does not override the manual provider or Patch list.
 
 `conflicts` produces a warning, not an installation or runtime block.
+
+## React Component declarations
+
+`component()` supports initialized variables and named function declarations. To keep later Component Patches composable, a function declaration is rewritten to an initialized `const` binding. It is no longer hoisted. Use a core Source Patch if the component is referenced before its declaration.
+
+A raw Component TSQuery cannot reliably identify the binding referenced by JSX call sites, so it does not produce Component call-path trace metadata. Use `{ name }` when Studio trace is required.
 
 ## Runtime ownership
 
