@@ -1,6 +1,6 @@
 # dsh-harmony-react
 
-React-aware source patch factories for [dsh-harmony](https://github.com/CH4ACKO3/dsh-harmony).
+React-aware source patch factories for [dsh-harmony](https://github.com/memorax-ai/dsh-harmony).
 
 This package is a Node-side Harmony extension, not a DSH client runtime. It turns
 React Element and Component operations into ordinary `HarmonySourcePatch` declarations. Harmony

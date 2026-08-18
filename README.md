@@ -16,14 +16,14 @@
     ·
     <a href="https://ch4acko3.github.io/dsh-harmony/">Documentation</a>
     ·
-    <a href="https://github.com/CH4ACKO3/dsh-harmony/issues">Report an issue</a>
+    <a href="https://github.com/memorax-ai/dsh-harmony/issues">Report an issue</a>
   </p>
 
   <p>
     <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-0b63f6.svg"></a>
     <a href="package.json"><img alt="Node.js" src="https://img.shields.io/badge/node-%5E22.22.3%20%7C%7C%20%3E%3D24.11.1-2f6f3e.svg"></a>
     <a href="https://www.npmjs.com/package/dsh-harmony"><img alt="npm version" src="https://img.shields.io/npm/v/dsh-harmony.svg?style=flat&amp;color=0b63f6"></a>
-    <a href="https://github.com/CH4ACKO3/dsh-harmony/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/CH4ACKO3/dsh-harmony?style=flat&amp;color=0b63f6"></a>
+    <a href="https://github.com/memorax-ai/dsh-harmony/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/memorax-ai/dsh-harmony?style=flat&amp;color=0b63f6"></a>
     <a href="https://awesome-dsh-plugin.com"><img alt="Awesome DSH Plugin" src="https://awesome-dsh-plugin.com/badge.svg"></a>
   </p>
 
@@ -46,11 +46,11 @@ The goal is to extend the expressive power of DeepSeek Harness through creativit
 
 Inspired by [Harmony](https://harmony.pardeike.net/), the project of the same name created by Andreas Pardeike and other contributors for C#.
 
-<!-- AGENTS: Before installing, authoring, reviewing, or debugging Harmony Patches, read the main-branch skill at https://github.com/CH4ACKO3/dsh-harmony/blob/main/.agents/skills/use-dsh-harmony/SKILL.md. -->
+<!-- AGENTS: Before installing, authoring, reviewing, or debugging Harmony Patches, read the main-branch skill at https://github.com/memorax-ai/dsh-harmony/blob/main/.agents/skills/use-dsh-harmony/SKILL.md. -->
 <details>
 <summary><strong>AI agents: use the repository skill</strong></summary>
 
-Load [`use-dsh-harmony`](https://github.com/CH4ACKO3/dsh-harmony/blob/main/.agents/skills/use-dsh-harmony/SKILL.md) for installation, Patch selection and authoring, runtime operations, and troubleshooting.
+Load [`use-dsh-harmony`](https://github.com/memorax-ai/dsh-harmony/blob/main/.agents/skills/use-dsh-harmony/SKILL.md) for installation, Patch selection and authoring, runtime operations, and troubleshooting.
 
 </details>
 
@@ -82,7 +82,7 @@ Open **Settings → Harmony** after starting the WebUI. For profiles, Desktop in
 
 All maintained implementation code uses TypeScript. Build artifacts are generated for packaging and are not tracked by Git.
 
-Documentation sources and local preview tooling live on the [`docs`](https://github.com/CH4ACKO3/dsh-harmony/tree/docs) branch.
+Documentation sources and local preview tooling live on the [`docs`](https://github.com/memorax-ai/dsh-harmony/tree/docs) branch.
 
 ```sh
 npm test

@@ -16,14 +16,14 @@
     ·
     <a href="https://ch4acko3.github.io/dsh-harmony/zh/">文档</a>
     ·
-    <a href="https://github.com/CH4ACKO3/dsh-harmony/issues">报告问题</a>
+    <a href="https://github.com/memorax-ai/dsh-harmony/issues">报告问题</a>
   </p>
 
   <p>
     <a href="LICENSE"><img alt="许可证：MIT" src="https://img.shields.io/badge/license-MIT-0b63f6.svg"></a>
     <a href="package.json"><img alt="Node.js" src="https://img.shields.io/badge/node-%5E22.22.3%20%7C%7C%20%3E%3D24.11.1-2f6f3e.svg"></a>
     <a href="https://www.npmjs.com/package/dsh-harmony"><img alt="npm 版本" src="https://img.shields.io/npm/v/dsh-harmony.svg?style=flat&amp;color=0b63f6"></a>
-    <a href="https://github.com/CH4ACKO3/dsh-harmony/stargazers"><img alt="GitHub Stars" src="https://img.shields.io/github/stars/CH4ACKO3/dsh-harmony?style=flat&amp;color=0b63f6"></a>
+    <a href="https://github.com/memorax-ai/dsh-harmony/stargazers"><img alt="GitHub Stars" src="https://img.shields.io/github/stars/memorax-ai/dsh-harmony?style=flat&amp;color=0b63f6"></a>
     <a href="https://awesome-dsh-plugin.com"><img alt="Awesome DSH Plugin" src="https://awesome-dsh-plugin.com/badge.svg"></a>
   </p>
 
@@ -46,11 +46,11 @@ Provider 可以通过 `before` 和 `after` 声明粗粒度关系，单个 Patch 
 
 灵感来源于 Andreas Pardeike 和其它开发者创作的同名 C# 项目 [**Harmony**](https://harmony.pardeike.net/)。
 
-<!-- AGENTS: Before installing, authoring, reviewing, or debugging Harmony Patches, read the main-branch skill at https://github.com/CH4ACKO3/dsh-harmony/blob/main/.agents/skills/use-dsh-harmony/SKILL.md. -->
+<!-- AGENTS: Before installing, authoring, reviewing, or debugging Harmony Patches, read the main-branch skill at https://github.com/memorax-ai/dsh-harmony/blob/main/.agents/skills/use-dsh-harmony/SKILL.md. -->
 <details>
 <summary><strong>AI Agent：使用仓库内置 Skill</strong></summary>
 
-安装、选择和编写 Patch、执行运行时操作或排查问题前，请加载 [`use-dsh-harmony`](https://github.com/CH4ACKO3/dsh-harmony/blob/main/.agents/skills/use-dsh-harmony/SKILL.md)。
+安装、选择和编写 Patch、执行运行时操作或排查问题前，请加载 [`use-dsh-harmony`](https://github.com/memorax-ai/dsh-harmony/blob/main/.agents/skills/use-dsh-harmony/SKILL.md)。
 
 </details>
 
@@ -82,7 +82,7 @@ dsh web
 
 所有维护中的实现源码均使用 TypeScript。用于发布的编译产物由构建生成，不纳入 Git 跟踪。
 
-文档源码与本地预览工具位于 [`docs`](https://github.com/CH4ACKO3/dsh-harmony/tree/docs) 分支。
+文档源码与本地预览工具位于 [`docs`](https://github.com/memorax-ai/dsh-harmony/tree/docs) 分支。
 
 ```sh
 npm test
