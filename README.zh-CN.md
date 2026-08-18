@@ -1,5 +1,5 @@
 <div align="center">
-  <a href="https://ch4acko3.github.io/dsh-harmony/zh/">
+  <a href="https://memorax-ai.github.io/dsh-harmony/zh/">
     <img width="132" alt="Harmony" src="assets/harmony-icon.png">
   </a>
 
@@ -12,9 +12,9 @@
   </p>
 
   <p>
-    <a href="https://ch4acko3.github.io/dsh-harmony/zh/guide/installation"><strong>开始使用</strong></a>
+    <a href="https://memorax-ai.github.io/dsh-harmony/zh/guide/installation"><strong>开始使用</strong></a>
     ·
-    <a href="https://ch4acko3.github.io/dsh-harmony/zh/">文档</a>
+    <a href="https://memorax-ai.github.io/dsh-harmony/zh/">文档</a>
     ·
     <a href="https://github.com/memorax-ai/dsh-harmony/issues">报告问题</a>
   </p>
@@ -64,19 +64,42 @@ npm install -g dsh-harmony
 dsh web
 ```
 
-启动 WebUI 后打开 **设置 → Harmony**。Profile、Desktop 集成、更新和卸载说明参见[安装指南](https://ch4acko3.github.io/dsh-harmony/zh/guide/installation)。
+启动 WebUI 后打开 **设置 → Harmony**。Profile、Desktop 集成、更新和卸载说明参见[安装指南](https://memorax-ai.github.io/dsh-harmony/zh/guide/installation)。
+
+## Patch 模型
+
+Harmony 维护一份全局 `patchOrder`。Provider 级 `before` / `after` 适合表达常见关系；单个 Patch 可以声明自己相对其它 Provider 的位置，并覆盖所属 Provider 的全局规则。用户既可以整体移动一个 Provider，也可以在 **设置 → Harmony** 中把单个 Patch 插入其它 Provider 的多个 Patch 之间。保存前会把完整顺序作为一个排列进行预检。
+
+组合 Patch 把多个普通 Patch 暴露为一个排序、启停与事务单元。成员保持声明顺序；任一成员失败，整个组合都不应用。相互独立的 Patch 则保持失败隔离：单个 Patch 失败会被报告并跳过，不会拖垮后续 Patch 或 Host。
+
+## React-aware Patch
+
+修改编译后的 React 目标时，在 Patch Provider 中安装 `dsh-harmony-react`：
+
+```sh
+npm install dsh-harmony-react
+```
+
+`element()` 修改具体的 `jsx` / `jsxs` 调用点；`component()` 修改所有调用共享的组件定义。兼容修改按 Harmony 最终 Patch 顺序组合。
+
+| API | 作用范围 |
+| --- | --- |
+| `element()` | 一个或多个调用点：替换、包裹、插入、变换 Props 或移除 |
+| `component()` | 所有通过已初始化变量或具名函数声明进行的调用：装饰或替换 |
+
+函数声明会被改写为已初始化的 `const`，从而让后续 Component Patch 继续组合；该绑定不再具有声明提升。目标在声明前读取组件时，请改用核心 Source Patch。选择器、Inspect trace 与 Studio 集成参见 [React 集成](https://memorax-ai.github.io/dsh-harmony/zh/integrations/react)。
 
 ## 文档
 
 | 主题 | 指南 |
 | --- | --- |
-| 运行时架构 | [Harmony 是什么？](https://ch4acko3.github.io/dsh-harmony/zh/guide/introduction) |
-| 安装与 profile | [安装](https://ch4acko3.github.io/dsh-harmony/zh/guide/installation) |
-| 编写源码、语义与加载器 Patch | [Patch 编写指南](https://ch4acko3.github.io/dsh-harmony/zh/patches/authoring) |
-| 排序、状态、检查和重载 | [运行操作](https://ch4acko3.github.io/dsh-harmony/zh/guide/operations) |
-| 使用 `dsh-harmony-react` 编写 React Patch | [React 集成](https://ch4acko3.github.io/dsh-harmony/zh/integrations/react) |
-| Studio 预览 | [Studio 集成](https://ch4acko3.github.io/dsh-harmony/zh/integrations/studio) |
-| 命令、限制与故障 | [CLI](https://ch4acko3.github.io/dsh-harmony/zh/reference/cli) · [限制](https://ch4acko3.github.io/dsh-harmony/zh/reference/limitations) · [故障排查](https://ch4acko3.github.io/dsh-harmony/zh/help/troubleshooting) |
+| 运行时架构 | [Harmony 是什么？](https://memorax-ai.github.io/dsh-harmony/zh/guide/introduction) |
+| 安装与 profile | [安装](https://memorax-ai.github.io/dsh-harmony/zh/guide/installation) |
+| 编写源码、语义、加载器与组合 Patch | [Patch 编写指南](https://memorax-ai.github.io/dsh-harmony/zh/patches/authoring) |
+| Provider/Patch 排序、状态、检查和重载 | [运行操作](https://memorax-ai.github.io/dsh-harmony/zh/guide/operations) |
+| 使用 `dsh-harmony-react` 编写 React Patch | [React 集成](https://memorax-ai.github.io/dsh-harmony/zh/integrations/react) |
+| Studio 预览 | [Studio 集成](https://memorax-ai.github.io/dsh-harmony/zh/integrations/studio) |
+| 命令、限制与故障 | [CLI](https://memorax-ai.github.io/dsh-harmony/zh/reference/cli) · [限制](https://memorax-ai.github.io/dsh-harmony/zh/reference/limitations) · [故障排查](https://memorax-ai.github.io/dsh-harmony/zh/help/troubleshooting) |
 
 ## 开发
 

@@ -1,5 +1,5 @@
 <div align="center">
-  <a href="https://ch4acko3.github.io/dsh-harmony/">
+  <a href="https://memorax-ai.github.io/dsh-harmony/">
     <img width="132" alt="Harmony" src="assets/harmony-icon.png">
   </a>
 
@@ -12,9 +12,9 @@
   </p>
 
   <p>
-    <a href="https://ch4acko3.github.io/dsh-harmony/guide/installation"><strong>Get started</strong></a>
+    <a href="https://memorax-ai.github.io/dsh-harmony/guide/installation"><strong>Get started</strong></a>
     ·
-    <a href="https://ch4acko3.github.io/dsh-harmony/">Documentation</a>
+    <a href="https://memorax-ai.github.io/dsh-harmony/">Documentation</a>
     ·
     <a href="https://github.com/memorax-ai/dsh-harmony/issues">Report an issue</a>
   </p>
@@ -64,19 +64,42 @@ npm install -g dsh-harmony
 dsh web
 ```
 
-Open **Settings → Harmony** after starting the WebUI. For profiles, Desktop integration, updates, and removal, see the [installation guide](https://ch4acko3.github.io/dsh-harmony/guide/installation).
+Open **Settings → Harmony** after starting the WebUI. For profiles, Desktop integration, updates, and removal, see the [installation guide](https://memorax-ai.github.io/dsh-harmony/guide/installation).
+
+## Patch model
+
+Harmony keeps one global `patchOrder`. Provider-level `before` and `after` declarations cover the common case; a Patch can define its own relation to other providers and thereby replace its provider-wide rule. Users can keep a provider together or interleave individual Patches across providers in **Settings → Harmony**. The saved order is preflighted as a complete permutation before it is committed.
+
+A composite Patch exposes several ordinary Patches as one ordered, toggleable transaction. Its members keep declaration order, and any member failure prevents the entire composite from applying. Independent Patches remain isolated: one failed Patch is reported and skipped without taking down later Patches or the Host.
+
+## React-aware patches
+
+Install `dsh-harmony-react` in a Patch provider when the target is compiled React:
+
+```sh
+npm install dsh-harmony-react
+```
+
+Use `element()` for a concrete compiled `jsx` / `jsxs` call site and `component()` for the shared component definition. Compatible changes compose in the final Harmony Patch order.
+
+| API | Scope |
+| --- | --- |
+| `element()` | One or more selected call sites: replace, wrap, insert, transform props, or remove |
+| `component()` | Every call through an initialized variable or named function declaration: decorate or replace |
+
+Patching a function declaration rewrites it to an initialized `const` binding so later Component Patches can compose. That binding is not hoisted; use a core Source Patch when the component is read before its declaration. See [React integration](https://memorax-ai.github.io/dsh-harmony/integrations/react) for selectors, Inspect trace behavior, and Studio integration.
 
 ## Documentation
 
 | Topic | Guide |
 | --- | --- |
-| Runtime architecture | [What is Harmony?](https://ch4acko3.github.io/dsh-harmony/guide/introduction) |
-| Installation and profiles | [Installation](https://ch4acko3.github.io/dsh-harmony/guide/installation) |
-| Writing source, semantic, and loader Patches | [Patch authoring](https://ch4acko3.github.io/dsh-harmony/patches/authoring) |
-| Order, status, inspection, and reload | [Operations](https://ch4acko3.github.io/dsh-harmony/guide/operations) |
-| React-aware patches with `dsh-harmony-react` | [React integration](https://ch4acko3.github.io/dsh-harmony/integrations/react) |
-| Studio previews | [Studio integration](https://ch4acko3.github.io/dsh-harmony/integrations/studio) |
-| Commands, limitations, and failures | [CLI](https://ch4acko3.github.io/dsh-harmony/reference/cli) · [Limitations](https://ch4acko3.github.io/dsh-harmony/reference/limitations) · [Troubleshooting](https://ch4acko3.github.io/dsh-harmony/help/troubleshooting) |
+| Runtime architecture | [What is Harmony?](https://memorax-ai.github.io/dsh-harmony/guide/introduction) |
+| Installation and profiles | [Installation](https://memorax-ai.github.io/dsh-harmony/guide/installation) |
+| Writing source, semantic, loader, and composite Patches | [Patch authoring](https://memorax-ai.github.io/dsh-harmony/patches/authoring) |
+| Provider/Patch order, status, inspection, and reload | [Operations](https://memorax-ai.github.io/dsh-harmony/guide/operations) |
+| React-aware patches with `dsh-harmony-react` | [React integration](https://memorax-ai.github.io/dsh-harmony/integrations/react) |
+| Studio previews | [Studio integration](https://memorax-ai.github.io/dsh-harmony/integrations/studio) |
+| Commands, limitations, and failures | [CLI](https://memorax-ai.github.io/dsh-harmony/reference/cli) · [Limitations](https://memorax-ai.github.io/dsh-harmony/reference/limitations) · [Troubleshooting](https://memorax-ai.github.io/dsh-harmony/help/troubleshooting) |
 
 ## Development
 
