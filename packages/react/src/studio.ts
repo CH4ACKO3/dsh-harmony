@@ -3,6 +3,7 @@ export const STUDIO_RUNTIME_KEY = '__DSH_HARMONY_STUDIO_RUNTIME__'
 export type StudioVariableValue = string | number | boolean
 
 export interface StudioVariableDefinition {
+  kind: 'variable'
   id: string
   label: string
   control: 'color' | 'length' | 'number' | 'boolean' | 'enum' | 'string'
@@ -16,12 +17,21 @@ export interface StudioVariableDefinition {
   }
 }
 
+export interface StudioVariableGroupDefinition {
+  kind: 'group'
+  id: string
+  label: string
+  children: readonly StudioVariableNode[]
+}
+
+export type StudioVariableNode = StudioVariableDefinition | StudioVariableGroupDefinition
+
 export interface StudioElementDefinition {
   id: string
   label: string
   boundary: { surfaceId: string; path: readonly string[] }
   source: { file: string; line?: number; column?: number }
-  variables?: readonly StudioVariableDefinition[]
+  variables?: readonly StudioVariableNode[]
 }
 
 export interface StudioVariableBinding {
@@ -38,7 +48,7 @@ export interface StudioElementRegistration {
 
 export interface StudioVariablesRegistration {
   owner: string
-  variables: readonly StudioVariableDefinition[]
+  variables: readonly StudioVariableNode[]
   bindings: Readonly<Record<string, StudioVariableBinding>>
 }
 
@@ -50,7 +60,7 @@ export interface StudioElementSnapshot {
 
 export interface StudioVariablesSnapshot {
   owner: string
-  variables: readonly StudioVariableDefinition[]
+  variables: readonly StudioVariableNode[]
   values: Readonly<Record<string, StudioVariableValue>>
 }
 

@@ -104,7 +104,14 @@ const dispose = registerStudioElement({
     label: 'Settings card',
     boundary: { surfaceId: 'settings', path: ['appearance', 'card'] },
     source: { file: 'src/SettingsCard.tsx', line: 12 },
-    variables: [{ id: 'accent', label: 'Accent', control: 'color' }],
+    variables: [{
+      kind: 'group',
+      id: 'appearance',
+      label: 'Appearance',
+      children: [
+        { kind: 'variable', id: 'accent', label: 'Accent', control: 'color' },
+      ],
+    }],
   },
   bindings: {
     accent: {
@@ -128,6 +135,11 @@ Source paths must be normalized, Draft-relative POSIX paths. Variable bindings a
 only live write surface: Studio serializes updates, calls `set`, then publishes the
 binding's current `get()` value in the next registry snapshot.
 
+The `variables` array is a tree. A `group` node may contain variable nodes or more
+groups, so one plugin can expose the same hierarchy it uses in source. Node IDs and
+variable IDs must be unique within one registration; bindings exist only for
+`variable` nodes and remain keyed by their variable ID.
+
 To let Studio persist a control value, add a `defaultSource` anchor to its variable definition.
 The `before` and `after` strings must surround exactly one source literal in the Draft
 file. Studio replaces only the text between those anchors and refuses ambiguous or
@@ -136,6 +148,7 @@ reactive and is not replaced:
 
 ```ts
 {
+  kind: 'variable',
   id: 'accent',
   label: 'Accent',
   control: 'color',

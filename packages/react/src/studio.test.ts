@@ -31,10 +31,10 @@ describe('Studio browser registration', () => {
     target[STUDIO_RUNTIME_KEY] = runtime
     const element = { owner: 'draft', element: {
       id: 'toolbar', label: 'Toolbar', boundary: { surfaceId: 'draft', path: ['draft', 'toolbar'] }, source: { file: 'src/Toolbar.tsx' },
-      variables: [{
-        id: 'accent', label: 'Accent', control: 'color' as const,
+      variables: [{ kind: 'group' as const, id: 'appearance', label: 'Appearance', children: [{
+        kind: 'variable' as const, id: 'accent', label: 'Accent', control: 'color' as const,
         defaultSource: { file: 'src/Toolbar.tsx', before: 'const accent = ', after: ';' },
-      }],
+      }] }],
     }, bindings: { accent: { get: () => '#235be6', set: vi.fn() } } }
     const variables = { owner: 'draft', variables: [], bindings: {} }
 
