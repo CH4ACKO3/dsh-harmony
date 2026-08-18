@@ -8,6 +8,12 @@ export interface StudioVariableDefinition {
   control: 'color' | 'length' | 'number' | 'boolean' | 'enum' | 'string'
   options?: readonly string[]
   constraints?: { min?: number; max?: number; step?: number }
+  /** Stable source anchors for this control's default initializer. */
+  defaultSource?: {
+    file: string
+    before: string
+    after: string
+  }
 }
 
 export interface StudioElementDefinition {

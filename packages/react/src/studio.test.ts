@@ -31,7 +31,11 @@ describe('Studio browser registration', () => {
     target[STUDIO_RUNTIME_KEY] = runtime
     const element = { owner: 'draft', element: {
       id: 'toolbar', label: 'Toolbar', boundary: { surfaceId: 'draft', path: ['draft', 'toolbar'] }, source: { file: 'src/Toolbar.tsx' },
-    }, bindings: {} }
+      variables: [{
+        id: 'accent', label: 'Accent', control: 'color' as const,
+        defaultSource: { file: 'src/Toolbar.tsx', before: 'const accent = ', after: ';' },
+      }],
+    }, bindings: { accent: { get: () => '#235be6', set: vi.fn() } } }
     const variables = { owner: 'draft', variables: [], bindings: {} }
 
     registerStudioElement(element)()

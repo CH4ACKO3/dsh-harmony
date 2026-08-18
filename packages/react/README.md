@@ -128,6 +128,25 @@ Source paths must be normalized, Draft-relative POSIX paths. Variable bindings a
 only live write surface: Studio serializes updates, calls `set`, then publishes the
 binding's current `get()` value in the next registry snapshot.
 
+To let Studio persist a control value, add a `defaultSource` anchor to its variable definition.
+The `before` and `after` strings must surround exactly one source literal in the Draft
+file. Studio replaces only the text between those anchors and refuses ambiguous or
+non-literal matches. This changes the next-load default; the runtime binding remains
+reactive and is not replaced:
+
+```ts
+{
+  id: 'accent',
+  label: 'Accent',
+  control: 'color',
+  defaultSource: {
+    file: 'src/SettingsCard.tsx',
+    before: 'const accent = ',
+    after: ';',
+  },
+}
+```
+
 An Element boundary proves only that the Draft owns the registered subtree contract.
 Preview trace wrappers produced by the factories can add candidate Patch metadata for
 the selected React render path, including owner, declaration, target, and effect. The
