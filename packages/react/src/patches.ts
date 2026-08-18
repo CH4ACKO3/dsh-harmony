@@ -80,7 +80,11 @@ function componentSelector(selector: ComponentSelector): string {
     return selector.tsquery
   }
   assertText(selector.name, 'select.name')
-  return `VariableDeclaration[name.name=${JSON.stringify(selector.name)}]`
+  const name = JSON.stringify(selector.name)
+  return [
+    `VariableDeclaration[name.name=${name}]`,
+    `FunctionDeclaration[name.name=${name}]`,
+  ].join(', ')
 }
 
 function sourceOf(context: HarmonyPatchContext, node: ts.Node): string {
@@ -107,11 +111,48 @@ function jsxCallOf(context: HarmonyPatchContext): JsxCall {
   throw new Error('dsh-harmony-react: element selector must directly match a compiled jsx/jsxs call')
 }
 
-function componentInitializerOf(context: HarmonyPatchContext): ts.Expression {
-  if (context.ts.isVariableDeclaration(context.node) && context.node.initializer !== undefined) {
-    return context.node.initializer
+function rewriteComponent(
+  context: HarmonyPatchContext,
+  overwrite: Overwrite,
+  reference: string,
+  operation: 'decorate' | 'replace',
+): void {
+  const node = context.node
+  if (context.ts.isVariableDeclaration(node) && node.initializer !== undefined) {
+    const replacement = operation === 'decorate'
+      ? `${reference}(${sourceOf(context, node.initializer)})`
+      : reference
+    overwrite(node.initializer.getStart(context.sourceFile), node.initializer.getEnd(), replacement)
+    return
   }
-  throw new Error('dsh-harmony-react: component selector must directly match a variable declaration with an initializer')
+
+  if (context.ts.isFunctionDeclaration(node) && node.name !== undefined && node.body !== undefined) {
+    const functionKeyword = node.getChildren(context.sourceFile)
+      .find(child => child.kind === context.ts.SyntaxKind.FunctionKeyword)
+    if (functionKeyword === undefined) {
+      throw new Error('dsh-harmony-react: function declaration has no function keyword')
+    }
+    const asyncModifier = node.modifiers
+      ?.find(modifier => modifier.kind === context.ts.SyntaxKind.AsyncKeyword)
+    const expressionStart = asyncModifier?.getStart(context.sourceFile)
+      ?? functionKeyword.getStart(context.sourceFile)
+    const expression = context.source.slice(expressionStart, node.getEnd())
+    const name = sourceOf(context, node.name)
+    const exported = node.modifiers
+      ?.some(modifier => modifier.kind === context.ts.SyntaxKind.ExportKeyword) ?? false
+    const defaultExport = node.modifiers
+      ?.some(modifier => modifier.kind === context.ts.SyntaxKind.DefaultKeyword) ?? false
+    const value = operation === 'decorate' ? `${reference}(${expression})` : reference
+    const exportPrefix = exported && !defaultExport ? 'export ' : ''
+    const exportDefault = defaultExport ? `\nexport default ${name};` : ''
+    overwrite(node.getStart(context.sourceFile), node.getEnd(), `${exportPrefix}const ${name} = ${value};${exportDefault}`)
+    return
+  }
+
+  throw new Error(
+    'dsh-harmony-react: component selector must directly match an initialized variable declaration '
+    + 'or a named function declaration with a body',
+  )
 }
 
 function clientReference(value: ClientReference, name: string): string {
@@ -245,11 +286,14 @@ export function component(options: ComponentPatchOptions): HarmonySourcePatch {
     throw new Error('dsh-harmony-react: unknown component operation')
   }
   const reference = clientReference(operation.with, 'operation.with')
-  return sourcePatch(options, select, undefined, (context, overwrite) => {
-    const initializer = componentInitializerOf(context)
-    const replacement = operation.kind === 'decorate'
-      ? `${reference}(${sourceOf(context, initializer)})`
-      : reference
-    overwrite(initializer.getStart(context.sourceFile), initializer.getEnd(), replacement)
+  const trace: HarmonySourceTrace | undefined = 'name' in options.select
+    ? {
+        select: elementSelector({ component: options.select.name }),
+        effect: operation.kind === 'decorate' ? 'decorate-component' : 'replace-component',
+        maxMatches: Number.MAX_SAFE_INTEGER,
+      }
+    : undefined
+  return sourcePatch(options, select, trace, (context, overwrite) => {
+    rewriteComponent(context, overwrite, reference, operation.kind)
   })
 }

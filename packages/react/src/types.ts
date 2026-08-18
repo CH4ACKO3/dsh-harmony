@@ -10,7 +10,9 @@ export type ElementSelector =
   | { tsquery: string }
 
 export type ComponentSelector =
+  /** Selects an initialized variable or named function declaration and enables component call-path tracing. */
   | { name: string }
+  /** Selects the declaration exactly; raw selectors cannot infer component call sites for tracing. */
   | { tsquery: string }
 
 export interface ClientReference {

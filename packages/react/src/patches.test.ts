@@ -199,12 +199,86 @@ describe('React source patches', () => {
       },
     })
 
-    expect(applyPatches(source, [first, second])).toBe([
+    expect(first.trace).toEqual({
+      select: expect.stringContaining('arguments.0.name="Button"'),
+      effect: 'decorate-component',
+      maxMatches: Number.MAX_SAFE_INTEGER,
+    })
+    const transformed = applyPatches(source, [first, second])
+    expect(transformed).toBe([
       'const Button = require("example-plugin")["withSecondFeature"]('
       + 'require("example-plugin")["withFirstFeature"](props => (0, react_jsx_runtime.jsx)("button", props)));',
       'const first = (0, react_jsx_runtime.jsx)(Button, { id: "first" });',
       'const second = (0, react_jsx_runtime.jsx)(Button, { id: "second" });',
     ].join('\n'))
+    const tracedSource = ts.createSourceFile('lib/client.js', transformed, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS)
+    expect(tsquery(tracedSource, first.trace!.select)).toHaveLength(2)
+    expect(second.trace?.effect).toBe('decorate-component')
+  })
+
+  test('decorates a named function component and keeps later component patches composable', () => {
+    const source = [
+      'function HeroShell(props) { return (0, runtime.jsx)("main", props) }',
+      'const view = (0, runtime.jsx)(HeroShell, { id: "hero" });',
+    ].join('\n')
+    const first = component({
+      id: 'hero-feature-a',
+      target,
+      select: { name: 'HeroShell' },
+      expect: 1,
+      operation: {
+        kind: 'decorate',
+        with: { module: 'example-plugin', export: 'withFirstFeature' },
+      },
+    })
+    const second = component({
+      id: 'hero-feature-b',
+      target,
+      select: { name: 'HeroShell' },
+      expect: 1,
+      operation: {
+        kind: 'decorate',
+        with: { module: 'example-plugin', export: 'withSecondFeature' },
+      },
+    })
+
+    expect(applyPatches(source, [first, second])).toBe([
+      'const HeroShell = require("example-plugin")["withSecondFeature"]('
+      + 'require("example-plugin")["withFirstFeature"]('
+      + 'function HeroShell(props) { return (0, runtime.jsx)("main", props) }));',
+      'const view = (0, runtime.jsx)(HeroShell, { id: "hero" });',
+    ].join('\n'))
+  })
+
+  test('replaces exported function components without leaving the original implementation active', () => {
+    const named = component({
+      id: 'replace-named-function',
+      target,
+      select: { name: 'HeroShell' },
+      expect: 1,
+      operation: {
+        kind: 'replace',
+        with: { module: 'example-plugin', export: 'HeroShell' },
+      },
+    })
+    const defaultExport = component({
+      id: 'replace-default-function',
+      target,
+      select: { name: 'DefaultShell' },
+      expect: 1,
+      operation: {
+        kind: 'replace',
+        with: { module: 'example-plugin', export: 'DefaultShell' },
+      },
+    })
+
+    expect(applyPatch('export function HeroShell() { return oldView }', named)).toBe(
+      'export const HeroShell = require("example-plugin")["HeroShell"];',
+    )
+    expect(named.trace?.effect).toBe('replace-component')
+    expect(applyPatch('export default function DefaultShell() { return oldView }', defaultExport)).toBe(
+      'const DefaultShell = require("example-plugin")["DefaultShell"];\nexport default DefaultShell;',
+    )
   })
 
   test('replaces a component binding without rewriting its call sites', () => {
@@ -257,6 +331,24 @@ describe('React source patches', () => {
     )
   })
 
+  test('accepts a raw function declaration selector for components', () => {
+    const patch = component({
+      id: 'function-declaration',
+      target,
+      select: { tsquery: 'FunctionDeclaration[name.name="Card"]' },
+      expect: 1,
+      operation: {
+        kind: 'decorate',
+        with: { module: 'example-plugin', export: 'withCard' },
+      },
+    })
+
+    expect(applyPatch('function Card() {}', patch)).toBe(
+      'const Card = require("example-plugin")["withCard"](function Card() {});',
+    )
+    expect(patch.trace).toBeUndefined()
+  })
+
   test('requires selectors to match their abstraction directly', () => {
     const elementPatch = element({
       id: 'raw-leaves',
@@ -269,9 +361,9 @@ describe('React source patches', () => {
       },
     })
     const componentPatch = component({
-      id: 'function-declaration',
+      id: 'function-body',
       target,
-      select: { tsquery: 'FunctionDeclaration[name.name="Card"]' },
+      select: { tsquery: 'Block' },
       expect: 1,
       operation: {
         kind: 'decorate',
@@ -283,7 +375,7 @@ describe('React source patches', () => {
       'element selector must directly match a compiled jsx/jsxs call',
     )
     expect(() => applyPatch('function Card() {}', componentPatch)).toThrow(
-      'component selector must directly match a variable declaration with an initializer',
+      'component selector must directly match an initialized variable declaration or a named function declaration with a body',
     )
   })
 

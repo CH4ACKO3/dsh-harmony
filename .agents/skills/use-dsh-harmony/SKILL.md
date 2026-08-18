@@ -18,7 +18,7 @@ Identify the active profile, target package, installed version, compiled target 
 | Decorate a named Node.js function or class method | Semantic Patch |
 | Load a target package that publishes TypeScript instead of runnable JavaScript | Loader Patch, plus exact Source Patches when needed |
 | Change one or more compiled React call sites | `dsh-harmony-react` `element()`, which produces a Source Patch |
-| Decorate or replace one initialized React component binding | `dsh-harmony-react` `component()`, which produces a Source Patch |
+| Decorate or replace one initialized variable or named function React component binding | `dsh-harmony-react` `component()`, which produces a Source Patch |
 | Expose explicit preview elements or editable variables to dsh-webui-studio | `dsh-harmony-react/studio` |
 
 Use a Source Patch for every browser target. Semantic handlers execute in Node.js and do not support browser bundles, generators, or non-identifier parameters.
@@ -111,7 +111,7 @@ module.exports = element({
 })
 ```
 
-Element operations are `replace`, `wrap`, `insert-before`, `insert-after`, `transform-props`, and `remove`. Component operations are `decorate` and `replace`; their selector must match a variable declaration with an initializer. Use a core Source Patch for component internals, function declarations, string literals, or any other arbitrary source change.
+Element operations are `replace`, `wrap`, `insert-before`, `insert-after`, `transform-props`, and `remove`. Component operations are `decorate` and `replace`; their selector must match a variable declaration with an initializer or a named function declaration with a body. Harmony React rewrites a matched function declaration into an initialized binding so every call site sees the same composed result. That binding is not hoisted: use a core Source Patch when the target reads the component before its declaration. Name-based Component selectors emit Preview call-path traces; raw TSQuery selectors cannot infer a binding name and do not. Use a core Source Patch for component internals, string literals, or any other arbitrary source change.
 
 ### Loader Patch
 

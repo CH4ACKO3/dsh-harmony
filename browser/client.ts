@@ -397,6 +397,57 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
     type PatchCardStatus = PatchStatus['status']
     type OrderSelection = { kind: 'plugin'; key: string } | { kind: 'patch'; key: string }
 
+    let patchStyleOwners: string[] = []
+    let patchStyleReorderQueued = false
+
+    const effectiveStyleOwners = (profile: ProfileView): string[] => {
+      const disabled = new Set(profile.disabled)
+      const lastPatch = new Map<string, number>()
+      const providerNames = profile.plugins.filter(plugin => plugin.harmony)
+        .map(plugin => plugin.name).sort((left, right) => right.length - left.length)
+      profile.patchOrder.forEach((key, index) => {
+        const owner = providerNames.find(name => key.startsWith(`${name}/`))
+        if (owner === undefined) return
+        if (disabled.has(key) || disabled.has(`${owner}/*`)) return
+        lastPatch.set(owner, index)
+      })
+      return [...lastPatch.keys()].sort((left, right) => lastPatch.get(left)! - lastPatch.get(right)!)
+    }
+
+    const reorderPatchStyles = () => {
+      patchStyleReorderQueued = false
+      if (patchStyleOwners.length === 0) return
+      const rank = new Map(patchStyleOwners.map((owner, index) => [owner, index]))
+      const styles = [...document.head.querySelectorAll<HTMLStyleElement>('style[data-plugin]')]
+      const ranked = styles.filter(style => rank.has(style.dataset.plugin ?? ''))
+      const desired = [...ranked].sort((left, right) =>
+        rank.get(left.dataset.plugin ?? '')! - rank.get(right.dataset.plugin ?? '')!)
+      if (desired.length === 0) return
+      if (ranked.every((style, index) => style === desired[index])) return
+      const slots = ranked.map(style => {
+        const marker = document.createComment('dsh-harmony-style-order')
+        style.before(marker)
+        return marker
+      })
+      slots.forEach((marker, index) => marker.replaceWith(desired[index]!))
+    }
+
+    const schedulePatchStyleReorder = () => {
+      if (patchStyleReorderQueued) return
+      patchStyleReorderQueued = true
+      queueMicrotask(reorderPatchStyles)
+    }
+
+    const applyPatchStyleOrder = (profile: ProfileView) => {
+      patchStyleOwners = effectiveStyleOwners(profile)
+      schedulePatchStyleReorder()
+    }
+
+    const refreshPatchStyleOrder = async () => {
+      const response = await fetch('/dsh-harmony/profile', { cache: 'no-store' })
+      if (response.ok) applyPatchStyleOrder(await response.json() as ProfileView)
+    }
+
     interface PatchDragProjection {
       keys: string[]
       target: number
@@ -617,6 +668,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
             if (seen.current === null) seen.current = signature
             else if (seen.current !== signature) {
               seen.current = signature
+              void refreshPatchStyleOrder().catch(() => {})
               const reloadMessages: Partial<Record<ReloadState, TranslationKey>> = {
                 reloading: 'reloadStarting',
                 succeeded: 'reloadSucceeded',
@@ -924,6 +976,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
           })
           const next = await response.json() as ProfileView & { error?: string }
           if (!response.ok) throw new Error(next.error ?? `${response.status}`)
+          applyPatchStyleOrder(next)
           setView(next)
           setSavedPatchOrder(next.patchOrder)
           setDraftPatchOrder(next.patchOrder)
@@ -1642,6 +1695,12 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
     const inject = ['slots', 'locale']
     function apply(ctx: HarmonyClientContext) {
       ctx.effect(() => ctx.locale.register(localeNamespace, dictionaries), 'dsh-harmony: dictionaries')
+      ctx.effect(() => {
+        const observer = new MutationObserver(schedulePatchStyleReorder)
+        observer.observe(document.head, { childList: true })
+        void refreshPatchStyleOrder().catch(() => {})
+        return () => observer.disconnect()
+      }, 'dsh-harmony: Patch style order')
       const t = ctx.locale.bind(localeNamespace)
       ctx.slots.inject('shell.overlay', () => ctx.slots.register({
         name: 'shell.overlay',

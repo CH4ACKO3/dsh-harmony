@@ -73,7 +73,14 @@ export interface HarmonyLoaderPatch extends HarmonyPatchOrder {
 
 export interface HarmonySourceTrace {
   select: string
-  effect: 'replace-element' | 'wrap-element' | 'insert-before' | 'insert-after' | 'transform-props'
+  effect:
+    | 'replace-element'
+    | 'wrap-element'
+    | 'insert-before'
+    | 'insert-after'
+    | 'transform-props'
+    | 'decorate-component'
+    | 'replace-component'
   maxMatches: number
 }
 

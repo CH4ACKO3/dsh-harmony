@@ -38,6 +38,8 @@ Source Patches use TSQuery to precisely match target nodes in a TypeScript AST, 
 
 Providers can declare coarse `before` and `after` relationships, while an individual Patch can override that provider-wide rule. Profiles keep both a provider order and a fully interleavable Patch order. Composite Patches group several ordinary Patches into one ordered, toggleable, cross-file transaction: if one member fails, none of the group is applied.
 
+In the browser, Harmony also reorders provider-owned `<style data-plugin>` tags from the final enabled Patch order. Because one provider owns one style group even when its Patches are interleaved, the provider's last enabled Patch position determines its CSS cascade position; style order updates again after Patch reloads.
+
 The goal is to extend the expressive power of DeepSeek Harness through creativity, composition, and **modification**.
 
 **Respect**

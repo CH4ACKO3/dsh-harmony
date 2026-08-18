@@ -1,4 +1,4 @@
-export const STUDIO_RUNTIME_KEY = '__DSH_HARMONY_STUDIO_RUNTIME__'
+import { STUDIO_RUNTIME_KEY, type StudioBrowserRuntime } from './studio-host.js'
 
 export type StudioVariableValue = string | number | boolean
 
@@ -50,28 +50,6 @@ export interface StudioVariablesRegistration {
   owner: string
   variables: readonly StudioVariableNode[]
   bindings: Readonly<Record<string, StudioVariableBinding>>
-}
-
-export interface StudioElementSnapshot {
-  owner: string
-  element: StudioElementDefinition
-  values: Readonly<Record<string, StudioVariableValue>>
-}
-
-export interface StudioVariablesSnapshot {
-  owner: string
-  variables: readonly StudioVariableNode[]
-  values: Readonly<Record<string, StudioVariableValue>>
-}
-
-export interface StudioRegistrySnapshot {
-  elements: readonly StudioElementSnapshot[]
-  variables: readonly StudioVariablesSnapshot[]
-}
-
-export interface StudioBrowserRuntime {
-  registerElement(registration: StudioElementRegistration): () => void
-  registerVariables(registration: StudioVariablesRegistration): () => void
 }
 
 type StudioGlobal = typeof globalThis & {

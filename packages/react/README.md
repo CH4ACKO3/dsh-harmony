@@ -19,6 +19,9 @@ second DSH plugin. Its optional `dsh-harmony-react/studio` browser API delegates
 registry injected only inside a Studio Preview; the same registrations are no-ops in
 normal `dsh web` sessions.
 
+Studio hosts use the separate `dsh-harmony-react/studio-host` integration contract.
+Patch providers should not import that host-only entry point.
+
 ## Example
 
 ```js
@@ -76,9 +79,10 @@ Use `element()` for one or more concrete compiled `jsx`/`jsxs` call sites. Its
 operation can `replace`, `wrap`, `insert-before`, `insert-after`, `transform-props`,
 or `remove` the selected Element. The change affects only the matched call sites.
 
-Use `component()` to change an initialized component binding. `decorate` wraps its
-current initializer in a browser-side higher-order function; `replace` replaces that
-initializer. Every call site that reads the binding observes the result:
+Use `component()` to change a component binding declared by an initialized variable or
+a named function declaration. `decorate` wraps the current definition in a browser-side
+higher-order function; `replace` replaces that definition. Every call site that reads
+the binding observes the result:
 
 ```js
 const { component } = require('dsh-harmony-react')
@@ -99,21 +103,34 @@ module.exports = component({
 })
 ```
 
-Component selectors must directly match a `VariableDeclaration` with an initializer.
-This preserves declaration and binding semantics; use a core Source Patch when a
-function body or another declaration form must change.
+Component selectors must directly match a `VariableDeclaration` with an initializer or
+a named `FunctionDeclaration` with a body. Function declarations are rewritten into an
+initialized `const` binding so later Component Patches can wrap or replace the result in
+resolved Patch order. As a consequence, a patched function component must not be read
+before its declaration: unlike the original function declaration, the generated binding
+is not hoisted. This tradeoff preserves definition-wide replacement and decoration for
+every call site as well as composition between multiple Component Patches; Harmony does
+not silently leave pre-declaration calls undecorated. Use a core Source Patch when that
+hoisting restriction is incompatible with the target, or when a function body or another
+declaration form must change.
 
 Element selectors can address a local or member component name, an intrinsic tag, or
 use raw TSQuery. A raw Element TSQuery must select the compiled `jsx`/`jsxs`
-`CallExpression` itself. A raw Component TSQuery must select the initialized variable
-declaration itself. Every patch requires an exact `expect`, explicit target version,
-and explicit target files. A single patch rejects nested matches when their source
-edits overlap; use explicitly ordered patches when both parent and child must change.
+`CallExpression` itself. A raw Component TSQuery must select the initialized variable or
+named function declaration itself. Every patch requires an exact `expect`, explicit
+target version, and explicit target files. A single patch rejects nested matches when
+their source edits overlap; use explicitly ordered patches when both parent and child
+must change.
 
 Harmony applies every React Patch to the source produced by earlier Patches. Compatible
 decorators and prop transforms therefore compose in resolved Patch order. React does
 not add a second ordering model; provider and Patch `before`/`after`, user order, and
 `patchOrder` remain owned by Harmony.
+
+Name-based Component selectors also emit Preview trace metadata for compiled JSX call
+sites that reference the binding. A raw Component TSQuery still applies normally but
+does not emit call-path trace metadata because an arbitrary AST selector does not
+reliably identify the component binding name.
 
 Client-side prop transformers are ordinary functions, not React components, and must
 not call hooks. Use a wrapper or replacement component when hooks are required.

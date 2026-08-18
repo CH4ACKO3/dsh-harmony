@@ -1,11 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  STUDIO_RUNTIME_KEY,
   registerStudioElement,
   registerStudioVariables,
-  type StudioBrowserRuntime,
 } from './studio.js'
-
+import { STUDIO_RUNTIME_KEY, type StudioBrowserRuntime } from './studio-host.js'
 const target = globalThis as typeof globalThis & { [STUDIO_RUNTIME_KEY]?: StudioBrowserRuntime }
 
 afterEach(() => {
