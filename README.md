@@ -32,15 +32,15 @@
 
 ## Introduction
 
-Harmony provides an elegant way to modify the behavior of other plugins written for DeepSeek Harness. It runs as an external framework, applies Patches to target plugins at runtime, and starts DeepSeek Harness with the transformed plugin set.
+Use Harmony when one DeepSeek Harness plugin needs to change another without maintaining a fork. Harmony loads Patches before the target runs, changes its compiled code in memory, and starts Harness with the result.
 
-Source Patches use TSQuery to precisely match target nodes in a TypeScript AST, then use MagicString to rewrite the corresponding ranges of the current in-memory source. Patches run in their configured order, and each Patch receives the output of the previous one, giving multiple changes to the same target a chance to coexist. Installed plugin files are never modified.
+Source Patches find TypeScript AST nodes with TSQuery and rewrite their source ranges with MagicString. They run one after another, each reading the source left by the previous Patch. This lets several plugins change the same target while leaving installed files untouched.
 
-Providers can declare coarse `before` and `after` relationships, while an individual Patch can override that provider-wide rule. Profiles keep both a provider order and a fully interleavable Patch order. Composite Patches group several ordinary Patches into one ordered, toggleable, cross-file transaction: if one member fails, none of the group is applied.
+A provider can place its Patches before or after another provider. One Patch may override that rule, and users may interleave Patches from different providers. When several changes must succeed together, a composite Patch gives them one position and one switch; if a member fails, Harmony applies none of them.
 
-In the browser, Harmony also reorders provider-owned `<style data-plugin>` tags from the final enabled Patch order. Because one provider owns one style group even when its Patches are interleaved, the provider's last enabled Patch position determines its CSS cascade position; style order updates again after Patch reloads.
+For browser plugins, Harmony also keeps provider-owned `<style data-plugin>` tags in Patch order. A provider owns one style group, so its last enabled Patch decides where that group appears in the CSS cascade. Harmony repeats the ordering after a Patch reload.
 
-The goal is to extend the expressive power of DeepSeek Harness through creativity, composition, and **modification**.
+Harmony adds modification to the ways DeepSeek Harness plugins can work together.
 
 **Respect**
 
@@ -68,9 +68,9 @@ Open **Settings → Harmony** after starting the WebUI. For profiles, Desktop in
 
 ## Patch model
 
-Harmony keeps one global `patchOrder`. Provider-level `before` and `after` declarations cover the common case; a Patch can define its own relation to other providers and thereby replace its provider-wide rule. Users can keep a provider together or interleave individual Patches across providers in **Settings → Harmony**. The saved order is preflighted as a complete permutation before it is committed.
+Harmony runs every Patch from one global `patchOrder`. Provider-level `before` and `after` rules set the usual order. A Patch that declares either rule uses its own rules instead. In **Settings → Harmony**, users can move a whole provider or place one Patch between Patches from another provider. Harmony checks that the saved list contains every registered Patch exactly once.
 
-A composite Patch exposes several ordinary Patches as one ordered, toggleable transaction. Its members keep declaration order, and any member failure prevents the entire composite from applying. Independent Patches remain isolated: one failed Patch is reported and skipped without taking down later Patches or the Host.
+A composite Patch groups several Patches under one order position and switch. Members keep their declared order and apply only when every member succeeds. A failed standalone Patch is reported and skipped; later Patches and the Host continue to run.
 
 ## React-aware patches
 
@@ -78,7 +78,7 @@ A composite Patch exposes several ordinary Patches as one ordered, toggleable tr
 npm install dsh-harmony-react
 ```
 
-Use `element()` for selected compiled `jsx` / `jsxs` call sites and `component()` for every call through one initialized variable or named function declaration. Function declarations are rewritten to `const` so Component Patches compose; the generated binding is not hoisted. See [React integration](https://memorax-ai.github.io/dsh-harmony/integrations/react).
+Use `element()` to change selected compiled `jsx` / `jsxs` calls. Use `component()` to change every call through one initialized variable or named function declaration. Harmony rewrites a function declaration as `const` so later Component Patches can modify it; the new binding is not hoisted. See [React integration](https://memorax-ai.github.io/dsh-harmony/integrations/react).
 
 ## Documentation
 

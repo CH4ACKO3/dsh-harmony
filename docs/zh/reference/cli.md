@@ -45,12 +45,12 @@ $DSH_HOME/profiles/<name>/harmony.json
 文件包含 `order`、`patchOrder` 与 `disabled`：
 
 - `order` 是终端 TUI 使用的粗粒度 Provider 列表；
-- `patchOrder` 是运行时使用的完整稳定 Patch 键排列；
+- `patchOrder` 按运行顺序列出每个已注册的稳定 Patch 键，且每个只出现一次；
 - `disabled` 包含单个 `provider/id` 键或 Provider 级 `provider/*` 条目。
 
-Harmony 会与已安装声明同步：新 Provider 与 Patch 会协调进入顺序，已移除条目会消失。
+声明变化时，Harmony 会更新这份状态：插入新的 Provider 和 Patch，并删除已经不存在的条目。
 
-profile 运行时不要直接编辑该文件。通过 Web 设置或 TUI 修改，才能预检并事务提交候选状态。
+Profile 运行时不要直接编辑该文件。请使用 Web 设置或 TUI，让 Harmony 在保存和重载前检查新状态。
 
 ## Provider 元数据
 

@@ -68,7 +68,7 @@ module.exports = {
 
 传给 `edit` 的位置都以当前 Patch 收到的源码为准。`files` 是备选包内相对路径，Harmony 使用第一个存在的文件；`version` 是 SemVer 范围；`expect` 要求精确匹配数。
 
-每个 Source Patch 都会解析并选择早期 Patch 产生的源码。Harmony 不会先让所有 Patch 查询同一棵原始 AST，再统一应用编辑；那会让选择器看到过时结构，并产生含糊的源码区间。
+每个 Source Patch 都会先解析早期 Patch 留下的源码，再运行选择器。Harmony 不会让所有选择器预先查询同一棵原始 AST，否则后续选择器看到的节点和偏移量都会过时。
 
 ## 加载器 Patch
 
@@ -87,7 +87,7 @@ module.exports = {
 }
 ```
 
-目标文件是绑定与状态检查使用的兼容性锚点。绑定后，Harmony 会在 Node 默认加载器运行前，读取并转译该包内的 `.ts`、`.tsx`、`.mts` 和 `.cts` 模块；其它包仍保持 Node 的默认行为。
+Harmony 使用目标文件检查兼容性并报告状态。Patch 绑定后，它会在 Node 默认加载器运行前转译该包内的 `.ts`、`.tsx`、`.mts` 和 `.cts` 模块，不改变其它包的加载方式。
 
 如果还需要修改 TypeScript 源码，请另行声明源码 Patch。精确到文件的源码 Patch 会先修改当前模块，加载器 Patch 再转译它以及包内的 TypeScript 依赖。
 
@@ -153,7 +153,7 @@ module.exports = {
 }
 ```
 
-组合 Patch 只有一个稳定键、一个 `patchOrder` 位置和一个启停状态；成员保持声明顺序。Harmony 会预检所有已解析成员目标；任一成员无法绑定或应用时，所有成员都不会提交。组合 Patch 是事务边界，并不表示所有查询都要先在原始源码上批量执行。
+组合 Patch 只有一个稳定键、一个 `patchOrder` 位置和一个开关，成员仍按声明顺序运行。提交前，Harmony 会在各自目标上尝试每个成员；只要有一个无法绑定或应用，整个组合都不应用。成员不会预先查询同一份原始源码，后一个仍会读取前一个的结果。
 
 ## 顺序约束
 
@@ -164,9 +164,9 @@ module.exports = {
 - 最终全局 `patchOrder` 可以交错不同 Provider 的 Patch。
 - 没有用户覆盖时，声明顺序仍是稳定 Tie-breaker。
 
-用户顺序始终有效。自动排序只寻找违反约束最少的顺序，并在多个答案相同时保留现有相对顺序；互相矛盾的规则会保留为警告，而不是引入数值优先级。
+用户顺序优先。自动排序会寻找违反规则最少的结果，并在多个结果相同时保留现有相对顺序。互相矛盾的规则会继续显示为警告，Harmony 不会用数值优先级把它们隐藏起来。
 
-修改 Provider 顺序会重新聚合同属 Patch；直接修改 `patchOrder` 则保留精确的跨 Provider 排列。后续 Source Patch 会收到早期 Patch 的输出。
+移动 Provider 会把它的 Patch 重新放到一起；直接修改 `patchOrder` 则保留用户选择的跨 Provider 位置。无论哪种方式，Source Patch 都会读取前一个 Patch 的输出。
 
 ## Provider 冲突
 
@@ -210,4 +210,11 @@ export function apply(ctx) {
 }
 ```
 
-服务提供 `binEntry`、`profileDir`、`inspect(input?)`、`inspectDependencies(owner)` 和 `reloadPlugin(name)`；后者用于以事务方式重载一个 Loader 插件及其 Patch 声明。包还导出扩展发现工具及其 TypeScript 类型。Preview 与 Draft 生命周期 API 属于 WebUI Studio，而不是 Harmony。
+服务提供：
+
+- `binEntry` 和 `profileDir`：当前运行时的入口与 profile 目录；
+- `inspect(input?)`：Patch 状态和修改后的目标快照；
+- `inspectDependencies(owner)`：从 Patch 结果中推断出的依赖关系；
+- `reloadPlugin(name)`：重载一个 Loader 插件及其 Patch 声明。
+
+包还导出扩展发现工具及其 TypeScript 类型。Preview 和 Draft 生命周期 API 由 WebUI Studio 提供，不属于 Harmony。

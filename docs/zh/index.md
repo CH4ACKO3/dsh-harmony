@@ -21,7 +21,7 @@ hero:
 
 features:
   - title: 源码 Patch
-    details: 使用 TSQuery 匹配编译后源码中的 TypeScript AST 节点，再通过 MagicString 精确改写当前内存区间。
+    details: 使用 TSQuery 查找编译后 TypeScript 中的 AST 节点，再用 MagicString 改写对应的内存源码。
     link: /zh/patches/authoring#源码-patch
     linkText: 编写源码 Patch
   - title: 语义 Patch
@@ -33,20 +33,20 @@ features:
     link: /zh/integrations/react
     linkText: 了解 React 集成
   - title: 运行时控制
-    details: 跨 Provider 交错单个 Patch、拖动整个 Provider 堆、检查变换、撤回编辑，并以事务方式保存。
+    details: 移动整个 Provider 或单个 Patch，查看每次修改，撤回编辑，并在不改安装文件的前提下重载。
     link: /zh/guide/operations
     linkText: 操作 Harmony
 ---
 
 ## 修改运行时，而不是安装文件
 
-Harmony 会解析出一条确定的全局 Patch 顺序。每个 Source Patch 都会继续处理前一个 Patch 的输出，因此针对同一目标的独立修改可以组合生效。组合 Patch 共享一个位置、启停状态和原子成功边界。无法应用的 Patch 会被记录并跳过；Harmony 始终不会改写已安装的插件文件。
+Harmony 按一份全局顺序运行 Source Patch，后一个 Patch 会读取前一个留下的源码。组合 Patch 让几处修改共用一个位置和开关，而且只有成员全部成功才会应用。独立 Patch 失败时会被报告并跳过，安装目录里的文件不会改变。
 
 ```text
 已安装源码（保持不变）
   -> 全局 Patch 顺序
-  -> 经过验证的内存变换
+  -> 内存中的修改
   -> Host 重载或浏览器 HMR
 ```
 
-你可以先了解 [Harmony 在运行时中的位置](/zh/guide/introduction)，或直接阅读[安装指南](/zh/guide/installation)。项目灵感来自 Andreas Pardeike 和其他贡献者创作的同名 C# 项目 [Harmony](https://harmony.pardeike.net/)。
+先阅读 [Harmony 在运行时中的位置](/zh/guide/introduction)，再按照[安装指南](/zh/guide/installation)操作。本项目的灵感来自 Andreas Pardeike 和其他贡献者创作的 C# 项目 [Harmony](https://harmony.pardeike.net/)。

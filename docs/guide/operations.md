@@ -1,6 +1,6 @@
 # Order, inspect, and reload
 
-Harmony gives WebUI and the terminal the same profile state, Patch status, and transactional update path. The profile contains both coarse provider order and the exact global Patch order.
+WebUI and the terminal edit the same profile. It stores a provider order for whole-group moves and a global Patch order for individual placement.
 
 ## Order Patches in WebUI
 
@@ -10,17 +10,17 @@ Start WebUI and open **Settings → Harmony → Plugin order**:
 dsh web
 ```
 
-The underlying model is one flat `patchOrder`. The UI dynamically reconciles consecutive Patches from the same provider into a visual stack; stacking never changes the order itself.
+Harmony stores one flat `patchOrder`. The UI draws consecutive Patches from the same provider as a stack, but the stack is only a visual grouping.
 
-- A collapsed provider is rendered as a cover plus one layer for every owned Patch. Click the visible stack area to expand it into flat Patch cards; moving outside the expanded run's vertical range collapses it after a short delay.
-- Drag a collapsed stack to move all consecutive cards together, or drag one Patch to interleave it with another provider. A blue insertion line marks the nearest gap. Hovering over a collapsed stack during a drag expands it after a short delay, and native wheel scrolling remains available.
-- Long-press a card or stack without dragging to recall every Patch from that provider to the current position and restore provider declaration order.
+- A collapsed provider shows a cover and one layer for each Patch. Click anywhere down to the bottom card to spread the stack into ordinary Patch cards. It folds again shortly after the pointer leaves the cards' vertical range.
+- Drag a collapsed stack to move its consecutive Patches together, or drag one Patch into another provider's run. A blue line marks the insertion point. During a drag, hovering over a collapsed stack opens it after a short delay, and the mouse wheel still scrolls the list.
+- Long-press a card or stack without moving it to bring every Patch from that provider to this position and restore their declaration order.
 - Click an individual Patch to inspect its target and status. Selecting one Patch leaves its provider visible at full width and shortens other providers, without replacing status colors.
 - **Undo** restores the last saved Patch order; **Save** preflights the complete permutation before committing and reloading.
 
 Disabled cards are gray, warnings amber, and failures muted red. A collapsed cover summarizes the active members; disabled Patches do not contribute to cover health, and a provider whose Patches are all disabled is fully gray.
 
-New Patches are reconciled into the saved provider order. Removed Patches disappear. `dsh-harmony` itself is not a Patch card in this list.
+When providers add or remove Patches, Harmony inserts new entries according to provider order and drops entries that no longer exist. `dsh-harmony` itself does not appear as a Patch card.
 
 ## Order plugins in the terminal
 
@@ -40,20 +40,20 @@ Use `dsh harmony --profile <name>` for another profile.
 | `r` | Synchronize with installed profile dependencies |
 | `q`, Escape, or Ctrl+C | Exit |
 
-The terminal TUI intentionally remains provider-level. Moves save immediately and regroup each provider's Patches in `patchOrder`. If the profile is running, the TUI asks that process to preflight and hot-reload the candidate order. Otherwise it performs the same preflight locally before writing `harmony.json`.
+The terminal moves whole providers rather than individual Patches. Each move saves immediately and puts that provider's Patches back together in `patchOrder`. For a running profile, the TUI asks the Host to check and hot-reload the new order. For a stopped profile, it checks locally before writing `harmony.json`.
 
-The manual order remains authoritative. Automatic sorting minimizes violated provider-level `before` and `after` constraints and preserves existing order when solutions tie. Use WebUI for Patch-level interleaving.
+Manual order wins. Automatic sorting looks for the fewest violated provider-level `before` and `after` rules, keeping the current relative order when several results are equally good. Use WebUI to interleave individual Patches.
 
 ## Declared order and user order
 
-Provider declarations supply a coarse default. A Patch that defines its own `before` or `after` replaces that provider-wide rule for itself. Harmony resolves those relationships into one global list without numeric priorities.
+Provider declarations set the default order. If a Patch declares its own `before` or `after`, those rules replace the provider rules for that Patch. Harmony turns the resulting relationships into one list; it does not assign numeric priorities.
 
 The user can override unresolved or incompatible relationships at two levels:
 
 - moving a provider regroups all owned Patches;
 - moving one Patch preserves its exact position, including between Patches from another provider.
 
-Constraint violations are status information, not a reason to reject a manual order. Saving rejects an incomplete, duplicated, or unknown Patch permutation. Transformation failures follow the isolation rules below: an independent Patch is skipped, while a failing composite is rolled back as one unit.
+Harmony shows violated ordering rules but does not reject the user's order for that reason. It does reject a list that omits, repeats, or invents a Patch. If applying the order later fails, Harmony skips a failed standalone Patch or discards every member of a failed composite.
 
 ## Inspect Patch status
 
@@ -92,19 +92,19 @@ Inspection never writes transformed source to the target package.
 
 ## Transactional updates
 
-Harmony watches the Loader profile, `harmony.json`, and declared provider files. Provider additions, Patch edits, order changes, enablement changes, and Loader-tree updates enter one serialized transaction queue.
+Harmony watches the Loader profile, `harmony.json`, and provider files. It handles provider changes, Patch edits, ordering, enablement, and Loader Tree updates one transaction at a time.
 
-Before commit, Harmony applies the complete ordered Patch set to every affected target. A standalone Patch that cannot match or apply is marked `failed`, logged as skipped, and does not stop later Patches or the Host. If one member of a composite fails, none of that composite's members apply. Provider declaration failures and target reload failures still preserve the previous runtime generation and profile state, so an older rollback cannot overwrite a newer committed update.
+Before committing, Harmony tries the saved Patch order on every affected target. A standalone Patch that cannot match or apply is marked `failed` and skipped; later Patches and the Host keep running. If a composite member fails, Harmony applies none of that composite. A provider import or target reload failure keeps the previous runtime and profile settings. Transactions are serialized, so an older rollback cannot overwrite a newer update.
 
-A failed Patch is a declaration that loaded successfully but cannot safely transform its current target: for example, the target package, version, or file is unavailable; `select` and `expect` do not agree with the compiled source; `apply()` throws; a Semantic Patch targets an unsupported shape; or a later `replace` conflicts with the first replacement. Failure to import a Patch plugin, duplicate Patch IDs, and failure to reload the target plugin are transaction failures instead, so Harmony rolls back the candidate generation.
+A Patch reaches `failed` after its declaration loads but its target cannot be changed. Common causes are a missing package, version, or file; a selector count that disagrees with `expect`; an exception from `apply()`; an unsupported Semantic target; or a second semantic `replace` on the same function. Provider import errors, duplicate Patch IDs, and target reload errors fail the whole transaction instead.
 
 Node target changes rebuild the affected Loader groups. Browser target changes use Harness HMR and reload only the changed client plugin.
 
-Harmony also projects the final enabled Patch order onto provider-owned `<style data-plugin>` tags. One provider owns one CSS group even when its Patches are interleaved, so the provider's last enabled Patch determines its cascade position. Style tags are re-synchronized after reload without moving unrelated page styles out of their existing slots.
+Harmony orders provider-owned `<style data-plugin>` tags from the enabled Patch list. Even when its Patches are split apart, a provider still owns one CSS group, placed at its last enabled Patch. After reload, Harmony moves those provider styles again without disturbing unrelated page styles.
 
 ## Conflict visibility
 
-Harmony reports:
+Harmony reports these conflicts:
 
 - selector counts that differ from `expect`;
 - two enabled semantic `replace` operations on the same function;

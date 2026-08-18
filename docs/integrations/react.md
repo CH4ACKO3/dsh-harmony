@@ -1,12 +1,12 @@
 # React patches
 
-`dsh-harmony-react` provides React-aware factories that return ordinary `HarmonySourcePatch` declarations. It understands compiled `jsx` and `jsxs` calls, but Harmony still owns discovery, ordering, validation, transactions, inspection, and browser HMR.
+`dsh-harmony-react` turns React-specific requests into ordinary `HarmonySourcePatch` declarations. It recognizes compiled `jsx` and `jsxs` calls; Harmony then discovers, orders, applies, inspects, and reloads those Patches like any other Source Patch.
 
 ```sh
 npm install dsh-harmony-react
 ```
 
-It is a Node-side helper, not another DSH plugin or client runtime. The downstream Patch provider remains the only plugin involved.
+The package runs on the Node side. It is neither a DSH plugin nor a browser runtime; the Patch provider is the only plugin you install.
 
 ## Package shape
 
@@ -30,7 +30,7 @@ A provider that inserts browser code normally carries:
 }
 ```
 
-Immediate prefetching lets the synchronous `require()` inserted into another client module resolve the provider's browser export.
+Immediate prefetching makes the provider's browser export available to the synchronous `require()` that Harmony inserts into the target client module.
 
 ## Element: change selected call sites
 
@@ -55,7 +55,7 @@ module.exports = element({
 })
 ```
 
-The generated Patch changes the component type while preserving the existing props and key. Element operations are:
+This Patch changes the component type and keeps the existing props and key. `element()` supports:
 
 | `operation.kind` | Result |
 | --- | --- |
@@ -90,7 +90,7 @@ module.exports = component({
 })
 ```
 
-`decorate` wraps the current definition in a browser-side higher-order function. `replace` replaces the definition with the supplied export. Name selectors accept:
+`decorate` passes the current definition through a browser-side higher-order function. `replace` assigns the supplied export instead. A name selector can match:
 
 - a `VariableDeclaration` with an initializer;
 - a named `FunctionDeclaration` with a body.
@@ -113,12 +113,12 @@ Every React Patch requires:
 - an exact `expect` count;
 - a stable Patch `id`.
 
-Harmony applies each React Patch to the source produced by earlier Patches. Compatible decorators, replacements, and prop transforms therefore compose in the final global `patchOrder`; React does not introduce a second ordering model. One Patch rejects overlapping nested edits, so parent and child changes should be separate, explicitly ordered Patches.
+React Patches read the source left by earlier Patches and use the same global `patchOrder`. Put parent and child edits in separate Patches with a declared order: one Patch rejects edits whose source ranges overlap.
 
 ## Inspect trace
 
-Element factories emit Preview trace metadata for supported operations. A name-based Component selector also emits `decorate-component` or `replace-component` candidate traces on compiled JSX call sites that reference the binding.
+Element factories record Preview traces for supported operations. A name-based Component selector also marks compiled JSX calls that use the binding with `decorate-component` or `replace-component`.
 
-A raw Component TSQuery still applies, but it emits no call-path trace because an arbitrary AST selector cannot reliably identify the component binding name. Trace metadata indicates a candidate render path, not exact node authorship; target-level transformed source remains available through `dsh harmony inspect`.
+A raw Component TSQuery still works, but Harmony cannot infer a binding name from an arbitrary AST selector, so it records no call-path trace. A trace points to a likely render path; it does not prove which Patch created every node. Use `dsh harmony inspect` to see the transformed target source.
 
 See the [runnable rebrand example](https://github.com/memorax-ai/dsh-harmony/tree/main/packages/react/examples/rebrand-plugin) for a complete provider and browser bundle.

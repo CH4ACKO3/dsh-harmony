@@ -80,13 +80,13 @@ Desktop supervisor
 
 Desktop 继续负责 Node 可执行文件、子进程、工作目录、退出处理和就绪协议。这条路径不使用也不修改系统全局 `dsh` shim。
 
-::: info 当前上游边界
-当前上游 Desktop 仍直接启动内置官方 CLI。在它开放可配置 Host 入口前，全局 Harmony 安装无法影响 Desktop。
+::: info Desktop 支持
+Desktop 直接启动内置官方 CLI。在它提供上文所述的可配置 Host 入口前，全局安装的 Harmony 无法影响它。
 :::
 
 ## Profile
 
-当前 profile 决定 Harmony 发现哪些 Provider 和目标。`dsh harmony` 默认使用 `web`，其他 profile 需要显式指定：
+Harmony 从选中的 profile 中发现 Provider 和目标。`dsh harmony` 默认使用 `web`；需要其它 profile 时请写明名称：
 
 ```sh
 dsh harmony --profile tui
@@ -94,7 +94,7 @@ dsh harmony status --profile tui
 dsh harmony inspect target-plugin --file lib/index.js --profile tui
 ```
 
-每个 profile 在 `$DSH_HOME/profiles/<name>/harmony.json` 中保存独立的 Provider `order`、精确的全局 `patchOrder` 和已停用 Patch 键。
+每个 profile 都会在 `$DSH_HOME/profiles/<name>/harmony.json` 中保存自己的 Provider `order`、全局 `patchOrder` 和已停用 Patch 键。
 
 ## 更新
 

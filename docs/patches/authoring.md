@@ -70,7 +70,7 @@ module.exports = {
 
 Positions passed to `edit` refer to the source received by this Patch. `files` contains alternative package-relative targets; Harmony selects the first existing file. `version` is a semver range, and `expect` requires an exact match count.
 
-Every Source Patch parses and selects the source produced by earlier Patches. Harmony does not query every Patch against one original AST and then apply all edits later; that would make selectors observe stale structure and create ambiguous ranges.
+Each Source Patch parses the source left by earlier Patches before running its selector. Harmony does not run every selector against the original AST first, because later selectors would then see stale nodes and offsets.
 
 ## Loader Patch
 
@@ -89,7 +89,7 @@ module.exports = {
 }
 ```
 
-The target file is the compatibility anchor used for binding and status. Once bound, Harmony reads and transpiles `.ts`, `.tsx`, `.mts`, and `.cts` modules inside that exact package before Node's default loader runs. Other packages retain Node's default behavior.
+Harmony uses the target file to check compatibility and report status. Once the Patch binds, Harmony transpiles `.ts`, `.tsx`, `.mts`, and `.cts` modules in that package before Node's loader runs. It does not change loading for other packages.
 
 Declare Source Patches separately when the TypeScript also needs modification. Exact-file Source Patches run before the current module is transpiled, while the Loader Patch covers its package-local TypeScript imports.
 
@@ -155,7 +155,7 @@ module.exports = {
 }
 ```
 
-The composite has one stable key, one position in `patchOrder`, and one enablement state. Members keep declaration order. Harmony preflights every resolved member target; if one member cannot bind or apply, none of the composite's members commit. A composite is a transaction boundary, not a request to batch all queries against original source.
+The composite has one stable key, one place in `patchOrder`, and one switch. Its members keep declaration order. Harmony tries every member against its target before committing; if one cannot bind or apply, it applies none of them. Members still run in sequence and read earlier output rather than querying one original AST in advance.
 
 ## Ordering constraints
 
@@ -166,9 +166,9 @@ The composite has one stable key, one position in `patchOrder`, and one enableme
 - The resolved global `patchOrder` may interleave Patches from different providers.
 - With no user override, declaration order remains the stable tie-breaker.
 
-The user order is authoritative. Automatic sorting finds a minimum-violation order while preserving existing order when solutions tie; contradictory rules remain visible as warnings rather than inventing numeric priority.
+The user's order wins. Automatic sorting looks for the fewest violated rules and keeps the current relative order when several results tie. Contradictory rules stay visible as warnings; Harmony does not invent a numeric priority to hide them.
 
-Changing the provider order regroups owned Patches. Changing `patchOrder` directly preserves the exact cross-provider permutation. Every later Source Patch receives the output of the earlier one.
+Moving a provider puts its Patches back together. Editing `patchOrder` keeps the chosen cross-provider placement. In either case, each Source Patch reads the output of the previous one.
 
 ## Provider conflicts
 
@@ -219,4 +219,4 @@ The service exposes:
 - `inspectDependencies(owner)` for relationships inferred between Patches;
 - `reloadPlugin(name)` for transactionally reloading one Loader plugin and its Patch declarations.
 
-The package also exports extension discovery helpers and their TypeScript types for downstream tooling. Preview and Draft lifecycle APIs belong to WebUI Studio rather than Harmony.
+The package also exports extension-discovery helpers and their TypeScript types. Preview and Draft lifecycle APIs come from WebUI Studio, not Harmony.

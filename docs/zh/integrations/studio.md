@@ -1,8 +1,8 @@
 # Studio 预览
 
-可选入口 `dsh-harmony-react/studio` 可以让兼容的 [dsh-webui-studio](https://github.com/CH4ACKO3/dsh-webui-studio) Draft 暴露明确的 Element 和可编辑变量。
+Patch Provider 可以通过可选入口 `dsh-harmony-react/studio`，向兼容的 [dsh-webui-studio](https://github.com/CH4ACKO3/dsh-webui-studio) Draft 描述 Element 和可编辑变量。
 
-注册会委托给仅在 Studio Preview 中注入的浏览器 Registry；在普通 `dsh web` 会话中，同样的调用是 No-op。
+Studio Preview 会注入接收这些注册的浏览器 Registry；普通 `dsh web` 会话中，同样的调用不会产生效果。
 
 ## 注册 Element
 
@@ -60,7 +60,7 @@ const dispose = registerStudioElement({
 
 `variables` 数组是由 `group` 和 `variable` 节点组成的树。Group 可以包含变量或嵌套 Group；同一 Registration 内的节点 ID 与变量 ID 必须唯一。只有叶子变量具有 Binding，并以变量 ID 为键。
 
-`defaultSource` 可选，用于让 Studio 把新的下次加载默认值写入 Draft 源码，而不替换实时 Binding。`before` 与 `after` 必须在标准化、相对 Draft 的文件中恰好包围一个受支持的源码字面量。匹配缺失、存在歧义或不是字面量时，Studio 会拒绝写入。
+需要让 Studio 把新默认值写入 Draft、供下次加载使用时，再设置 `defaultSource`；实时 Binding 不会因此被替换。在指定的 Draft 相对路径文件中，`before` 和 `after` 必须包围一个受支持的字面量。找不到、找到多个或匹配到非字面量时，Studio 会拒绝写入。
 
 ## 注册约定
 
@@ -79,10 +79,10 @@ Studio 实现只从 `dsh-harmony-react/studio-host` 导入共享注入键和运�
 import { STUDIO_RUNTIME_KEY, type StudioBrowserRuntime } from 'dsh-harmony-react/studio-host'
 ```
 
-Registry Snapshot、选中状态、Preview Message 与持久化契约属于 Studio 应用自身，不属于 Provider API。这样公共 Provider 接口不会绑定到唯一一个下游 Host 实现。
+Registry Snapshot、选中状态、Preview Message 和持久化由 Studio 应用负责，不属于 Provider API，因此 Provider 不依赖某一种 Studio 实现。
 
-## Trace 边界
+## Trace 表示什么
 
-Element Boundary 只能证明 Draft 拥有已注册的子树契约。React 工厂生成的 Preview Trace Wrapper 可以附带候选 Patch 元数据，包括 Owner、Declaration、Target 和 Effect。基于名称的 Component Patch 会在引用该绑定的 JSX 调用点贡献 `decorate-component` 或 `replace-component` trace。
+注册 Element 表示 Draft 拥有这棵子树。React 工厂可以在可能的渲染路径上附加 Owner、Declaration、Target 和 Effect。按名称选择的 Component Patch 会在使用该绑定的 JSX 调用上添加 `decorate-component` 或 `replace-component` trace。
 
-这些信息不代表精确节点作者。其他 Provider 可能 Patch 祖先节点、变换 Props，或贡献没有直接源码对应的节点。原始 Component TSQuery 无法推断绑定名称，因此不会生成调用路径 trace。未声明 Trace Intent 的原始 Source Patch 仍只能通过 Harmony Target Inspection 查看。
+Trace 不能指出每个节点由谁创建。其他 Provider 可能修改祖先节点或 Props，也可能加入没有直接源码对应的节点。原始 Component TSQuery 没有可推断的绑定名称，因此不记录调用路径。没有 Trace 数据的原始 Source Patch 只能在 Harmony Target Inspection 中查看。

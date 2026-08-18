@@ -21,7 +21,7 @@ hero:
 
 features:
   - title: Source Patches
-    details: Match compiled TypeScript AST nodes with TSQuery, then rewrite exact in-memory ranges with MagicString.
+    details: Find nodes in compiled TypeScript with TSQuery and rewrite their in-memory source ranges with MagicString.
     link: /patches/authoring#source-patch
     linkText: Author a Source Patch
   - title: Semantic Patches
@@ -33,20 +33,20 @@ features:
     link: /integrations/react
     linkText: Explore React integration
   - title: Runtime control
-    details: Interleave individual Patches across providers, drag whole provider stacks, inspect transformations, undo edits, and save transactionally.
+    details: Move whole providers or individual Patches, inspect each change, undo edits, and reload without touching installed files.
     link: /guide/operations
     linkText: Operate Harmony
 ---
 
 ## Patch the runtime, not the installation
 
-Harmony resolves one deterministic global Patch order. Each Source Patch receives the previous Patch's output, so independent modifications can compose against the same target. Composite Patches share one position, enablement state, and atomic success boundary. A Patch that cannot be applied is reported and skipped; installed plugin files are never rewritten.
+Harmony runs Source Patches in one global order, and each Patch reads the source left by the previous one. A composite Patch gives several changes one position and one switch, and applies them only when every member succeeds. Failed standalone Patches are reported and skipped. Installed files remain unchanged.
 
 ```text
 installed source (unchanged)
   -> global Patch order
-  -> validated in-memory transformations
+  -> in-memory changes
   -> Host reload or browser HMR
 ```
 
-Start with [how Harmony fits into the runtime](/guide/introduction), or go directly to the [installation guide](/guide/installation). Inspired by Andreas Pardeike and contributors' C# project [Harmony](https://harmony.pardeike.net/).
+Read [how Harmony fits into the runtime](/guide/introduction), then follow the [installation guide](/guide/installation). The project is inspired by Andreas Pardeike and contributors' C# project [Harmony](https://harmony.pardeike.net/).

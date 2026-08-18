@@ -21,15 +21,15 @@ dsh harmony inspect <package> --file <file>
 
 ## 选择器不再匹配
 
-目标编译结构发生了变化。检查原始源码，更新 TSQuery，再更新 Patch 的 `target.version`。保持精确 `expect`，不要接受未知匹配数。
+目标的编译结构发生了变化。查看原始源码并更新 TSQuery，再把 `target.version` 调整为实际测试过的版本。`expect` 应填写查到的匹配数，不要接受未知数量。
 
 ## 自动排序仍然报告违规
 
-`before` 和 `after` 约束互相冲突。自动排序会返回违规最少的顺序并列出相关 Provider。修正声明、移动 Provider，或在 WebUI 中精确放置单个 Patch。Patch 级关系会覆盖而不是追加 Provider 全局规则。
+`before` 和 `after` 规则互相冲突。自动排序会给出违规最少的顺序，并列出相关 Provider。可以修正声明、移动 Provider，或在 WebUI 中单独移动 Patch。Patch 自己的规则会替换 Provider 规则，而不是追加到后面。
 
 ## Patch 后的函数在声明后正常、声明前失败
 
-`component()` 会把具名函数声明改写为 `const`，以保持定义级装饰和替换可以组合，因此绑定不再具有声明提升。请把该 Patch 改为核心 Source Patch，或让目标首次读取发生在声明之后。
+`component()` 会把具名函数声明改写为 `const`，让后续 Component Patch 可以修改同一绑定。新绑定不再提升。请改用核心 Source Patch，或确保目标在声明后才第一次读取组件。
 
 ## 依赖 Harmony 的插件首次启动时没有运行
 
@@ -45,7 +45,7 @@ Harmony 会保留上一代运行状态。通过 **Patch 状态** 或 `status` �
 
 ## Desktop 不受全局 Harmony 影响
 
-当前上游 Desktop 直接启动内置 CLI，全局命令 shim 无法影响它。Desktop 需要提供指向 `dsh-harmony/bin` 的可配置 Host 入口；内置 DSH 位于不同依赖树时，再设置 `DSH_HARMONY_DSH_ENTRY`。
+Desktop 直接启动内置 CLI，因此全局命令 shim 无法影响它。Desktop 需要提供指向 `dsh-harmony/bin` 的可配置 Host 入口。若内置 DSH 位于另一棵依赖树，还要设置 `DSH_HARMONY_DSH_ENTRY`。
 
 ## 移除 Harmony 后 profile 仍然提示
 

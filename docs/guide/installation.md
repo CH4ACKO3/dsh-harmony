@@ -80,13 +80,13 @@ If Harmony and the built-in DSH live in separate Node dependency trees, set `DSH
 
 Desktop continues to own the Node executable, child process, working directory, exit handling, and readiness protocol. This route does not use or modify the system-global `dsh` shim.
 
-::: info Current upstream boundary
-The current upstream Desktop starts its built-in official CLI directly. A global Harmony installation cannot affect Desktop until Desktop exposes the configurable Host entry described above.
+::: info Desktop support
+Desktop starts its built-in official CLI directly. A global Harmony installation cannot affect it until Desktop provides the configurable Host entry described above.
 :::
 
 ## Profiles
 
-The selected profile determines which providers and targets Harmony discovers. `dsh harmony` uses `web` by default; pass another profile explicitly:
+Harmony discovers providers and targets from the selected profile. `dsh harmony` uses `web` by default; name another profile when needed:
 
 ```sh
 dsh harmony --profile tui
@@ -94,7 +94,7 @@ dsh harmony status --profile tui
 dsh harmony inspect target-plugin --file lib/index.js --profile tui
 ```
 
-Each profile stores its independent provider `order`, exact global `patchOrder`, and disabled Patch keys in `$DSH_HOME/profiles/<name>/harmony.json`.
+Each profile stores its provider `order`, global `patchOrder`, and disabled Patch keys in `$DSH_HOME/profiles/<name>/harmony.json`.
 
 ## Updating
 

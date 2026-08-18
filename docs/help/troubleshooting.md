@@ -26,7 +26,7 @@ dsh harmony inspect <package> --file <file>
 
 ## A selector no longer matches
 
-The target's compiled structure changed. Inspect the original source, update the TSQuery selector, then update the Patch's `target.version`. Keep `expect` exact rather than accepting an unknown number of matches.
+The target's compiled structure changed. Inspect the original source and update the TSQuery selector, then adjust `target.version` to the versions you tested. Set `expect` to the match count you found instead of accepting an unknown count.
 
 ## Automatic sorting still reports violations
 
@@ -34,7 +34,7 @@ The declared `before` and `after` constraints conflict. Automatic sorting return
 
 ## A patched function works after its declaration but fails before it
 
-`component()` rewrites a named function declaration to `const` to keep definition-wide decoration and replacement composable. The binding is therefore not hoisted. Replace this Patch with a core Source Patch, or move the target's first read after the declaration.
+`component()` rewrites a named function declaration as `const` so later Component Patches can change the same binding. The new binding is not hoisted. Use a core Source Patch instead, or make sure the target first reads the component after its declaration.
 
 ## A dependent plugin does not start on first boot
 
@@ -50,7 +50,7 @@ Harmony keeps the previous generation. Open **Patch status** or run `status`, co
 
 ## Desktop ignores a global Harmony installation
 
-The upstream Desktop currently starts its built-in CLI directly. Global command shims cannot affect it. Desktop must expose a configurable Host entry that points at `dsh-harmony/bin`; use `DSH_HARMONY_DSH_ENTRY` when its built-in DSH lives in a separate dependency tree.
+Desktop starts its built-in CLI directly, so the global command shim cannot affect it. Desktop must provide a configurable Host entry that points to `dsh-harmony/bin`. If its built-in DSH is in another dependency tree, also set `DSH_HARMONY_DSH_ENTRY`.
 
 ## Removing Harmony left a profile prompt
 

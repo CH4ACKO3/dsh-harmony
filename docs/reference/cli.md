@@ -45,12 +45,12 @@ $DSH_HOME/profiles/<name>/harmony.json
 The file contains `order`, `patchOrder`, and `disabled`:
 
 - `order` is the coarse provider list used by the terminal TUI;
-- `patchOrder` is the complete ordered permutation of stable Patch keys used at runtime;
+- `patchOrder` lists every registered stable Patch key once, in runtime order;
 - `disabled` contains individual `provider/id` keys or provider-wide `provider/*` entries.
 
-Harmony synchronizes the state with installed declarations: new providers and Patches are reconciled into the order, while removed entries disappear.
+Harmony updates the state when declarations change: it inserts new providers and Patches, and removes entries that no longer exist.
 
-Do not edit the file while the profile is running. Use Web Settings or the TUI so the candidate state is preflighted and committed transactionally.
+Do not edit the file while the profile is running. Use Web Settings or the TUI so Harmony can check the new state before saving and reloading it.
 
 ## Provider metadata
 

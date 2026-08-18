@@ -1,12 +1,12 @@
 # React Patch
 
-`dsh-harmony-react` 提供 React-aware 工厂，并返回普通 `HarmonySourcePatch` 声明。它理解编译后的 `jsx` 与 `jsxs` 调用；发现、排序、验证、事务、检查和浏览器 HMR 仍由 Harmony 负责。
+`dsh-harmony-react` 把 React 相关的修改要求转换成普通 `HarmonySourcePatch` 声明。它识别编译后的 `jsx` 和 `jsxs` 调用，Harmony 再像处理其它 Source Patch 一样发现、排序、应用、检查和重载它们。
 
 ```sh
 npm install dsh-harmony-react
 ```
 
-它是 Node 侧辅助库，不是新的 DSH 插件或客户端运行时。下游 Patch Provider 仍是唯一插件。
+这个包运行在 Node 侧，既不是 DSH 插件，也不是浏览器运行时。需要安装的插件只有 Patch Provider。
 
 ## 包结构
 
@@ -30,7 +30,7 @@ npm install dsh-harmony-react
 }
 ```
 
-立即预取保证插入到其他客户端模块中的同步 `require()` 能解析 Provider 的浏览器导出。
+立即预取会提前准备好 Provider 的浏览器导出，让 Harmony 插入目标 Client Module 的同步 `require()` 能够找到它。
 
 ## Element：修改选中的调用点
 
@@ -55,7 +55,7 @@ module.exports = element({
 })
 ```
 
-生成的 Patch 会替换组件类型，同时保留原有 Props 与 Key。Element 操作包括：
+这个 Patch 会替换组件类型，并保留原有 Props 和 Key。`element()` 支持：
 
 | `operation.kind` | 结果 |
 | --- | --- |
@@ -90,7 +90,7 @@ module.exports = component({
 })
 ```
 
-`decorate` 通过浏览器侧高阶函数包裹当前定义；`replace` 用指定导出替换当前定义。名称选择器支持：
+`decorate` 把当前定义传给浏览器侧高阶函数，`replace` 则改用指定导出。名称选择器可以匹配：
 
 - 带 initializer 的 `VariableDeclaration`；
 - 带函数体的具名 `FunctionDeclaration`。
@@ -113,12 +113,12 @@ Component 选择器支持 `{ name }` 或原始 TSQuery。原始 Component TSQuer
 - 精确 `expect` 数量；
 - 稳定 Patch `id`。
 
-Harmony 会让每个 React Patch 继续处理早期 Patch 产生的源码，因此兼容的装饰、替换与 Props 变换按全局最终 `patchOrder` 组合。React 不引入第二套排序模型。同一个 Patch 会拒绝范围重叠的嵌套编辑；父子修改应拆成多个具有明确顺序的 Patch。
+React Patch 会读取早期 Patch 留下的源码，并和其它 Source Patch 共用全局 `patchOrder`。父节点和子节点的修改应拆成两个有先后关系的 Patch，因为同一个 Patch 不接受源码范围重叠的编辑。
 
 ## Inspect trace
 
-Element 工厂会为支持的操作生成 Preview trace。基于名称的 Component 选择器也会在引用该绑定的编译 JSX 调用点上生成 `decorate-component` 或 `replace-component` 候选 trace。
+Element 工厂会为支持的操作记录 Preview trace。按名称选择 Component 时，Harmony 还会在使用该绑定的编译后 JSX 调用上标记 `decorate-component` 或 `replace-component`。
 
-原始 Component TSQuery 仍可正常应用，但不会生成调用路径 trace，因为任意 AST 选择器无法可靠推断绑定名称。Trace 表示候选渲染路径，并不证明精确节点作者；目标级变换源码仍可通过 `dsh harmony inspect` 查看。
+原始 Component TSQuery 仍可应用，但 Harmony 无法从任意 AST 选择器推断绑定名称，所以不会记录调用路径 trace。Trace 只指出可能的渲染路径，不能证明每个节点由哪个 Patch 创建。要查看目标修改后的源码，请使用 `dsh harmony inspect`。
 
 完整 Provider 与浏览器 Bundle 见[可运行的 Rebrand 示例](https://github.com/memorax-ai/dsh-harmony/tree/main/packages/react/examples/rebrand-plugin)。

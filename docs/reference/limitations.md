@@ -1,26 +1,26 @@
 # Limitations
 
-Harmony changes compiled runtime code, so its guarantees stop at explicit boundaries.
+Harmony changes compiled code at runtime. The limits below describe what it cannot restore, infer, or patch safely.
 
 ## Patch modules
 
 Provider Patch files must be CommonJS modules. Harmony's live Loader update path collects them synchronously.
 
-When a Source Patch's `apply()` throws, Harmony discards that Patch's in-memory edits and continues from the previous source. It cannot undo file writes, network calls, global mutations, or other side effects performed by Patch code. Keep Patch declarations and `apply()` functions deterministic and side-effect free.
+If a Source Patch's `apply()` throws, Harmony discards its in-memory edits and continues from the previous source. It cannot undo file writes, network calls, global mutations, or other work performed by the Patch itself. Keep declarations and `apply()` deterministic and free of side effects.
 
 ## Loader rollback
 
-Harmony evaluates a candidate plugin module before replacing its active Loader Fiber. If module evaluation or startup fails, Harmony restores the previous Fiber and CommonJS cache, but it cannot undo side effects that ran at module scope. Each ESM reload uses a distinct generation URL, so Node.js retains those module instances until the Host process exits.
+Harmony evaluates a replacement plugin module before swapping its Loader Fiber. If evaluation or startup fails, it restores the previous Fiber and CommonJS cache. Module-level side effects cannot be undone. ESM reloads use a new generation URL each time, so Node.js keeps those module instances until the Host exits.
 
 Plugins intended for live reload should not create timers or listeners, write files, or mutate global singletons at module scope. Register those effects inside the Cordis plugin lifecycle so Loader disposal owns their cleanup. Restart the Host after an extended session of high-frequency ESM reloads.
 
 ## Compiled structure
 
-Source selectors depend on the compiled shape of the target package. A target upgrade may change names, nesting, JSX output, or bundler helpers without changing the visible feature. Pin a compatible `target.version`, keep `expect` exact, and run `dsh harmony status` in release checks.
+Source selectors depend on the target's compiled shape. An upgrade can change names, nesting, JSX output, or bundler helpers even when the visible feature looks the same. Pin `target.version`, set an exact `expect`, and run `dsh harmony status` before release.
 
 ## TypeScript loading
 
-A `typescript` Loader Patch transpiles syntax without type-checking and does not load the target package's `tsconfig.json`. Runtime imports must still follow Node's resolution rules; Harmony does not add TypeScript path aliases or infer missing extensions. Loading is limited to TypeScript files inside the declared target package and version.
+A `typescript` Loader Patch transpiles syntax but does not type-check or read the target's `tsconfig.json`. Imports must still follow Node's resolution rules. Harmony adds no TypeScript path aliases and does not infer missing extensions. It only loads TypeScript from the declared package and version.
 
 ## Semantic targets
 
@@ -38,9 +38,9 @@ Only the first enabled semantic `replace` Patch in global Patch order may target
 
 ## React Component declarations
 
-`component()` supports initialized variables and named function declarations. To keep later Component Patches composable, a function declaration is rewritten to an initialized `const` binding. It is no longer hoisted. Use a core Source Patch if the component is referenced before its declaration.
+`component()` accepts initialized variables and named function declarations. Harmony rewrites a function declaration as an initialized `const` so later Component Patches can change the same binding. That binding is not hoisted. If the component is read before its declaration, use a core Source Patch.
 
-A raw Component TSQuery cannot reliably identify the binding referenced by JSX call sites, so it does not produce Component call-path trace metadata. Use `{ name }` when Studio trace is required.
+A raw Component TSQuery does not tell Harmony which binding the JSX calls use, so it produces no Component call-path trace. Use `{ name }` when Studio needs that trace.
 
 ## Runtime ownership
 

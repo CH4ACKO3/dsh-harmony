@@ -1,26 +1,26 @@
 # 限制
 
-Harmony 修改编译后的运行时代码，因此保证范围止于明确边界。
+Harmony 在运行时修改编译产物。下面列出它无法恢复、推断或安全修改的情况。
 
 ## Patch 模块
 
 Provider Patch 文件必须使用 CommonJS，以便实时 Loader 更新路径同步收集。
 
-源码 Patch 的 `apply()` 抛错时，Harmony 会丢弃该 Patch 的内存编辑，并从上一个源码结果继续；但无法撤销 Patch 代码自行执行的文件写入、网络请求、全局修改或其它副作用。Patch 声明与 `apply()` 应保持确定性且不产生副作用。
+Source Patch 的 `apply()` 抛错时，Harmony 会丢弃它在内存中的编辑，并从上一份源码继续。Patch 自己执行的文件写入、网络请求、全局修改或其它操作无法撤销，因此声明和 `apply()` 应保持确定性，不要产生副作用。
 
 ## Loader 回滚
 
-Harmony 会在替换当前 Loader Fiber 之前求值候选插件模块。如果模块求值或启动失败，Harmony 会恢复原有 Fiber 和 CommonJS 缓存，但无法撤销已经在模块顶层发生的副作用。每次 ESM 重载都会使用不同的 generation URL，因此 Node.js 会保留这些模块实例，直到 Host 进程退出。
+替换 Loader Fiber 前，Harmony 会先执行新的插件模块。执行或启动失败时，它会恢复原来的 Fiber 和 CommonJS 缓存，但模块顶层已经发生的副作用无法撤销。每次 ESM 重载使用新的 generation URL，所以 Node.js 会保留这些模块实例，直到 Host 退出。
 
 需要实时重载的插件不应在模块顶层创建定时器或监听器、写入文件，或修改全局单例。请在 Cordis 插件生命周期内注册这些副作用，让 Loader 在释放插件时负责清理。长时间、高频率重载 ESM 插件后，请重启 Host。
 
 ## 编译结构
 
-源码选择器依赖目标包的编译结果。升级可能改变名称、嵌套、JSX 输出或 Bundler Helper，而可见功能保持不变。请锁定兼容的 `target.version`、保持精确 `expect`，并在发布检查中运行 `dsh harmony status`。
+Source selector 依赖目标包的编译结构。升级可能改变名称、嵌套、JSX 输出或 Bundler Helper，即使界面功能看起来没有变化。请锁定 `target.version`，为 `expect` 填写确切数量，并在发布前运行 `dsh harmony status`。
 
 ## TypeScript 加载
 
-`typescript` 加载器 Patch 只转译语法，不执行类型检查，也不会读取目标包的 `tsconfig.json`。运行时导入仍须符合 Node 的解析规则；Harmony 不会增加 TypeScript 路径别名，也不会推断缺失的扩展名。加载范围仅限声明的目标包与版本中的 TypeScript 文件。
+`typescript` Loader Patch 只转译语法，不执行类型检查，也不读取目标包的 `tsconfig.json`。Import 仍须符合 Node 的解析规则。Harmony 不会增加 TypeScript 路径别名，也不会推断缺失的扩展名；它只加载指定包和版本中的 TypeScript 文件。
 
 ## 语义目标
 
@@ -38,9 +38,9 @@ Harmony 会在替换当前 Loader Fiber 之前求值候选插件模块。如果�
 
 ## React Component 声明
 
-`component()` 支持已初始化变量和具名函数声明。为了让后续 Component Patch 继续组合，函数声明会被改写为已初始化的 `const` 绑定，因此不再具有声明提升。组件在声明前被引用时，请使用核心 Source Patch。
+`component()` 支持已初始化变量和具名函数声明。Harmony 会把函数声明改写为已初始化的 `const`，让后续 Component Patch 可以修改同一绑定。新绑定不再提升；如果文件在声明前读取组件，请使用核心 Source Patch。
 
-原始 Component TSQuery 无法可靠识别 JSX 调用点所引用的绑定，因此不会生成 Component 调用路径 trace。Studio 需要 trace 时请使用 `{ name }`。
+原始 Component TSQuery 不会告诉 Harmony JSX 调用使用了哪个绑定，因此不会生成 Component 调用路径 trace。Studio 需要这项 trace 时，请使用 `{ name }`。
 
 ## 运行时所有权
 
