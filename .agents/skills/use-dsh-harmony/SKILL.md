@@ -25,11 +25,11 @@ Use a Source Patch for every browser target. Semantic handlers execute in Node.j
 
 ## Install Harmony
 
-Require Node.js `^22.22.3` or `>=24.11.1` and `@deepseek-ai/dsh@0.1.0-rc.6` for the current release.
+Require Node.js `^22.22.3` or `>=24.11.1` and `@deepseek-ai/dsh@0.1.0-rc.7` for the current release.
 
 ```sh
 node --version
-npm install -g @deepseek-ai/dsh@0.1.0-rc.6
+npm install -g @deepseek-ai/dsh@0.1.0-rc.7
 npm install -g dsh-harmony
 dsh web
 ```

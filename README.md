@@ -56,10 +56,10 @@ Load [`use-dsh-harmony`](https://github.com/memorax-ai/dsh-harmony/blob/main/.ag
 
 ## Install
 
-Requires Node.js `^22.22.3` or `>=24.11.1` and `@deepseek-ai/dsh@0.1.0-rc.6`.
+Requires Node.js `^22.22.3` or `>=24.11.1` and `@deepseek-ai/dsh@0.1.0-rc.7`.
 
 ```sh
-npm install -g @deepseek-ai/dsh@0.1.0-rc.6
+npm install -g @deepseek-ai/dsh@0.1.0-rc.7
 npm install -g dsh-harmony
 dsh web
 ```

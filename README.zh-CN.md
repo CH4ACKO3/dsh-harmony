@@ -56,10 +56,10 @@ Harmony 为 DeepSeek Harness 插件之间的协作补上了修改能力。
 
 ## 安装
 
-需要 Node.js `^22.22.3` 或 `>=24.11.1`，以及 `@deepseek-ai/dsh@0.1.0-rc.6`。
+需要 Node.js `^22.22.3` 或 `>=24.11.1`，以及 `@deepseek-ai/dsh@0.1.0-rc.7`。
 
 ```sh
-npm install -g @deepseek-ai/dsh@0.1.0-rc.6
+npm install -g @deepseek-ai/dsh@0.1.0-rc.7
 npm install -g dsh-harmony
 dsh web
 ```

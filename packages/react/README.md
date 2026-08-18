@@ -31,7 +31,7 @@ module.exports = element({
   id: 'custom-sidebar-brand',
   target: {
     package: '@deepseek-ai/dsh-client-ui-sidebar',
-    version: '0.1.0-rc.6',
+    version: '0.1.0-rc.7',
     files: ['lib/client.js'],
   },
   select: { component: 'BrandWordmark' },
@@ -91,7 +91,7 @@ module.exports = component({
   id: 'decorate-button',
   target: {
     package: '@deepseek-ai/dsh-client-ui-buttons',
-    version: '0.1.0-rc.6',
+    version: '0.1.0-rc.7',
     files: ['lib/client.js'],
   },
   select: { name: 'Button' },

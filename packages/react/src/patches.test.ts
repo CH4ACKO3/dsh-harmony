@@ -13,7 +13,7 @@ const require = createRequire(import.meta.url)
 
 const target = {
   package: '@deepseek-ai/dsh-client-ui-example',
-  version: '0.1.0-rc.6',
+  version: '0.1.0-rc.7',
   files: ['lib/client.js'],
 }
 

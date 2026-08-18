@@ -26,14 +26,14 @@ try {
     ...process.env,
     DSH_HOME: home,
   }
-  run(npm, ['install', '--global', '--prefix', prefix, '@deepseek-ai/dsh@0.1.0-rc.6'], installEnv)
+  run(npm, ['install', '--global', '--prefix', prefix, '@deepseek-ai/dsh@0.1.0-rc.7'], installEnv)
   run(npm, ['install', '--global', '--prefix', prefix, tarball], installEnv)
 
   const env = {
     ...installEnv,
     PATH: `${binDir}${delimiter}${process.env.PATH ?? ''}`,
   }
-  assert.match(run(dsh, ['--version'], env), /0\.1\.0-rc\.6/)
+  assert.match(run(dsh, ['--version'], env), /0\.1\.0-rc\.7/)
   const config = run(dsh, ['web', '--dump-config'], env)
   assert.match(config, /dsh-harmony-bootstrap/)
   assert.match(config, /id: harmony\s+name: dsh-harmony/)
