@@ -42,6 +42,20 @@ Provider 可以声明自己的 Patch 应排在另一个 Provider 之前或之后
 
 Harmony 为 DeepSeek Harness 插件之间的协作补上了修改能力。
 
+## 为什么使用 Harmony
+
+目标已经暴露所需能力时，普通 DSH 扩展点仍然是首选。Harmony 解决的是公开 API 与维护 Fork 之间的空白：修改目标没有暴露的内部组件、Loader 条目或编译后行为。
+
+| 不使用 Harmony | 使用 Harmony |
+| --- | --- |
+| 隐藏或复制内部 UI，并长期同步两套实现 | 在原位置替换选中的组件或编译后调用点 |
+| 修改 `node_modules`、维护 Fork，或升级后重新应用改动 | 只在内存中变换源码；已安装文件逐字节保持不变 |
+| 选择器漂移后由 UI 静默失效暴露问题 | 钉死目标版本和 `expect`；失配会在 `status` 中明确失败 |
+| 把最终 Bundle 当作黑盒 | 检查原始源码、每一步 Patch 和最终变换结果 |
+| 手动清理定制改动 | 禁用或移除 Provider 即恢复原始行为 |
+
+Harmony 不会把编译内部变成稳定的公开 API；它让这项依赖变得明确、有序、可检查且可逆。
+
 **Respect**
 
 灵感来源于 Andreas Pardeike 和其它开发者创作的同名 C# 项目 [**Harmony**](https://harmony.pardeike.net/)。

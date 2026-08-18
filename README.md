@@ -42,6 +42,20 @@ For browser plugins, Harmony also keeps provider-owned `<style data-plugin>` tag
 
 Harmony adds modification to the ways DeepSeek Harness plugins can work together.
 
+## Why Harmony
+
+Ordinary DSH extension points remain the first choice when the target exposes the behavior you need. Harmony is for the gap between those APIs and maintaining a fork: changing an internal component, loader entry, or compiled behavior that the target does not expose.
+
+| Without Harmony | With Harmony |
+| --- | --- |
+| Hide or duplicate an internal UI and keep both implementations aligned | Replace the selected component or compiled call site in place |
+| Patch `node_modules`, carry a fork, or reapply edits after upgrades | Transform source in memory; installed package files remain byte-for-byte unchanged |
+| Discover a selector drift only after the UI silently breaks | Pin package version and `expect`; mismatches fail visibly in `status` |
+| Treat the final bundle as a black box | Inspect the original, every Patch step, and the final transformed source |
+| Remove custom edits manually | Disable or remove the Provider to restore the original behavior |
+
+Harmony does not turn compiled internals into a stable public API. It makes that dependency explicit, ordered, inspectable, and reversible.
+
 **Respect**
 
 Inspired by [Harmony](https://harmony.pardeike.net/), the project of the same name created by Andreas Pardeike and other contributors for C#.
