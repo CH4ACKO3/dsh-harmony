@@ -207,11 +207,12 @@ module.exports = [{
 
   expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('[1, 3]')
   expect(getPatchStatuses().find(patch => patch.key === 'expect-provider/one-number')).toMatchObject({
-    state: 'failed',
+    index: 0,
+    state: 'failed', status: 'error',
     matches: 2,
     file: 'lib/index.js',
   })
-  expect(getPatchStatuses().find(patch => patch.key === 'expect-provider/replace-two')?.state).toBe('bound')
+  expect(getPatchStatuses().find(patch => patch.key === 'expect-provider/replace-two')).toMatchObject({ index: 1, state: 'bound', status: 'normal' })
 })
 
 test('collects failed statuses without aborting the status inspection pass', () => {
@@ -252,6 +253,218 @@ module.exports = [{
   expect(getPatchStatuses().find(patch => patch.key === 'status-provider/missing-package')).toMatchObject({
     state: 'failed', matches: 0, loaded: false,
   })
+})
+
+test('uses provider constraints by default and lets a Patch override them', () => {
+  const profile = join(root, 'expected-patch-order-profile')
+  const target = join(profile, 'node_modules', 'expected-patch-order-target')
+  const first = join(profile, 'node_modules', 'expected-first-provider')
+  const second = join(profile, 'node_modules', 'expected-second-provider')
+  for (const directory of [target, first, second]) mkdirSync(directory, { recursive: true })
+  writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: {
+    'expected-first-provider': '1',
+    'expected-second-provider': '1',
+    'expected-patch-order-target': '1',
+  } }))
+  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'expected-patch-order-target' }))
+  writeFileSync(join(target, 'index.js'), 'export const value = 1\n')
+  writeFileSync(join(first, 'package.json'), JSON.stringify({
+    name: 'expected-first-provider',
+    dsh: { harmony: { patches: ['./patch.cjs'], before: ['expected-second-provider'] } },
+  }))
+  writeFileSync(join(first, 'patch.cjs'), `
+const patch = (id, order) => ({
+  id, ...(order || {}),
+  target: { package: 'expected-patch-order-target', files: ['index.js'] },
+  select: 'SourceFile', apply() { globalThis.__expectedPatchOrder.push(id) },
+})
+module.exports = [patch('default'), patch('override', { after: ['expected-second-provider'] })]
+`)
+  writeFileSync(join(second, 'package.json'), JSON.stringify({
+    name: 'expected-second-provider', dsh: { harmony: { patches: ['./patch.cjs'] } },
+  }))
+  writeFileSync(join(second, 'patch.cjs'), `
+module.exports = {
+  id: 'middle', target: { package: 'expected-patch-order-target', files: ['index.js'] },
+  select: 'SourceFile', apply() { globalThis.__expectedPatchOrder.push('middle') },
+}
+`)
+
+  ;(globalThis as any).__expectedPatchOrder = []
+  synchronizeProfile(profile)
+  readFileSync(join(target, 'index.js'), 'utf8')
+
+  expect((globalThis as any).__expectedPatchOrder).toEqual(['default', 'middle', 'override'])
+  expect(currentProfile().patchOrder).toEqual([
+    'expected-first-provider/default',
+    'expected-second-provider/middle',
+    'expected-first-provider/override',
+  ])
+
+  const added = join(profile, 'node_modules', 'expected-added-provider')
+  mkdirSync(added)
+  writeFileSync(join(added, 'package.json'), JSON.stringify({
+    name: 'expected-added-provider',
+    dsh: { harmony: { patches: ['./patch.cjs'], before: ['expected-second-provider'] } },
+  }))
+  writeFileSync(join(added, 'patch.cjs'), `
+module.exports = {
+  id: 'added', target: { package: 'expected-patch-order-target', files: ['index.js'] },
+  select: 'SourceFile', apply() { globalThis.__expectedPatchOrder.push('added') },
+}
+`)
+  writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: {
+    'expected-first-provider': '1',
+    'expected-second-provider': '1',
+    'expected-added-provider': '1',
+    'expected-patch-order-target': '1',
+  } }))
+  synchronizeProfile(profile)
+  ;(globalThis as any).__expectedPatchOrder = []
+  readFileSync(join(target, 'index.js'), 'utf8')
+  expect((globalThis as any).__expectedPatchOrder).toEqual(['default', 'added', 'middle', 'override'])
+  delete (globalThis as any).__expectedPatchOrder
+})
+
+test('applies a complete user Patch order across provider boundaries', () => {
+  const profile = join(root, 'manual-patch-order-profile')
+  const target = join(profile, 'node_modules', 'manual-patch-order-target')
+  const first = join(profile, 'node_modules', 'manual-first-provider')
+  const second = join(profile, 'node_modules', 'manual-second-provider')
+  for (const directory of [target, first, second]) mkdirSync(directory, { recursive: true })
+  writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: {
+    'manual-first-provider': '1', 'manual-second-provider': '1', 'manual-patch-order-target': '1',
+  } }))
+  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'manual-patch-order-target' }))
+  writeFileSync(join(target, 'index.js'), 'export const value = 1\n')
+  for (const [directory, name, ids] of [
+    [first, 'manual-first-provider', ['a', 'c']],
+    [second, 'manual-second-provider', ['b', 'd']],
+  ] as const) {
+    writeFileSync(join(directory, 'package.json'), JSON.stringify({
+      name, dsh: { harmony: { patches: ['./patch.cjs'] } },
+    }))
+    writeFileSync(join(directory, 'patch.cjs'), `
+module.exports = ${JSON.stringify(ids)}.map(id => ({
+  id, target: { package: 'manual-patch-order-target', files: ['index.js'] },
+  select: 'SourceFile', apply() { globalThis.__manualPatchOrder.push(id) },
+}))
+`)
+  }
+  synchronizeProfile(profile)
+  const desired = [
+    'manual-first-provider/a',
+    'manual-second-provider/b',
+    'manual-first-provider/c',
+    'manual-second-provider/d',
+  ]
+  const transaction = beginProfileUpdate({ patchOrder: desired })
+  transaction.commit()
+
+  ;(globalThis as any).__manualPatchOrder = []
+  readFileSync(join(target, 'index.js'), 'utf8')
+  expect((globalThis as any).__manualPatchOrder).toEqual(['a', 'b', 'c', 'd'])
+  expect(JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8')).patchOrder).toEqual(desired)
+
+  const providerMove = beginProfileUpdate({
+    order: ['manual-second-provider', 'manual-first-provider', 'manual-patch-order-target'],
+  })
+  expect(providerMove.profile.patchOrder).toEqual([
+    'manual-second-provider/b',
+    'manual-second-provider/d',
+    'manual-first-provider/a',
+    'manual-first-provider/c',
+  ])
+  providerMove.rollback()
+  delete (globalThis as any).__manualPatchOrder
+})
+
+test('rolls back every file when one member of a composite Patch fails', () => {
+  const profile = join(root, 'failed-composite-profile')
+  const provider = join(profile, 'node_modules', 'failed-composite-provider')
+  const target = join(profile, 'node_modules', 'failed-composite-target')
+  mkdirSync(provider, { recursive: true })
+  mkdirSync(target, { recursive: true })
+  writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: {
+    'failed-composite-provider': '1', 'failed-composite-target': '1',
+  } }))
+  writeFileSync(join(provider, 'package.json'), JSON.stringify({
+    name: 'failed-composite-provider', dsh: { harmony: { patches: ['./patch.cjs'] } },
+  }))
+  writeFileSync(join(provider, 'patch.cjs'), `
+const replace = (id, file, from, to) => ({
+  id, target: { package: 'failed-composite-target', files: [file] },
+  select: 'NumericLiteral[text="' + from + '"]', expect: 1,
+  apply({ node, edit }) {
+    globalThis.__failedCompositeCalls = (globalThis.__failedCompositeCalls || 0) + 1
+    edit.overwrite(node.getStart(), node.getEnd(), String(to))
+  },
+})
+module.exports = [{
+  id: 'atomic',
+  patches: [replace('first', 'a.js', 1, 2), replace('second', 'b.js', 9, 4)],
+}, {
+  id: 'later', target: { package: 'failed-composite-target', files: ['a.js'] },
+  select: 'NumericLiteral[text="1"]', expect: 1,
+  apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '5') },
+}]
+`)
+  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'failed-composite-target' }))
+  writeFileSync(join(target, 'a.js'), 'export const a = 1\n')
+  writeFileSync(join(target, 'b.js'), 'export const b = 3\n')
+  synchronizeProfile(profile)
+
+  expect(readFileSync(join(target, 'a.js'), 'utf8')).toContain('a = 5')
+  expect(readFileSync(join(target, 'b.js'), 'utf8')).toContain('b = 3')
+  expect((globalThis as any).__failedCompositeCalls).toBe(1)
+  expect(getPatchStatuses().find(patch => patch.key === 'failed-composite-provider/atomic')).toMatchObject({
+    kind: 'composite', state: 'failed', matches: 0,
+    members: [{ id: 'first' }, { id: 'second' }],
+  })
+  expect(getPatchInspections('failed-composite-target', 'a.js')[0]?.steps.map(step => step.key)).toEqual([
+    'failed-composite-provider/later',
+  ])
+  delete (globalThis as any).__failedCompositeCalls
+})
+
+test('toggles and reports a successful composite Patch as one unit', () => {
+  const profile = join(root, 'successful-composite-profile')
+  const provider = join(profile, 'node_modules', 'successful-composite-provider')
+  const target = join(profile, 'node_modules', 'successful-composite-target')
+  mkdirSync(provider, { recursive: true })
+  mkdirSync(target, { recursive: true })
+  writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: {
+    'successful-composite-provider': '1', 'successful-composite-target': '1',
+  } }))
+  writeFileSync(join(provider, 'package.json'), JSON.stringify({
+    name: 'successful-composite-provider', dsh: { harmony: { patches: ['./patch.cjs'] } },
+  }))
+  writeFileSync(join(provider, 'patch.cjs'), `
+const replace = (id, file, from, to) => ({
+  id, target: { package: 'successful-composite-target', files: [file] },
+  select: 'NumericLiteral[text="' + from + '"]', expect: 1,
+  apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), String(to)) },
+})
+module.exports = { id: 'atomic', patches: [
+  replace('first', 'a.js', 1, 2), replace('second', 'b.js', 3, 4),
+] }
+`)
+  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'successful-composite-target' }))
+  writeFileSync(join(target, 'a.js'), 'export const a = 1\n')
+  writeFileSync(join(target, 'b.js'), 'export const b = 3\n')
+  synchronizeProfile(profile)
+
+  expect(readFileSync(join(target, 'a.js'), 'utf8')).toContain('a = 2')
+  expect(readFileSync(join(target, 'b.js'), 'utf8')).toContain('b = 4')
+  expect(getPatchStatuses().find(patch => patch.key === 'successful-composite-provider/atomic')).toMatchObject({
+    kind: 'composite', state: 'bound', matches: 2, files: ['a.js', 'b.js'],
+  })
+
+  const transaction = beginProfileUpdate({ disabled: ['successful-composite-provider/atomic'] })
+  transaction.commit()
+  expect(readFileSync(join(target, 'a.js'), 'utf8')).toContain('a = 1')
+  expect(readFileSync(join(target, 'b.js'), 'utf8')).toContain('b = 3')
+  expect(getPatchStatuses().find(patch => patch.key === 'successful-composite-provider/atomic')).toMatchObject({ state: 'disabled', status: 'disabled' })
 })
 
 test('reports lazy Patch failures only after their generation is committed', () => {
@@ -742,7 +955,9 @@ test('customizes the official Settings shell bundle while Harmony is active', ()
 
   expect(source).toContain('__dshHarmonyBeforeSettingsClose')
   expect(source).toContain('onSelect: async (id)')
-  expect(source).toContain('width:1040px;max-width:calc(100vw - 48px)')
+  expect(source).toContain('width:800px;max-width:calc(100vw - 48px)')
+  expect(source).not.toContain('width:1040px;max-width:calc(100vw - 48px)')
+  expect(source).toContain('SettingsRoot_module_css_default.panel + " dshHarmonySettingsPanel"')
   expect(source).toContain('id === "harmony"')
   expect(source).toContain('dshHarmonyNavIcon')
 })
@@ -759,7 +974,9 @@ test('applies providers in the persisted manual order', () => {
   writeFileSync(join(profile, 'package.json'), JSON.stringify({
     dependencies: { 'first-provider': '1.0.0', 'second-provider': '1.0.0' },
   }))
-  writeFileSync(join(profile, 'harmony.json'), JSON.stringify({ order: ['second-provider', 'first-provider'], disabled: [] }))
+  writeFileSync(join(profile, 'harmony.json'), JSON.stringify({
+    order: ['second-provider', 'first-provider'], patchOrder: [], disabled: [],
+  }))
   writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'ordered-target' }))
   writeFileSync(join(target, 'lib/index.js'), 'export const value = 1\n')
   writeFileSync(join(first, 'package.json'), JSON.stringify({
@@ -1884,14 +2101,14 @@ module.exports = [{
 
   failNext = true
   const failed = response()
-  await routes.get('/dsh-harmony/order')(request(desired), failed)
+  await routes.get('/dsh-harmony/profile')(request(desired), failed)
   expect(failed.status).toBe(500)
   expect(await runtimeStatus()).toMatchObject({ state: 'failed', error: 'transaction reload failed' })
   expect(readFileSync(join(profile, 'harmony.json'), 'utf8')).toBe(stateBefore)
   expect(entry.fiber.runtime.callback).toBe(nextPlugin)
 
   const succeeded = response()
-  await routes.get('/dsh-harmony/order')(request(desired), succeeded)
+  await routes.get('/dsh-harmony/profile')(request(desired), succeeded)
   expect(succeeded.status).toBe(200)
   expect(await runtimeStatus()).toMatchObject({ state: 'succeeded' })
   expect(JSON.parse(succeeded.body).order).toEqual(desired)
@@ -1913,11 +2130,16 @@ module.exports = [{
   expect(JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8')).disabled)
     .toEqual(['web-transaction-provider/transactional'])
 
+  const reversedPatchOrder = [...currentProfile().patchOrder].reverse()
+  const patchOrderUpdate = await harmony.updateProfile({ patchOrder: reversedPatchOrder })
+  expect(patchOrderUpdate.profile.patchOrder).toEqual(reversedPatchOrder)
+  expect(JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8')).patchOrder).toEqual(reversedPatchOrder)
+
   const committedState = readFileSync(join(profile, 'harmony.json'), 'utf8')
   clientRebuilds.length = 0
   failClient = 'web-transaction-client-b'
   const clientFailed = response()
-  await routes.get('/dsh-harmony/order')(request(JSON.parse(stateBefore).order), clientFailed)
+  await routes.get('/dsh-harmony/profile')(request(JSON.parse(stateBefore).order), clientFailed)
   failClient = undefined
   expect(clientFailed.status).toBe(500)
   expect(readFileSync(join(profile, 'harmony.json'), 'utf8')).toBe(committedState)
@@ -1931,10 +2153,10 @@ module.exports = [{
   failNext = true
   const first = response()
   const second = response()
-  const firstUpdate = routes.get('/dsh-harmony/order')(request(JSON.parse(stateBefore).order), first)
+  const firstUpdate = routes.get('/dsh-harmony/profile')(request(JSON.parse(stateBefore).order), first)
   await new Promise<void>(resolve => setImmediate(resolve))
   expect(await runtimeStatus()).toMatchObject({ state: 'reloading' })
-  const secondUpdate = routes.get('/dsh-harmony/order')(request(desired), second)
+  const secondUpdate = routes.get('/dsh-harmony/profile')(request(desired), second)
   releaseStart()
   await Promise.all([firstUpdate, secondUpdate])
   expect(first.status).toBe(500)

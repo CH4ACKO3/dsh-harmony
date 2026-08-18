@@ -17,7 +17,8 @@ Identify the active profile, target package, installed version, compiled target 
 | Match syntax, literals, imports, or arbitrary compiled structure | Source Patch |
 | Decorate a named Node.js function or class method | Semantic Patch |
 | Load a target package that publishes TypeScript instead of runnable JavaScript | Loader Patch, plus exact Source Patches when needed |
-| Replace, wrap, insert, remove, or transform compiled React elements | A `dsh-harmony-react` factory, which produces a Source Patch |
+| Change one or more compiled React call sites | `dsh-harmony-react` `element()`, which produces a Source Patch |
+| Decorate or replace one initialized React component binding | `dsh-harmony-react` `component()`, which produces a Source Patch |
 | Expose explicit preview elements or editable variables to dsh-webui-studio | `dsh-harmony-react/studio` |
 
 Use a Source Patch for every browser target. Semantic handlers execute in Node.js and do not support browser bundles, generators, or non-identifier parameters.
@@ -87,6 +88,31 @@ module.exports = {
 
 Always set a target version and an exact `expect` count. Positions passed to `edit` refer to the source produced by all earlier Patches. Keep edits local and non-overlapping; do not write target files.
 
+### React Patch
+
+Use `element()` for concrete compiled `jsx`/`jsxs` calls and `component()` for an initialized component variable whose value is shared by every call site. Both return ordinary Source Patches and use Harmony's normal ordering:
+
+```js
+const { element } = require('dsh-harmony-react')
+
+module.exports = element({
+  id: 'wrap-submit',
+  target: {
+    package: 'some-dsh-plugin',
+    version: '^1.2.0',
+    files: ['lib/client.js'],
+  },
+  select: { component: 'SubmitButton' },
+  expect: 1,
+  operation: {
+    kind: 'wrap',
+    with: { module: 'my-provider', export: 'SubmitBoundary' },
+  },
+})
+```
+
+Element operations are `replace`, `wrap`, `insert-before`, `insert-after`, `transform-props`, and `remove`. Component operations are `decorate` and `replace`; their selector must match a variable declaration with an initializer. Use a core Source Patch for component internals, function declarations, string literals, or any other arbitrary source change.
+
 ### Loader Patch
 
 Use a Loader Patch only when the target package publishes TypeScript source that Node cannot load from `node_modules`. It enables Harmony's TypeScript transpiler for that package's `.ts`, `.tsx`, `.mts`, and `.cts` module graph before Node's default loader runs:
@@ -151,7 +177,7 @@ Use Settings or `dsh harmony` to reorder and enable or disable Patches. Do not e
 
 ## Control a profile from another plugin
 
-Use the Cordis service for a running profile. `order` must be a complete permutation of the current order; omitted fields keep their current values. The result identifies the committed Patch generation, reload status, and client graph revision when the client module service is available:
+Use the Cordis service when already inside the running profile. `order` and `patchOrder` must be complete permutations of their current lists; omitted fields keep their current values. The result identifies the committed Patch generation, reload status, and client graph revision when the client module service is available:
 
 ```ts
 export const inject = ['harmony']
@@ -166,7 +192,7 @@ export async function apply(ctx) {
 }
 ```
 
-For a profile whose Host is stopped, use the public filesystem API instead of importing `lib/profile.js` or editing `harmony.json` directly:
+Call the public profile update API from any other local process. It automatically uses the running Harness transaction when that profile is active, and otherwise validates and atomically updates the stopped profile on disk:
 
 ```ts
 import {
@@ -177,10 +203,10 @@ import {
 
 const current = readHarmonyProfile(profileDir)
 const candidate = preflightHarmonyProfileUpdate(profileDir, { order: current.order })
-const saved = updateHarmonyProfile(profileDir, { disabled: candidate.disabled })
+const saved = await updateHarmonyProfile(profileDir, { disabled: candidate.disabled })
 ```
 
-Offline preflight validates and normalizes profile state without writing it. It does not start a Host or bind target Patches; runtime binding still happens when that profile starts. Never call `updateHarmonyProfile()` while the profile is running; use `ctx.harmony.updateProfile()` so reload and disk state commit or roll back together.
+Offline preflight validates and normalizes profile state without writing it. It does not start a Host or bind target Patches; runtime binding still happens when that profile starts. Do not import internal control/profile modules or edit `harmony.json` directly.
 
 ## Diagnose failures
 

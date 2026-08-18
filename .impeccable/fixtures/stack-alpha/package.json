@@ -1,0 +1,17 @@
+{
+  "name": "dsh-harmony-motion-alpha",
+  "version": "0.0.0",
+  "author": "Harmony Fixture Team",
+  "private": true,
+  "main": "./index.cjs",
+  "dsh": {
+    "plugin": {
+      "schemaVersion": 1,
+      "displayName": { "zh-CN": "动效测试 Alpha", "en": "Motion Test Alpha" },
+      "summary": { "zh-CN": "含 3 个 Patch 的卡片堆测试插件。", "en": "Card-stack fixture with 3 Patches." },
+      "category": "plugin-development"
+    },
+    "bundle": { "patch": "./harmony.patch.yml" },
+    "harmony": { "patches": ["./patches.cjs"], "before": ["dsh-harmony-motion-beta"] }
+  }
+}

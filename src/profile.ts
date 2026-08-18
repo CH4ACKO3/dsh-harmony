@@ -25,6 +25,7 @@ export interface HarmonyIncompatibility {
 export interface HarmonyProfile {
   dir: string
   order: string[]
+  patchOrder: string[]
   disabled: string[]
   plugins: InstalledPlugin[]
   incompatibilities: HarmonyIncompatibility[]
@@ -50,14 +51,17 @@ export interface HarmonyProfilePluginView {
 export interface HarmonyProfileView {
   dir: string
   order: string[]
+  patchOrder: string[]
   disabled: string[]
   plugins: HarmonyProfilePluginView[]
   orderViolations: HarmonyOrderViolation[]
+  patchOrderViolations: HarmonyOrderViolation[]
   incompatibilities: HarmonyIncompatibility[]
 }
 
 export interface HarmonyProfileUpdate {
   order?: string[]
+  patchOrder?: string[]
   disabled?: string[]
 }
 
@@ -140,25 +144,30 @@ export function providerIncompatibilities(
 
 export interface HarmonyState {
   order: string[]
+  patchOrder: string[]
   disabled: string[]
 }
 
 function readState(profileDir: string): HarmonyState {
   const path = join(profileDir, HARMONY_STATE_FILE)
-  if (!existsSync(path)) return { order: [], disabled: [] }
-  const state = JSON.parse(readFileSync(path, 'utf8')) as { order: string[]; disabled?: string[] }
-  return { order: state.order, disabled: state.disabled ?? [] }
+  if (!existsSync(path)) return { order: [], patchOrder: [], disabled: [] }
+  const state = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>
+  return {
+    order: stringList(state.order, 'order'),
+    patchOrder: stringList(state.patchOrder, 'patchOrder'),
+    disabled: stringList(state.disabled, 'disabled'),
+  }
 }
 
 export function saveHarmonyState(profileDir: string, state: HarmonyState): void {
   const path = join(profileDir, HARMONY_STATE_FILE)
   const temporary = `${path}.${process.pid}.tmp`
-  writeFileSync(temporary, `${JSON.stringify({ order: pinHarmonyOrder(state.order), disabled: state.disabled }, null, 2)}\n`)
+  writeFileSync(temporary, `${JSON.stringify({
+    order: pinHarmonyOrder(state.order),
+    patchOrder: state.patchOrder,
+    disabled: state.disabled,
+  }, null, 2)}\n`)
   renameSync(temporary, path)
-}
-
-export function saveHarmonyOrder(profileDir: string, order: string[]): void {
-  saveHarmonyState(profileDir, { ...readState(profileDir), order })
 }
 
 export function synchronizeHarmonyProfile(profileDir: string, requested?: string[], persist = true): HarmonyProfile {
@@ -178,6 +187,7 @@ export function synchronizeHarmonyProfile(profileDir: string, requested?: string
   return {
     dir: profileDir,
     order,
+    patchOrder: state.patchOrder,
     disabled: state.disabled,
     plugins,
     incompatibilities: providerIncompatibilities(plugins, state.disabled),
@@ -207,14 +217,43 @@ function profileOrder(current: string[], input: unknown): string[] {
   return order
 }
 
+function patchOrder(current: string[], input: unknown): string[] {
+  const order = input === undefined ? [...current] : stringList(input, 'patchOrder')
+  const seen = new Set<string>()
+  for (const key of order) {
+    if (seen.has(key)) throw new Error(`dsh-harmony: profile patchOrder contains duplicate Patch ${JSON.stringify(key)}`)
+    seen.add(key)
+  }
+  if (input === undefined || current.length === 0) return order
+  const expected = new Set(current)
+  for (const key of order) {
+    if (!expected.has(key)) throw new Error(`dsh-harmony: profile patchOrder contains unknown Patch ${JSON.stringify(key)}`)
+  }
+  const missing = current.filter(key => !seen.has(key))
+  if (missing.length > 0) {
+    throw new Error(`dsh-harmony: profile patchOrder omits registered Patch${missing.length === 1 ? '' : 'es'} ${missing.map(key => JSON.stringify(key)).join(', ')}`)
+  }
+  return order
+}
+
+export function groupHarmonyPatchOrder(order: string[], current: string[]): string[] {
+  const owners = [...order].sort((left, right) => right.length - left.length)
+  const ownerOf = (key: string): string | undefined => owners.find(owner => key.startsWith(`${owner}/`))
+  return order.flatMap(owner => current.filter(key => ownerOf(key) === owner))
+}
+
 export function prepareHarmonyProfileUpdate(profile: HarmonyProfile, input: HarmonyProfileUpdate): HarmonyProfile {
   if (typeof input !== 'object' || input === null) throw new TypeError('dsh-harmony: profile update must be an object')
   const order = profileOrder(profile.order, input.order)
+  const nextPatchOrder = input.patchOrder === undefined && input.order !== undefined
+    ? groupHarmonyPatchOrder(order, profile.patchOrder)
+    : patchOrder(profile.patchOrder, input.patchOrder)
   const disabled = [...new Set(input.disabled === undefined ? profile.disabled : stringList(input.disabled, 'disabled'))]
   const ordered = new Set(order)
   return {
     ...profile,
     order,
+    patchOrder: nextPatchOrder,
     disabled,
     incompatibilities: providerIncompatibilities(profile.plugins.filter(plugin => ordered.has(plugin.name)), disabled),
   }
@@ -223,12 +262,15 @@ export function prepareHarmonyProfileUpdate(profile: HarmonyProfile, input: Harm
 export function createHarmonyProfileView(
   profile: HarmonyProfile,
   patchCounts: ReadonlyMap<string, number> = new Map(),
+  patchOrderViolations: HarmonyOrderViolation[] = [],
 ): HarmonyProfileView {
   return {
     dir: profile.dir,
     order: [...profile.order],
+    patchOrder: [...profile.patchOrder],
     disabled: [...profile.disabled],
     orderViolations: orderViolations(profile.order, profile.plugins),
+    patchOrderViolations: patchOrderViolations.map(item => ({ ...item })),
     incompatibilities: profile.incompatibilities.map(item => ({ ...item })),
     plugins: profile.plugins.map(({
       name, version, description, patches, before, after, conflicts, author, contributors, homepage, bugs, license,
@@ -264,8 +306,12 @@ export function preflightHarmonyProfileUpdate(profileDir: string, input: Harmony
 }
 
 /** Atomically update a stopped profile. Running profiles must use HarmonyService.updateProfile(). */
-export function updateHarmonyProfile(profileDir: string, input: HarmonyProfileUpdate): HarmonyProfileView {
+export function updateStoppedHarmonyProfile(profileDir: string, input: HarmonyProfileUpdate): HarmonyProfileView {
   const candidate = prepareHarmonyProfileUpdate(synchronizeHarmonyProfile(profileDir, undefined, false), input)
-  saveHarmonyState(profileDir, { order: candidate.order, disabled: candidate.disabled })
+  saveHarmonyState(profileDir, {
+    order: candidate.order,
+    patchOrder: candidate.patchOrder,
+    disabled: candidate.disabled,
+  })
   return createHarmonyProfileView(candidate)
 }

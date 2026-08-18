@@ -36,6 +36,8 @@ Harmony 提供一种以优雅的方式来修改其它为 DeepSeek Harness 编写
 
 源码 Patch 通过 TSQuery 在 TypeScript AST 中精确匹配目标节点，再使用 MagicString 改写当前内存源码的对应区间。Patch 按排序依次应用，后一个 Patch 继续处理前一个 Patch 的输出，因此针对同一目标的多个修改有机会和谐共处。整个过程不会写回已安装的插件文件。
 
+Provider 可以通过 `before` 和 `after` 声明粗粒度关系，单个 Patch 也可以覆盖所属 Provider 的全局规则。配置同时保存 Provider 顺序和可跨 Provider 任意交错的 Patch 顺序。组合 Patch 则把多个普通 Patch 作为一个排序、开关和跨文件事务单元：任一成员失败，整个组合都不会应用。
+
 该功能旨在让 DeepSeek Harness 的表达能力更进一步：创造性、组合性、**修改性**。
 
 **Respect**

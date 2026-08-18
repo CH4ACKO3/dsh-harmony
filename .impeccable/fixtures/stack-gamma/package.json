@@ -1,0 +1,17 @@
+{
+  "name": "dsh-harmony-motion-gamma",
+  "version": "0.0.0",
+  "author": "Harmony Fixture Team",
+  "private": true,
+  "main": "./index.cjs",
+  "dsh": {
+    "plugin": {
+      "schemaVersion": 1,
+      "displayName": { "zh-CN": "动效测试 Gamma", "en": "Motion Test Gamma" },
+      "summary": { "zh-CN": "含 7 个 Patch 的长卡片堆测试插件。", "en": "Long card-stack fixture with 7 Patches." },
+      "category": "plugin-development"
+    },
+    "bundle": { "patch": "./harmony.patch.yml" },
+    "harmony": { "patches": ["./patches.cjs"] }
+  }
+}

@@ -36,6 +36,8 @@ Harmony provides an elegant way to modify the behavior of other plugins written 
 
 Source Patches use TSQuery to precisely match target nodes in a TypeScript AST, then use MagicString to rewrite the corresponding ranges of the current in-memory source. Patches run in their configured order, and each Patch receives the output of the previous one, giving multiple changes to the same target a chance to coexist. Installed plugin files are never modified.
 
+Providers can declare coarse `before` and `after` relationships, while an individual Patch can override that provider-wide rule. Profiles keep both a provider order and a fully interleavable Patch order. Composite Patches group several ordinary Patches into one ordered, toggleable, cross-file transaction: if one member fails, none of the group is applied.
+
 The goal is to extend the expressive power of DeepSeek Harness through creativity, composition, and **modification**.
 
 **Respect**

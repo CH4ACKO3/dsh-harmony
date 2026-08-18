@@ -1,5 +1,6 @@
-export interface ClientPatchTarget {
-  package: string
+import type { HarmonyPatchOrder, HarmonyPatchTarget } from 'dsh-harmony'
+
+export interface ReactPatchTarget extends HarmonyPatchTarget {
   version: string
 }
 
@@ -8,40 +9,39 @@ export type ElementSelector =
   | { intrinsic: string }
   | { tsquery: string }
 
-export interface ClientExport {
+export type ComponentSelector =
+  | { name: string }
+  | { tsquery: string }
+
+export interface ClientReference {
   module: string
   export: string
 }
 
-interface ElementPatchOptions {
+export type ElementOperation =
+  | { kind: 'replace'; with: ClientReference }
+  | { kind: 'wrap'; with: ClientReference }
+  | { kind: 'insert-before'; with: ClientReference }
+  | { kind: 'insert-after'; with: ClientReference }
+  | { kind: 'transform-props'; with: ClientReference }
+  | { kind: 'remove' }
+
+export interface ElementPatchOptions extends HarmonyPatchOrder {
   id: string
-  target: ClientPatchTarget
+  target: ReactPatchTarget
   select: ElementSelector
   expect: number
+  operation: ElementOperation
 }
 
-export interface ReplaceElementOptions extends ElementPatchOptions {
-  with: ClientExport
-}
+export type ComponentOperation =
+  | { kind: 'decorate'; with: ClientReference }
+  | { kind: 'replace'; with: ClientReference }
 
-export interface WrapElementOptions extends ElementPatchOptions {
-  with: ClientExport
-}
-
-export interface InsertElementOptions extends ElementPatchOptions {
-  insert: ClientExport
-}
-
-export type RemoveElementOptions = ElementPatchOptions
-
-export interface TransformPropsOptions extends ElementPatchOptions {
-  transform: ClientExport
-}
-
-export interface ReplaceStringLiteralOptions {
+export interface ComponentPatchOptions extends HarmonyPatchOrder {
   id: string
-  target: ClientPatchTarget
-  text: string
-  with: string
+  target: ReactPatchTarget
+  select: ComponentSelector
   expect: number
+  operation: ComponentOperation
 }

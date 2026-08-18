@@ -68,7 +68,8 @@ if (isHarmonyCommand) {
     if (command === 'status') {
       const patches = getPatchStatuses()
       for (const patch of patches) {
-        process.stdout.write(`${patch.state.padEnd(8)} ${patch.key} -> ${patch.target.package}/${patch.file ?? patch.target.files.join('|')}${patch.error === undefined ? '' : `\n  ${patch.error}`}\n`)
+        const targets = patch.targets.map(target => `${target.package}/${target.files.join('|')}`).join(', ')
+        process.stdout.write(`${patch.state.padEnd(8)} ${patch.key} -> ${patch.file ?? targets}${patch.error === undefined ? '' : `\n  ${patch.error}`}\n`)
       }
       process.exit(patches.some(patch => patch.state === 'failed') ? 1 : 0)
     } else {

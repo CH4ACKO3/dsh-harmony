@@ -1,0 +1,4 @@
+- insert:
+    - id: harmony-motion-gamma
+      name: dsh-harmony-motion-gamma
+      inject: [harmony]

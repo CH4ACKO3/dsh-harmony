@@ -3,7 +3,7 @@
 React-aware source patch factories for [dsh-harmony](https://github.com/CH4ACKO3/dsh-harmony).
 
 This package is a Node-side Harmony extension, not a DSH client runtime. It turns
-component-level operations into ordinary `HarmonySourcePatch` declarations. Harmony
+React Element and Component operations into ordinary `HarmonySourcePatch` declarations. Harmony
 continues to own patch discovery, ordering, validation, transactions, and WebUI HMR.
 
 ## Architecture
@@ -22,19 +22,23 @@ normal `dsh web` sessions.
 ## Example
 
 ```js
-const { replaceElement } = require('dsh-harmony-react')
+const { element } = require('dsh-harmony-react')
 
-module.exports = replaceElement({
+module.exports = element({
   id: 'custom-sidebar-brand',
   target: {
     package: '@deepseek-ai/dsh-client-ui-sidebar',
     version: '0.1.0-rc.6',
+    files: ['lib/client.js'],
   },
   select: { component: 'BrandWordmark' },
   expect: 1,
-  with: {
-    module: 'my-harmony-plugin',
-    export: 'CustomBrand',
+  operation: {
+    kind: 'replace',
+    with: {
+      module: 'my-harmony-plugin',
+      export: 'CustomBrand',
+    },
   },
 })
 ```
@@ -66,21 +70,50 @@ the synchronous `require()` inserted into another client module can resolve it:
 }
 ```
 
-## Operations
+## Element and Component patches
 
-- `replaceElement`: replace the component type and preserve existing props and key.
-- `wrapElement`: wrap the existing element and pass it as `children`.
-- `insertBefore` / `insertAfter`: insert a component next to the existing element.
-- `transformProps`: pass the existing props through a browser-side function.
-- `removeElement`: replace the element with `null`.
-- `replaceStringLiteral`: replace an exact string literal anywhere in the target bundle.
+Use `element()` for one or more concrete compiled `jsx`/`jsxs` call sites. Its
+operation can `replace`, `wrap`, `insert-before`, `insert-after`, `transform-props`,
+or `remove` the selected Element. The change affects only the matched call sites.
 
-Selectors can address a local or member component name, an intrinsic tag, or use raw
-TSQuery. A raw TSQuery must select the compiled `jsx`/`jsxs` `CallExpression` itself;
-selecting one of its descendants would make `expect` count syntax nodes instead of
-React elements. Every patch requires an exact `expect` count and an explicit target
-version. A single patch also rejects nested matches when their source edits overlap;
-use explicitly ordered patches when both parent and child must be changed.
+Use `component()` to change an initialized component binding. `decorate` wraps its
+current initializer in a browser-side higher-order function; `replace` replaces that
+initializer. Every call site that reads the binding observes the result:
+
+```js
+const { component } = require('dsh-harmony-react')
+
+module.exports = component({
+  id: 'decorate-button',
+  target: {
+    package: '@deepseek-ai/dsh-client-ui-buttons',
+    version: '0.1.0-rc.6',
+    files: ['lib/client.js'],
+  },
+  select: { name: 'Button' },
+  expect: 1,
+  operation: {
+    kind: 'decorate',
+    with: { module: 'my-harmony-plugin', export: 'withFeature' },
+  },
+})
+```
+
+Component selectors must directly match a `VariableDeclaration` with an initializer.
+This preserves declaration and binding semantics; use a core Source Patch when a
+function body or another declaration form must change.
+
+Element selectors can address a local or member component name, an intrinsic tag, or
+use raw TSQuery. A raw Element TSQuery must select the compiled `jsx`/`jsxs`
+`CallExpression` itself. A raw Component TSQuery must select the initialized variable
+declaration itself. Every patch requires an exact `expect`, explicit target version,
+and explicit target files. A single patch rejects nested matches when their source
+edits overlap; use explicitly ordered patches when both parent and child must change.
+
+Harmony applies every React Patch to the source produced by earlier Patches. Compatible
+decorators and prop transforms therefore compose in resolved Patch order. React does
+not add a second ordering model; provider and Patch `before`/`after`, user order, and
+`patchOrder` remain owned by Harmony.
 
 Client-side prop transformers are ordinary functions, not React components, and must
 not call hooks. Use a wrapper or replacement component when hooks are required.

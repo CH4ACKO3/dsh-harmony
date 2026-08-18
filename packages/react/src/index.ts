@@ -1,21 +1,12 @@
-export {
-  insertAfter,
-  insertBefore,
-  removeElement,
-  replaceElement,
-  replaceStringLiteral,
-  transformProps,
-  wrapElement,
-} from './patches.js'
+export { component, element } from './patches.js'
 
 export type {
-  ClientExport,
-  ClientPatchTarget,
+  ClientReference,
+  ComponentOperation,
+  ComponentPatchOptions,
+  ComponentSelector,
+  ElementOperation,
+  ElementPatchOptions,
   ElementSelector,
-  InsertElementOptions,
-  RemoveElementOptions,
-  ReplaceElementOptions,
-  ReplaceStringLiteralOptions,
-  TransformPropsOptions,
-  WrapElementOptions,
+  ReactPatchTarget,
 } from './types.js'

@@ -4,7 +4,7 @@ import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from 'vitest'
-import { publishRuntimeAddress, updateRuntimeOrder } from './control.js'
+import { publishRuntimeAddress, updateHarmonyProfile, updateRuntimeProfile } from './control.js'
 import { synchronizeProfile } from './runtime.js'
 import { renderHarmonyTui, saveHarmonyTuiOrder } from './tui.js'
 
@@ -67,9 +67,10 @@ module.exports = {
   rmSync(profile, { recursive: true })
 })
 
-test('TUI sends live order updates through the published runtime address', async () => {
+test('the unified profile API sends live updates through the published runtime address', async () => {
   const profile = mkdtempSync(join(tmpdir(), 'dsh-harmony-control-'))
   let failure = false
+  let mismatch = false
   let delay = 0
   let received: unknown
   const server = createServer(async (request, response) => {
@@ -78,21 +79,37 @@ test('TUI sends live order updates through the published runtime address', async
     received = JSON.parse(Buffer.concat(chunks).toString())
     await new Promise(resolve => setTimeout(resolve, delay))
     response.writeHead(failure ? 500 : 200, { 'content-type': 'application/json' })
-    response.end(JSON.stringify(failure ? { error: 'reload conflict' } : { dir: profile, order: ['a'] }))
+    const input = received as { order?: string[]; patchOrder?: string[]; disabled?: string[] }
+    response.end(JSON.stringify(failure ? { error: 'reload conflict' } : {
+      dir: profile,
+      order: mismatch ? ['unexpected'] : input.order ?? ['a'],
+      patchOrder: input.patchOrder ?? [],
+      disabled: [...new Set(input.disabled ?? [])],
+      plugins: [], orderViolations: [], patchOrderViolations: [], incompatibilities: [],
+    }))
   })
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   const dispose = publishRuntimeAddress(profile, '127.0.0.1', (server.address() as AddressInfo).port)
 
-  expect(await updateRuntimeOrder(profile, ['a'])).toBe(true)
+  expect(await updateHarmonyProfile(profile, { order: ['a'] })).toMatchObject({ dir: profile, order: ['a'] })
   expect(received).toEqual({ order: ['a'] })
+  expect(await updateHarmonyProfile(profile, {
+    patchOrder: ['provider/patch'], disabled: ['provider/patch', 'provider/patch'],
+  })).toMatchObject({ patchOrder: ['provider/patch'], disabled: ['provider/patch'] })
+  expect(received).toEqual({
+    patchOrder: ['provider/patch'], disabled: ['provider/patch', 'provider/patch'],
+  })
   failure = true
   delay = 1100
-  await expect(updateRuntimeOrder(profile, ['b'])).rejects.toThrow('reload conflict')
+  await expect(updateRuntimeProfile(profile, { order: ['b'] })).rejects.toThrow('reload conflict')
   failure = false
+  mismatch = true
   delay = 0
-  await expect(updateRuntimeOrder(profile, ['b'])).rejects.toThrow('does not match')
+  await expect(updateRuntimeProfile(profile, { order: ['b'] })).rejects.toThrow('does not match')
+  mismatch = false
   dispose()
   expect(existsSync(join(profile, '.dsh-harmony-runtime.json'))).toBe(false)
+  expect(await updateRuntimeProfile(profile, { order: ['a'] })).toBeUndefined()
 
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
   rmSync(profile, { recursive: true })

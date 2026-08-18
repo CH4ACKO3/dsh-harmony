@@ -1,9 +1,8 @@
 import { emitKeypressEvents } from 'node:readline'
 import type { ReadStream, WriteStream } from 'node:tty'
-import { updateRuntimeOrder } from './control.js'
+import { updateHarmonyProfile } from './control.js'
 import { autoSortOrder, orderViolations } from './order.js'
 import { HARMONY_PLUGIN, pinHarmonyOrder, synchronizeHarmonyProfile, type HarmonyProfile } from './profile.js'
-import { beginProfileUpdate, preflightProfileUpdate } from './runtime.js'
 
 const ESC = '\u001b['
 
@@ -58,10 +57,7 @@ export function renderHarmonyTui(profile: HarmonyProfile, selected: number, mess
 
 export async function saveHarmonyTuiOrder(profileDir: string, order: string[]): Promise<HarmonyProfile> {
   order = pinHarmonyOrder(order)
-  if (!await updateRuntimeOrder(profileDir, order)) {
-    preflightProfileUpdate({ order })
-    beginProfileUpdate({ order }).commit()
-  }
+  await updateHarmonyProfile(profileDir, { order })
   return synchronizeHarmonyProfile(profileDir)
 }
 

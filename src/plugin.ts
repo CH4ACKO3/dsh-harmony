@@ -17,6 +17,7 @@ import {
   beginPluginUpdate,
   currentProfile,
   getPatchInspections,
+  getPatchOrderViolations,
   getPatchStatuses,
   inspectPatchDependencies,
   inspectPatchTargets,
@@ -62,7 +63,7 @@ function profileView(): HarmonyProfileView {
   const profile = currentProfile()
   const patchCounts = new Map(profile.plugins.map(plugin => [plugin.name, 0]))
   for (const patch of getPatchStatuses()) patchCounts.set(patch.owner, (patchCounts.get(patch.owner) ?? 0) + 1)
-  return createHarmonyProfileView(profile, patchCounts)
+  return createHarmonyProfileView(profile, patchCounts, getPatchOrderViolations())
 }
 
 function sendJson(response: ServerResponse, value: unknown): void {
@@ -296,8 +297,13 @@ export async function apply(ctx: Context): Promise<void> {
 
   const updateProfile = async (input: () => HarmonyProfileUpdate): Promise<HarmonyProfileUpdateResult> => {
     const generation = await enqueueUpdate(async () => {
-      const candidate = prepareHarmonyProfileUpdate(currentProfile(), input())
-      const transaction = beginProfileUpdate({ order: candidate.order, disabled: candidate.disabled })
+      const requested = input()
+      const candidate = prepareHarmonyProfileUpdate(currentProfile(), requested)
+      const transaction = beginProfileUpdate({
+        ...(requested.order === undefined ? {} : { order: candidate.order }),
+        ...(requested.patchOrder === undefined ? {} : { patchOrder: candidate.patchOrder }),
+        ...(requested.disabled === undefined ? {} : { disabled: candidate.disabled }),
+      })
       await applyTransaction(transaction)
       return transaction.generation
     })
@@ -343,13 +349,13 @@ export async function apply(ctx: Context): Promise<void> {
   ctx.inject(['webServer'], (webCtx) => {
     const dispose = [webCtx.webServer.register({
       kind: 'exact',
-      path: '/dsh-harmony/order',
+      path: '/dsh-harmony/profile',
       async handler(request: IncomingMessage, response: ServerResponse) {
         if (request.method === 'GET') return sendJson(response, profileView())
         if (request.method === 'POST') {
           try {
-            const { order } = await readJson(request) as { order: string[] }
-            const result = await updateProfile(() => ({ order }))
+            const input = await readJson(request) as HarmonyProfileUpdate
+            const result = await updateProfile(() => input)
             return sendJson(response, result.profile)
           } catch (error) {
             return sendError(response, error)

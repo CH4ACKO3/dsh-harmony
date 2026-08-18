@@ -8,7 +8,9 @@ import semver from 'semver'
 import ts from 'typescript'
 import { tsquery } from '@phenomnomnominal/tsquery'
 import type {
+  HarmonyCompositePatch,
   HarmonyPatch,
+  HarmonyPatchDeclaration,
   HarmonyPatchInspection,
   HarmonyPatchDependency,
   HarmonyLoaderPatch,
@@ -17,8 +19,11 @@ import type {
   HarmonySemanticPatch,
   HarmonySourcePatch,
 } from './index.js'
+import { autoSortPatchOrder, patchOrderViolations, type HarmonyPatchOrderItem } from './order.js'
+import { schedulePatchBatches } from './scheduler.js'
 import {
   HARMONY_STATE_FILE,
+  groupHarmonyPatchOrder,
   pinHarmonyOrder,
   providerIncompatibilities,
   saveHarmonyState,
@@ -38,7 +43,8 @@ interface PackageInfo {
 }
 
 interface RegisteredPatch {
-  patch: HarmonyPatch
+  declarationPatch: HarmonyPatchDeclaration
+  members: HarmonyPatch[]
   owner: string
   key: string
   index: number
@@ -64,6 +70,7 @@ interface TransformRecord {
 interface GenerationState {
   providers: ProviderRecord[]
   order: string[]
+  patchOrder: string[]
   disabled: Set<string>
 }
 
@@ -91,12 +98,19 @@ const moduleSourcesLoading = new Map<string, number>()
 const transformationsInProgress = new Set<string>()
 let transformCache = new Map<string, TransformRecord>()
 let patchStatuses = new Map<string, HarmonyPatchStatus>()
-let semanticBindings = new Map<string, RegisteredPatch[]>()
+interface BoundSemanticPatch {
+  registered: RegisteredPatch
+  patch: HarmonySemanticPatch
+}
+let semanticBindings = new Map<string, BoundSemanticPatch[]>()
 let generation = 0
 let generationSequence = 0
-const generationStates = new Map<number, GenerationState>([[0, { providers: [], order: [], disabled: new Set() }]])
+const generationStates = new Map<number, GenerationState>([[0, {
+  providers: [], order: [], patchOrder: [], disabled: new Set(),
+}]])
 let activeProfileDir: string | undefined
 let providerOrder: string[] = []
+let patchOrder: string[] = []
 let disabledPatchKeys = new Set<string>()
 let refreshWatchedFiles: (() => void) | undefined
 let moduleHooksInstalled = false
@@ -152,8 +166,10 @@ function addTarget(targets: PatchTargets, packageName: string, file: string): vo
 }
 
 function addPatchTargets(targets: PatchTargets, patches: RegisteredPatch[]): void {
-  for (const { patch } of patches) {
-    for (const file of patch.target.files) addTarget(targets, patch.target.package, file)
+  for (const registered of patches) {
+    for (const patch of registered.members) {
+      for (const file of patch.target.files) addTarget(targets, patch.target.package, file)
+    }
   }
 }
 
@@ -180,22 +196,106 @@ function patchKind(patch: HarmonyPatch): 'source' | 'semantic' | 'loader' {
   return 'select' in patch ? 'source' : 'semantic'
 }
 
+function isCompositePatch(patch: HarmonyPatchDeclaration): patch is HarmonyCompositePatch {
+  return 'patches' in patch
+}
+
+function orderItem(registered: RegisteredPatch): HarmonyPatchOrderItem {
+  return {
+    key: registered.key,
+    owner: registered.owner,
+    index: registered.index,
+    before: registered.declarationPatch.before,
+    after: registered.declarationPatch.after,
+  }
+}
+
+function defaultPatchOrder(order: string[], records: Iterable<ProviderRecord>): string[] {
+  const rank = new Map(order.map((owner, index) => [owner, index]))
+  return [...records].flatMap(provider => provider.patches)
+    .sort((a, b) => (rank.get(a.owner) ?? Number.MAX_SAFE_INTEGER)
+      - (rank.get(b.owner) ?? Number.MAX_SAFE_INTEGER) || a.index - b.index)
+    .map(registered => registered.key)
+}
+
+function reconcilePatchOrder(
+  requested: string[],
+  order: string[],
+  records: Iterable<ProviderRecord>,
+): string[] {
+  const providers = [...records]
+  const defaults = defaultPatchOrder(order, providers)
+  const items = providers.flatMap(provider => provider.patches).map(orderItem)
+  const constraints = providers.map(record => record.info.harmony === undefined
+    ? { name: record.info.name, before: [], after: [] }
+    : {
+        name: record.info.name,
+        before: record.info.harmony.before ?? [],
+        after: record.info.harmony.after ?? [],
+      })
+  if (requested.length === 0) return autoSortPatchOrder(defaults, items, constraints)
+  const known = new Set(defaults)
+  const reconciled = requested.filter((key, index) => known.has(key) && requested.indexOf(key) === index)
+  const present = new Set(reconciled)
+  const defaultRank = new Map(defaults.map((key, index) => [key, index]))
+  const inversions = (candidate: string[]): number => {
+    let count = 0
+    for (let left = 0; left < candidate.length; left += 1) {
+      for (let right = left + 1; right < candidate.length; right += 1) {
+        if (defaultRank.get(candidate[left]!)! > defaultRank.get(candidate[right]!)!) count += 1
+      }
+    }
+    return count
+  }
+  for (const key of defaults) {
+    if (present.has(key)) continue
+    let best: string[] | undefined
+    let bestViolations = Number.POSITIVE_INFINITY
+    let bestInversions = Number.POSITIVE_INFINITY
+    for (let index = 0; index <= reconciled.length; index += 1) {
+      const candidate = [...reconciled.slice(0, index), key, ...reconciled.slice(index)]
+      const violations = patchOrderViolations(candidate, items, constraints).length
+      const changed = inversions(candidate)
+      if (violations < bestViolations || violations === bestViolations && changed < bestInversions) {
+        best = candidate
+        bestViolations = violations
+        bestInversions = changed
+      }
+    }
+    reconciled.splice(0, reconciled.length, ...best!)
+    present.add(key)
+  }
+  return reconciled
+}
+
 function isPatchDisabled(registered: RegisteredPatch, disabled = disabledPatchKeys): boolean {
   return disabled.has(registered.key) || disabled.has(`${registered.owner}/*`)
 }
 
 function freshStatus(registered: RegisteredPatch): HarmonyPatchStatus {
-  const semantic = patchKind(registered.patch) === 'semantic' ? registered.patch as HarmonySemanticPatch : undefined
-  const loader = patchKind(registered.patch) === 'loader' ? registered.patch as HarmonyLoaderPatch : undefined
+  const simple = registered.members.length === 1 ? registered.members[0]! : undefined
+  const semantic = simple !== undefined && patchKind(simple) === 'semantic' ? simple as HarmonySemanticPatch : undefined
+  const loader = simple !== undefined && patchKind(simple) === 'loader' ? simple as HarmonyLoaderPatch : undefined
   return {
     key: registered.key,
-    id: registered.patch.id,
+    id: registered.declarationPatch.id,
     owner: registered.owner,
-    target: registered.patch.target,
-    kind: patchKind(registered.patch),
+    index: registered.index,
+    targets: registered.members.map(patch => patch.target),
+    kind: simple === undefined ? 'composite' : patchKind(simple),
     operation: semantic?.operation,
     loader: loader?.loader,
+    ...(simple === undefined ? {
+      members: registered.members.map(patch => ({
+        id: patch.id,
+        target: patch.target,
+        kind: patchKind(patch),
+        ...(patchKind(patch) === 'semantic' ? { operation: (patch as HarmonySemanticPatch).operation } : {}),
+        ...(patchKind(patch) === 'loader' ? { loader: (patch as HarmonyLoaderPatch).loader } : {}),
+      })),
+    } : {}),
     state: isPatchDisabled(registered) ? 'disabled' : 'pending',
+    status: isPatchDisabled(registered) ? 'disabled' : 'normal',
     loaded: false,
     matches: 0,
     generation,
@@ -217,6 +317,7 @@ function snapshotGeneration(retainedGeneration?: number): void {
   generationStates.set(generation, {
     providers: [...providers.values()],
     order: [...providerOrder],
+    patchOrder: [...patchOrder],
     disabled: new Set(disabledPatchKeys),
   })
 }
@@ -239,9 +340,14 @@ function pruneSemanticBindings(activeGeneration: number): void {
 function updateStatus(registered: RegisteredPatch, value: Partial<HarmonyPatchStatus>): void {
   const previous = patchStatuses.get(registered.key) ?? freshStatus(registered)
   const next = { ...previous, ...value }
+  next.status = next.state === 'disabled'
+    ? 'disabled'
+    : next.state === 'failed'
+      ? 'error'
+      : value.status ?? (value.state === undefined ? previous.status : 'normal')
   patchStatuses.set(registered.key, next)
   if (!pendingStatusGenerations.has(next.generation)
-    && (previous.state !== next.state || previous.error !== next.error)) {
+    && (previous.state !== next.state || previous.status !== next.status || previous.error !== next.error)) {
     for (const listener of patchStatusListeners) listener()
   }
 }
@@ -313,13 +419,30 @@ function prepareProvider(info: PackageInfo, current?: ProviderRecord, stage = fa
   try {
     for (const filename of declaredFiles) {
       const require = createRequire(join(info.dir, 'package.json'))
-      const exported = require(filename) as HarmonyPatch | HarmonyPatch[] | { default?: HarmonyPatch | HarmonyPatch[] }
-      const value = (exported as { default?: HarmonyPatch | HarmonyPatch[] }).default ?? exported as HarmonyPatch | HarmonyPatch[]
+      const exported = require(filename) as HarmonyPatchDeclaration | HarmonyPatchDeclaration[]
+        | { default?: HarmonyPatchDeclaration | HarmonyPatchDeclaration[] }
+      const value = (exported as { default?: HarmonyPatchDeclaration | HarmonyPatchDeclaration[] }).default
+        ?? exported as HarmonyPatchDeclaration | HarmonyPatchDeclaration[]
       for (const patch of Array.isArray(value) ? value : [value]) {
         if (ids.has(patch.id)) throw new Error(`dsh-harmony: duplicate patch id ${JSON.stringify(patch.id)} in ${JSON.stringify(info.name)}`)
         ids.add(patch.id)
+        const members = isCompositePatch(patch) ? patch.patches : [patch]
+        if (members.length === 0) {
+          throw new Error(`dsh-harmony: composite Patch ${JSON.stringify(`${info.name}/${patch.id}`)} must contain at least one member`)
+        }
+        const memberIds = new Set<string>()
+        for (const member of members) {
+          if (memberIds.has(member.id)) {
+            throw new Error(`dsh-harmony: duplicate member id ${JSON.stringify(member.id)} in composite Patch ${JSON.stringify(`${info.name}/${patch.id}`)}`)
+          }
+          memberIds.add(member.id)
+          if (isCompositePatch(patch) && (member.before !== undefined || member.after !== undefined)) {
+            throw new Error(`dsh-harmony: member ${JSON.stringify(member.id)} in composite Patch ${JSON.stringify(`${info.name}/${patch.id}`)} cannot declare before or after`)
+          }
+        }
         registered.push({
-          patch,
+          declarationPatch: patch,
+          members,
           owner: info.name,
           key: `${info.name}/${patch.id}`,
           index: index++,
@@ -351,14 +474,20 @@ export function discoverPackage(packageDir: string): void {
   providers.set(info.name, next)
   if (!providerOrder.includes(info.name)) {
     providerOrder.push(info.name)
-    if (activeProfileDir !== undefined) saveHarmonyState(activeProfileDir, { order: providerOrder, disabled: [...disabledPatchKeys] })
   }
+  patchOrder = reconcilePatchOrder(patchOrder, providerOrder, providers.values())
+  if (activeProfileDir !== undefined) saveHarmonyState(activeProfileDir, {
+    order: providerOrder,
+    patchOrder,
+    disabled: [...disabledPatchKeys],
+  })
   notify(targets)
 }
 
 export function synchronizeProfile(profileDir: string, installed?: string[]): HarmonyProfile {
   const previousTargets = allTargets()
   const previousOrder = providerOrder
+  const previousPatchOrder = patchOrder
   const previousDisabled = disabledPatchKeys
   const profile = synchronizeHarmonyProfile(profileDir, installed, false)
   const harmonyProviders = profile.plugins.filter(plugin => plugin.patches.length > 0)
@@ -394,9 +523,16 @@ export function synchronizeProfile(profileDir: string, installed?: string[]): Ha
     }
     activeProfileDir = profileDir
     providerOrder = profile.order
+    patchOrder = reconcilePatchOrder(profile.patchOrder, providerOrder, nextProviders.values())
     disabledPatchKeys = new Set(profile.disabled)
-    if (registryChanged || orderChanged || disabledChanged) notify(changedTargets)
-    return profile
+    const patchOrderChanged = previousPatchOrder.length !== patchOrder.length
+      || previousPatchOrder.some((key, index) => key !== patchOrder[index])
+    if (profile.patchOrder.length !== patchOrder.length
+      || profile.patchOrder.some((key, index) => key !== patchOrder[index])) {
+      saveHarmonyState(profileDir, { order: providerOrder, patchOrder, disabled: profile.disabled })
+    }
+    if (registryChanged || orderChanged || patchOrderChanged || disabledChanged) notify(changedTargets)
+    return { ...profile, patchOrder: [...patchOrder] }
   } finally {
     refreshWatchedFiles?.()
   }
@@ -409,6 +545,7 @@ export function currentProfile(): HarmonyProfile {
   return {
     ...profile,
     order: [...providerOrder],
+    patchOrder: [...patchOrder],
     disabled,
     incompatibilities: providerIncompatibilities(
       profile.plugins.filter(plugin => loaded.has(plugin.name)),
@@ -452,10 +589,13 @@ export function beginPluginUpdate(installed: string[], force = false): ProfileTr
     refreshWatchedFiles?.()
     throw error
   }
+  const nextPatchOrder = reconcilePatchOrder(profile.patchOrder, profile.order, nextProviders.values())
+  const nextProfile = { ...profile, patchOrder: nextPatchOrder }
   const previous = {
     providers: new Map(providers),
     declared: declaredProviderFiles,
     order: providerOrder,
+    patchOrder,
     disabled: disabledPatchKeys,
     generation,
     cache: transformCache,
@@ -466,12 +606,14 @@ export function beginPluginUpdate(installed: string[], force = false): ProfileTr
     || [...nextProviders].some(([name, record]) => previous.providers.get(name) !== record)
     || previous.order.length !== profile.order.length
     || previous.order.some((name, index) => name !== profile.order[index])
+    || previous.patchOrder.length !== nextPatchOrder.length
+    || previous.patchOrder.some((key, index) => key !== nextPatchOrder[index])
     || previous.disabled.size !== profile.disabled.length
     || profile.disabled.some(key => !previous.disabled.has(key))
   if (!changed && !force) {
     return {
       generation,
-      profile,
+      profile: nextProfile,
       targets: new Map(),
       commit() {},
       rollback() {},
@@ -487,14 +629,16 @@ export function beginPluginUpdate(installed: string[], force = false): ProfileTr
     replaceProviders(nextProviders)
     declaredProviderFiles = nextDeclared
     providerOrder = profile.order
+    patchOrder = nextPatchOrder
     disabledPatchKeys = new Set(profile.disabled)
-    preflight(providerOrder, disabledPatchKeys)
+    preflight(patchOrder, disabledPatchKeys)
   } catch (error) {
     for (const restore of [...stagedProviderCaches.values()].reverse()) restore()
     stagedProviderCaches.clear()
     replaceProviders(previous.providers)
     declaredProviderFiles = previous.declared
     providerOrder = previous.order
+    patchOrder = previous.patchOrder
     disabledPatchKeys = previous.disabled
     throw error
   }
@@ -508,12 +652,16 @@ export function beginPluginUpdate(installed: string[], force = false): ProfileTr
   let active = true
   return {
     generation: candidateGeneration,
-    profile,
+    profile: nextProfile,
     targets,
     commit() {
       if (!active) return
       pruneSemanticBindings(candidateGeneration)
-      saveHarmonyState(activeProfileDir!, { order: profile.order, disabled: profile.disabled })
+      saveHarmonyState(activeProfileDir!, {
+        order: profile.order,
+        patchOrder,
+        disabled: profile.disabled,
+      })
       refreshWatchedFiles?.()
       stagedProviderCaches.clear()
       retainGeneration(candidateGeneration)
@@ -525,6 +673,7 @@ export function beginPluginUpdate(installed: string[], force = false): ProfileTr
       replaceProviders(previous.providers)
       declaredProviderFiles = previous.declared
       providerOrder = previous.order
+      patchOrder = previous.patchOrder
       disabledPatchKeys = previous.disabled
       generation = previous.generation
       transformCache = previous.cache
@@ -540,9 +689,14 @@ export function beginPluginUpdate(installed: string[], force = false): ProfileTr
   }
 }
 
-export function beginProfileUpdate(input: { order?: string[]; disabled?: string[] }): ProfileTransaction {
+export function beginProfileUpdate(input: {
+  order?: string[]
+  patchOrder?: string[]
+  disabled?: string[]
+}): ProfileTransaction {
   const previous = {
     order: providerOrder,
+    patchOrder,
     disabled: disabledPatchKeys,
     generation,
     cache: transformCache,
@@ -550,10 +704,21 @@ export function beginProfileUpdate(input: { order?: string[]; disabled?: string[
     bindings: semanticBindings,
   }
   const order = pinHarmonyOrder(input.order ?? providerOrder)
+  const nextPatchOrder = input.patchOrder !== undefined
+    ? reconcilePatchOrder(input.patchOrder, order, providers.values())
+    : input.order !== undefined
+      ? groupHarmonyPatchOrder(order, patchOrder)
+      : [...patchOrder]
+  if (input.patchOrder !== undefined
+    && (nextPatchOrder.length !== input.patchOrder.length
+      || nextPatchOrder.some((key, index) => key !== input.patchOrder![index]))) {
+    throw new Error('dsh-harmony: profile patchOrder must be a complete permutation of registered Patches')
+  }
   const disabled = new Set(input.disabled ?? disabledPatchKeys)
-  preflight(order, disabled)
+  preflight(nextPatchOrder, disabled)
 
   providerOrder = order
+  patchOrder = nextPatchOrder
   disabledPatchKeys = disabled
   generation = ++generationSequence
   const candidateGeneration = generation
@@ -565,12 +730,12 @@ export function beginProfileUpdate(input: { order?: string[]; disabled?: string[
   let active = true
   return {
     generation: candidateGeneration,
-    profile: { ...currentProfile(), order, disabled: [...disabled] },
+    profile: { ...currentProfile(), order, patchOrder: nextPatchOrder, disabled: [...disabled] },
     targets: allTargets(),
     commit() {
       if (!active) return
       pruneSemanticBindings(candidateGeneration)
-      saveHarmonyState(activeProfileDir!, { order, disabled: [...disabled] })
+      saveHarmonyState(activeProfileDir!, { order, patchOrder: nextPatchOrder, disabled: [...disabled] })
       retainGeneration(candidateGeneration)
       pendingStatusGenerations.delete(candidateGeneration)
       active = false
@@ -578,6 +743,7 @@ export function beginProfileUpdate(input: { order?: string[]; disabled?: string[
     rollback() {
       if (!active) return
       providerOrder = previous.order
+      patchOrder = previous.patchOrder
       disabledPatchKeys = previous.disabled
       generation = previous.generation
       transformCache = previous.cache
@@ -631,10 +797,10 @@ export function subscribePatchStatuses(listener: () => void): () => void {
   return () => patchStatusListeners.delete(listener)
 }
 
-function orderedPatches(input: RegisteredPatch[], order = providerOrder): RegisteredPatch[] {
-  const rank = new Map(order.map((owner, index) => [owner, index]))
-  return input.sort((a, b) => (rank.get(a.owner) ?? Number.MAX_SAFE_INTEGER)
-    - (rank.get(b.owner) ?? Number.MAX_SAFE_INTEGER) || a.index - b.index)
+function orderedPatches(input: RegisteredPatch[], order = patchOrder): RegisteredPatch[] {
+  const rank = new Map(order.map((key, index) => [key, index]))
+  return input.sort((a, b) => (rank.get(a.key) ?? Number.MAX_SAFE_INTEGER)
+    - (rank.get(b.key) ?? Number.MAX_SAFE_INTEGER) || a.index - b.index)
 }
 
 function parse(filename: string, source: string): ts.SourceFile {
@@ -649,6 +815,17 @@ function parse(filename: string, source: string): ts.SourceFile {
 function customizeSettings(filename: string, source: string): string {
   const sourceFile = parse(filename, source)
   const edit = new MagicString(source)
+  const settingsPanel = tsquery(sourceFile, 'FunctionDeclaration').find((node) => {
+    const declaration = node as ts.FunctionDeclaration
+    return declaration.name?.text === 'SettingsPanel'
+  }) as ts.FunctionDeclaration
+  const panelClass = tsquery(settingsPanel, 'PropertyAssignment').find((node) => {
+    const property = node as ts.PropertyAssignment
+    return property.name.getText(sourceFile) === 'className'
+      && property.initializer.getText(sourceFile) === 'SettingsRoot_module_css_default.panel'
+  }) as ts.PropertyAssignment
+  edit.overwrite(panelClass.initializer.getStart(sourceFile), panelClass.initializer.getEnd(),
+    'SettingsRoot_module_css_default.panel + " dshHarmonySettingsPanel"')
   const navIcon = tsquery(sourceFile, 'FunctionDeclaration').find((node) => {
     const declaration = node as ts.FunctionDeclaration
     return declaration.name?.text === 'navIcon'
@@ -676,7 +853,7 @@ function customizeSettings(filename: string, source: string): string {
           if (harmonyGuard && !await harmonyGuard()) return;
           setActiveId(id);
         }`)
-  return edit.toString().replace('width:800px;max-width:calc(100vw - 48px)', 'width:1040px;max-width:calc(100vw - 48px)')
+  return edit.toString()
 }
 
 function matches(filename: string, source: string, selector: string): boolean {
@@ -694,8 +871,8 @@ function conflictOwner(filename: string, original: string, selector: string, his
   return conflict
 }
 
-function expectedMatches(registered: RegisteredPatch, matches: number, target: string): void {
-  const expected = 'expect' in registered.patch ? registered.patch.expect : undefined
+function expectedMatches(registered: RegisteredPatch, patch: HarmonyPatch, matches: number, target: string): void {
+  const expected = 'expect' in patch ? patch.expect : undefined
   if (expected === undefined && matches > 0 || expected === matches) return
   const wanted = expected === undefined ? 'at least 1' : String(expected)
   throw new Error(`dsh-harmony: patch ${JSON.stringify(registered.key)} expected ${wanted} match(es) in ${target}, found ${matches}`)
@@ -707,13 +884,13 @@ function applySourcePatch(
   source: string,
   original: string,
   registered: RegisteredPatch,
+  patch: HarmonySourcePatch,
   history: Array<{ owner: string; source: string }>,
 ): { source: string; matches: number } {
-  const patch = registered.patch as HarmonySourcePatch
   const sourceFile = parse(filename, source)
   const nodes = tsquery(sourceFile, patch.select)
   try {
-    expectedMatches(registered, nodes.length, target)
+    expectedMatches(registered, patch, nodes.length, target)
   } catch (error) {
     if (nodes.length === 0) {
       const conflicting = conflictOwner(filename, original, patch.select, history)
@@ -759,6 +936,11 @@ interface SourceTraceMetadata {
   confidence: 'candidate'
 }
 
+interface BoundSourceTrace {
+  registered: RegisteredPatch
+  patch: HarmonySourcePatch
+}
+
 function jsxRuntimeExpression(sourceFile: ts.SourceFile, node: ts.Node, source: string): string | undefined {
   if (!ts.isCallExpression(node)) return undefined
   let expression: ts.Expression = node.expression
@@ -773,13 +955,13 @@ function instrumentSourceTraces(
   filename: string,
   source: string,
   target: { package: string; file: string },
-  patches: RegisteredPatch[],
+  patches: BoundSourceTrace[],
 ): string {
   if (process.env.DSH_HARMONY_REACT_TRACE !== '1' || patches.length === 0) return source
   const sourceFile = parse(filename, source)
   const traced = new Map<string, { node: ts.CallExpression; runtime: string; traces: SourceTraceMetadata[] }>()
-  for (const registered of patches) {
-    const trace = (registered.patch as HarmonySourcePatch).trace
+  for (const { registered, patch } of patches) {
+    const trace = patch.trace
     if (trace === undefined) continue
     let nodes: ts.Node[]
     try {
@@ -859,16 +1041,22 @@ function uniqueIdentifier(node: ts.Node, base: string): string {
   return name
 }
 
-function semanticMatchCount(filename: string, source: string, functionName: string, registered: RegisteredPatch): number {
+function semanticMatchCount(
+  filename: string,
+  source: string,
+  functionName: string,
+  registered: RegisteredPatch,
+  patch: HarmonySemanticPatch,
+): number {
   const count = semanticFunctions(parse(filename, source), functionName).length
-  expectedMatches(registered, count, `${registered.patch.target.package}/${relative(packageFor(filename)!.dir, filename)}`)
+  expectedMatches(registered, patch, count, `${patch.target.package}/${relative(packageFor(filename)!.dir, filename)}`)
   return count
 }
 
-function assertNoReplaceConflict(functionName: string, registered: RegisteredPatch[]): void {
-  const replacements = registered.filter(item => (item.patch as HarmonySemanticPatch).operation === 'replace')
+function assertNoReplaceConflict(functionName: string, registered: BoundSemanticPatch[]): void {
+  const replacements = registered.filter(item => item.patch.operation === 'replace')
   if (replacements.length > 1) {
-    throw new Error(`dsh-harmony: replace conflict in ${functionName}: ${replacements.map(item => item.key).join(', ')}`)
+    throw new Error(`dsh-harmony: replace conflict in ${functionName}: ${replacements.map(item => item.registered.key).join(', ')}`)
   }
 }
 
@@ -877,11 +1065,12 @@ function instrumentSemantic(
   source: string,
   functionName: string,
   registered: RegisteredPatch,
+  patch: HarmonySemanticPatch,
   bindingKey: string,
 ): { source: string; matches: number; bindingKey: string } {
   const sourceFile = parse(filename, source)
   const nodes = semanticFunctions(sourceFile, functionName)
-  expectedMatches(registered, nodes.length, `${registered.patch.target.package}/${relative(packageFor(filename)!.dir, filename)}`)
+  expectedMatches(registered, patch, nodes.length, `${patch.target.package}/${relative(packageFor(filename)!.dir, filename)}`)
   const edit = new MagicString(source)
   for (const node of nodes) {
     if (node.asteriskToken !== undefined) throw new Error(`dsh-harmony: semantic patches do not support generator ${functionName}`)
@@ -908,126 +1097,221 @@ function instrumentSemantic(
   return { source: edit.toString(), matches: nodes.length, bindingKey }
 }
 
-function resolvedTargetFile(registered: RegisteredPatch, pkg: PackageInfo): string | undefined {
-  return registered.patch.target.files.find(file => existsSync(join(pkg.dir, file)))
+function resolvedTargetFile(patch: HarmonyPatch, pkg: PackageInfo): string | undefined {
+  return patch.target.files.find(file => existsSync(join(pkg.dir, file)))
 }
 
-function versionError(registered: RegisteredPatch, pkg: PackageInfo): string | undefined {
-  const range = registered.patch.target.version
+function versionError(patch: HarmonyPatch, pkg: PackageInfo): string | undefined {
+  const range = patch.target.version
   if (range === undefined || semver.satisfies(pkg.version, range, { includePrerelease: true })) return undefined
   return `target ${pkg.name}@${pkg.version} does not satisfy ${range}`
+}
+
+interface WorkingTransform {
+  filename: string
+  source: string
+  pkg: PackageInfo
+  relativeFile: string
+  target: string
+  original: string
+  output: string
+  steps: HarmonyPatchInspection['steps']
+  history: Array<{ owner: string; source: string }>
+  traceable: BoundSourceTrace[]
+  semantic: Map<string, { bindingKey: string; patches: BoundSemanticPatch[] }>
+}
+
+function beginWorkingTransform(filename: string, source: string): WorkingTransform {
+  const pkg = packageFor(filename)!
+  const relativeFile = relative(pkg.dir, filename).replaceAll('\\', '/')
+  const output = pkg.name === '@deepseek-ai/dsh-client-ui-settings-general' && relativeFile === 'lib/client.js'
+    ? customizeSettings(filename, source)
+    : source
+  return {
+    filename,
+    source,
+    pkg,
+    relativeFile,
+    target: `${pkg.name}/${relativeFile}`,
+    original: output,
+    output,
+    steps: [],
+    history: [],
+    traceable: [],
+    semantic: new Map(),
+  }
+}
+
+function snapshotWorkingTransform(state: WorkingTransform): Omit<WorkingTransform, 'filename' | 'source' | 'pkg' | 'relativeFile' | 'target' | 'original'> {
+  return {
+    output: state.output,
+    steps: [...state.steps],
+    history: [...state.history],
+    traceable: [...state.traceable],
+    semantic: new Map([...state.semantic].map(([name, value]) => [name, {
+      bindingKey: value.bindingKey,
+      patches: [...value.patches],
+    }])),
+  }
+}
+
+function restoreWorkingTransform(
+  state: WorkingTransform,
+  snapshot: ReturnType<typeof snapshotWorkingTransform>,
+): void {
+  state.output = snapshot.output
+  state.steps = snapshot.steps
+  state.history = snapshot.history
+  state.traceable = snapshot.traceable
+  state.semantic = snapshot.semantic
+}
+
+function applyRegisteredPatch(
+  state: WorkingTransform,
+  registered: RegisteredPatch,
+  members: HarmonyPatch[],
+  transformGeneration: number,
+): number {
+  let matches = 0
+  for (const patch of members) {
+    if (patchKind(patch) === 'loader') {
+      matches += 1
+      continue
+    }
+    if (patchKind(patch) === 'semantic') {
+      const semanticPatch = patch as HarmonySemanticPatch
+      if (state.relativeFile === 'lib/client.js') {
+        throw new Error(`dsh-harmony: semantic patch ${JSON.stringify(registered.key)} targets a browser bundle; use a source patch for lib/client.js`)
+      }
+      const functionName = semanticPatch.target.function
+      const current = state.semantic.get(functionName)
+      const bound = { registered, patch: semanticPatch }
+      if (current === undefined) {
+        const bindingKey = `${transformGeneration}\0${state.filename}\0${functionName}`
+        const result = instrumentSemantic(
+          state.filename,
+          state.output,
+          functionName,
+          registered,
+          semanticPatch,
+          bindingKey,
+        )
+        state.output = result.source
+        matches += result.matches
+        state.semantic.set(functionName, { bindingKey, patches: [bound] })
+      } else {
+        matches += semanticMatchCount(state.filename, state.output, functionName, registered, semanticPatch)
+        assertNoReplaceConflict(functionName, [...current.patches, bound])
+        current.patches.push(bound)
+      }
+      continue
+    }
+    const sourcePatch = patch as HarmonySourcePatch
+    const result = applySourcePatch(
+      state.filename,
+      state.target,
+      state.output,
+      state.original,
+      registered,
+      sourcePatch,
+      state.history,
+    )
+    state.output = result.source
+    matches += result.matches
+    if (sourcePatch.trace !== undefined) state.traceable.push({ registered, patch: sourcePatch })
+  }
+  state.history.push({ owner: registered.owner, source: state.output })
+  state.steps.push({ key: registered.key, owner: registered.owner, matches, source: state.output })
+  return matches
+}
+
+function finishWorkingTransform(
+  state: WorkingTransform,
+  transformGeneration: number,
+  bind: boolean,
+): TransformRecord {
+  if (bind) {
+    for (const value of state.semantic.values()) semanticBindings.set(value.bindingKey, [...value.patches])
+  }
+  const runtimeOutput = instrumentSourceTraces(
+    state.filename,
+    state.output,
+    { package: state.pkg.name, file: state.relativeFile },
+    state.traceable,
+  )
+  return {
+    filename: state.filename,
+    generation: transformGeneration,
+    packageVersion: state.pkg.version,
+    source: state.source,
+    output: runtimeOutput,
+    inspection: {
+      package: state.pkg.name,
+      file: state.relativeFile,
+      original: state.source,
+      final: state.output,
+      steps: state.steps,
+    },
+  }
 }
 
 function buildTransform(
   filename: string,
   source: string,
-  order = providerOrder,
+  order = patchOrder,
   disabled = disabledPatchKeys,
   bind = true,
   records: Iterable<ProviderRecord> = providers.values(),
   transformGeneration = generation,
 ): TransformRecord {
-  const pkg = packageFor(filename)!
-  const relativeFile = relative(pkg.dir, filename).replaceAll('\\', '/')
-  let output = pkg.name === '@deepseek-ai/dsh-client-ui-settings-general' && relativeFile === 'lib/client.js'
-    ? customizeSettings(filename, source)
-    : source
-  const target = `${pkg.name}/${relativeFile}`
+  const state = beginWorkingTransform(filename, source)
+  const { pkg, relativeFile } = state
   const candidates = orderedPatches([...records].flatMap(provider => provider.patches), order)
-    .filter(registered => registered.patch.target.package === pkg.name)
+    .filter(registered => registered.members.some(patch => patch.target.package === pkg.name))
   const recordStatus = bind && transformGeneration === generation
-  const applicable: RegisteredPatch[] = []
+  const applicable: Array<{ registered: RegisteredPatch; members: HarmonyPatch[] }> = []
   for (const registered of candidates) {
     if (recordStatus) updateStatus(registered, { loaded: true, generation: transformGeneration })
     if (isPatchDisabled(registered, disabled)) {
       if (recordStatus) updateStatus(registered, { state: 'disabled', matches: 0, error: undefined, file: undefined, generation: transformGeneration })
       continue
     }
-    const incompatible = versionError(registered, pkg)
-    if (incompatible !== undefined) {
-      if (recordStatus) updateStatus(registered, { state: 'failed', matches: 0, error: incompatible, generation: transformGeneration })
-      continue
+    const members: HarmonyPatch[] = []
+    let memberError: string | undefined
+    for (const patch of registered.members.filter(patch => patch.target.package === pkg.name)) {
+      const incompatible = versionError(patch, pkg)
+      const file = resolvedTargetFile(patch, pkg)
+      if (incompatible !== undefined || file === undefined) {
+        memberError = incompatible ?? `none of the target files exist: ${patch.target.files.join(', ')}`
+        break
+      }
+      if (file === relativeFile) members.push(patch)
     }
-    const file = resolvedTargetFile(registered, pkg)
-    if (file === undefined) {
-      if (recordStatus) updateStatus(registered, { state: 'failed', matches: 0, error: `none of the target files exist: ${registered.patch.target.files.join(', ')}`, generation: transformGeneration })
-      continue
-    }
-    if (patchKind(registered.patch) === 'loader') {
+    if (memberError !== undefined) {
       if (recordStatus) updateStatus(registered, {
-        state: 'bound', matches: 1, file, error: undefined, generation: transformGeneration,
+        state: 'failed', matches: 0, error: memberError, generation: transformGeneration,
       })
       continue
     }
-    if (file === relativeFile) applicable.push(registered)
+    if (members.length > 0) applicable.push({ registered, members })
   }
 
-  const steps: HarmonyPatchInspection['steps'] = []
-  const history: Array<{ owner: string; source: string }> = []
-  const traceable: RegisteredPatch[] = []
-  const original = output
-  const semantic = new Map<string, { bindingKey: string; patches: RegisteredPatch[] }>()
-  for (const registered of applicable) {
-    if (patchKind(registered.patch) === 'semantic') {
-      if (relativeFile === 'lib/client.js') {
-        const error = new Error(`dsh-harmony: semantic patch ${JSON.stringify(registered.key)} targets a browser bundle; use a source patch for lib/client.js`)
-        if (recordStatus) updateStatus(registered, { state: 'failed', file: relativeFile, error: error.message, generation: transformGeneration })
-        continue
-      }
-      const functionName = (registered.patch as HarmonySemanticPatch).target.function
-      const current = semantic.get(functionName)
-      try {
-        let matches: number
-        if (current === undefined) {
-          const bindingKey = `${transformGeneration}\0${filename}\0${functionName}`
-          const result = instrumentSemantic(filename, output, functionName, registered, bindingKey)
-          output = result.source
-          matches = result.matches
-          semantic.set(functionName, { bindingKey, patches: [registered] })
-          if (bind) semanticBindings.set(bindingKey, [registered])
-        } else {
-          matches = semanticMatchCount(filename, output, functionName, registered)
-          assertNoReplaceConflict(functionName, [...current.patches, registered])
-          current.patches.push(registered)
-          if (bind) semanticBindings.set(current.bindingKey, [...current.patches])
-        }
-        history.push({ owner: registered.owner, source: output })
-        steps.push({ key: registered.key, owner: registered.owner, matches, source: output })
-        if (recordStatus) updateStatus(registered, { state: 'bound', matches, file: relativeFile, error: undefined, generation: transformGeneration })
-      } catch (error) {
-        if (recordStatus) updateStatus(registered, { state: 'failed', file: relativeFile, error: error instanceof Error ? error.message : String(error), generation: transformGeneration })
-        continue
-      }
-      continue
-    }
+  for (const { registered, members } of applicable) {
+    const snapshot = snapshotWorkingTransform(state)
     try {
-      const result = applySourcePatch(filename, target, output, original, registered, history)
-      output = result.source
-      history.push({ owner: registered.owner, source: output })
-      steps.push({ key: registered.key, owner: registered.owner, matches: result.matches, source: output })
-      if ((registered.patch as HarmonySourcePatch).trace !== undefined) traceable.push(registered)
-      if (recordStatus) updateStatus(registered, { state: 'bound', matches: result.matches, file: relativeFile, error: undefined, generation: transformGeneration })
-    } catch (error) {
+      const matches = applyRegisteredPatch(state, registered, members, transformGeneration)
       if (recordStatus) updateStatus(registered, {
-        state: 'failed',
-        matches: (error as { matches?: number }).matches ?? 0,
-        file: relativeFile,
-        error: error instanceof Error ? error.message : String(error),
-        generation: transformGeneration,
+        state: 'bound', matches, file: relativeFile, error: undefined, generation: transformGeneration,
       })
-      continue
+    } catch (error) {
+      restoreWorkingTransform(state, snapshot)
+      if (recordStatus) updateStatus(registered, {
+        state: 'failed', matches: (error as { matches?: number }).matches ?? 0, file: relativeFile,
+        error: error instanceof Error ? error.message : String(error), generation: transformGeneration,
+      })
     }
   }
-
-  const runtimeOutput = instrumentSourceTraces(filename, output, { package: pkg.name, file: relativeFile }, traceable)
-  return {
-    filename,
-    generation: transformGeneration,
-    packageVersion: pkg.version,
-    source,
-    output: runtimeOutput,
-    inspection: { package: pkg.name, file: relativeFile, original: source, final: output, steps },
-  }
+  return finishWorkingTransform(state, transformGeneration, bind)
 }
 
 function preflight(order: string[], disabled: Set<string>): void {
@@ -1073,10 +1357,14 @@ function activeTypeScriptLoader(
   if (pkg === undefined || state === undefined) return undefined
   const recordStatus = requestedGeneration === generation
   let active = false
-  const candidates = orderedPatches([...state.providers].flatMap(provider => provider.patches), state.order)
-    .filter(registered => patchKind(registered.patch) === 'loader'
-      && (registered.patch as HarmonyLoaderPatch).loader === 'typescript'
-      && registered.patch.target.package === pkg.name)
+  const candidates = orderedPatches([...state.providers].flatMap(provider => provider.patches), state.patchOrder)
+    .filter(registered => registered.members.some(patch => patchKind(patch) === 'loader'
+      && (patch as HarmonyLoaderPatch).loader === 'typescript'
+      && patch.target.package === pkg.name))
+  if (recordStatus && activeProfileDir !== undefined && candidates.some(registered => registered.members.length > 1
+    && (patchStatuses.get(registered.key)?.state ?? 'pending') === 'pending')) {
+    inspectTargets(state.patchOrder, state.disabled, true, true)
+  }
   for (const registered of candidates) {
     if (recordStatus) updateStatus(registered, { loaded: true, generation: requestedGeneration })
     if (isPatchDisabled(registered, state.disabled)) {
@@ -1085,18 +1373,28 @@ function activeTypeScriptLoader(
       })
       continue
     }
-    const incompatible = versionError(registered, pkg)
+    if (registered.members.length > 1 && recordStatus) {
+      const compositeState = patchStatuses.get(registered.key)?.state
+      if (compositeState === 'failed') continue
+      if (compositeState === 'bound') {
+        active = true
+        continue
+      }
+    }
+    const loaders = registered.members.filter(patch => patchKind(patch) === 'loader'
+      && patch.target.package === pkg.name) as HarmonyLoaderPatch[]
+    const incompatible = loaders.map(patch => versionError(patch, pkg)).find(error => error !== undefined)
     if (incompatible !== undefined) {
       if (recordStatus) updateStatus(registered, {
         state: 'failed', matches: 0, error: incompatible, file: undefined, generation: requestedGeneration,
       })
       continue
     }
-    const file = resolvedTargetFile(registered, pkg)
-    if (file === undefined) {
+    const files = loaders.map(patch => resolvedTargetFile(patch, pkg))
+    if (files.some(file => file === undefined)) {
       if (recordStatus) updateStatus(registered, {
         state: 'failed', matches: 0,
-        error: `none of the target files exist: ${registered.patch.target.files.join(', ')}`,
+        error: `none of the target files exist: ${loaders.find((_, index) => files[index] === undefined)!.target.files.join(', ')}`,
         file: undefined,
         generation: requestedGeneration,
       })
@@ -1104,7 +1402,7 @@ function activeTypeScriptLoader(
     }
     active = true
     if (recordStatus) updateStatus(registered, {
-      state: 'bound', matches: 1, file, error: undefined, generation: requestedGeneration,
+      state: 'bound', matches: loaders.length, file: files[0], error: undefined, generation: requestedGeneration,
     })
   }
   return active ? pkg : undefined
@@ -1178,19 +1476,24 @@ function transform(filename: string, source: string, requestedGeneration = gener
   if (loadedPatchFiles.has(filename) || loadingPatchFiles.has(filename)) return source
   const cacheKey = `${requestedGeneration}\0${filename}`
   if (transformationsInProgress.has(cacheKey)) return source
-  const cached = transformCache.get(cacheKey)
+  let cached = transformCache.get(cacheKey)
+  const state = generationStates.get(requestedGeneration)
+  if (cached === undefined && requestedGeneration === generation && activeProfileDir !== undefined
+    && state?.providers.some(provider => provider.patches.some(patch => patch.members.length > 1))) {
+    inspectTargets(state.patchOrder, state.disabled, true, true)
+    cached = transformCache.get(cacheKey)
+  }
   transformationsInProgress.add(cacheKey)
   try {
     packageCache.clear()
     const pkg = packageFor(filename)
     if (pkg === undefined) return source
     if (cached?.packageVersion === pkg.version && cached.source === source) return cached.output
-    const state = generationStates.get(requestedGeneration)
     if (state === undefined) return source
     const result = buildTransform(
       filename,
       source,
-      state.order,
+      state.patchOrder,
       state.disabled,
       true,
       state.providers,
@@ -1209,16 +1512,16 @@ function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
 
 function invokeSemantic(bindingKey: string, self: unknown, initialArgs: unknown[], original: (args: unknown[]) => unknown): unknown {
   const patches = semanticBindings.get(bindingKey) ?? []
-  const before = patches.filter(item => (item.patch as HarmonySemanticPatch).operation === 'before')
+  const before = patches.filter(item => item.patch.operation === 'before')
   const decorators = patches.filter(item => {
-    const operation = (item.patch as HarmonySemanticPatch).operation
+    const operation = item.patch.operation
     return operation === 'around' || operation === 'replace'
   })
-  const after = patches.filter(item => (item.patch as HarmonySemanticPatch).operation === 'after')
+  const after = patches.filter(item => item.patch.operation === 'after')
 
   const runBefore = (index: number, args: unknown[]): unknown[] | PromiseLike<unknown> => {
     if (index === before.length) return args
-    const patch = before[index]!.patch as HarmonySemanticPatch
+    const patch = before[index]!.patch
     const changed = patch.handler({ args, self, invoke: next => runBefore(index + 1, next ?? args) })
     const proceed = (value: unknown): unknown[] | PromiseLike<unknown> => runBefore(index + 1, Array.isArray(value) ? value : args)
     return isPromiseLike(changed) ? changed.then(proceed) : proceed(changed)
@@ -1226,13 +1529,13 @@ function invokeSemantic(bindingKey: string, self: unknown, initialArgs: unknown[
 
   const runDecorators = (index: number, args: unknown[]): unknown => {
     if (index === decorators.length) return original(args)
-    const patch = decorators[index]!.patch as HarmonySemanticPatch
+    const patch = decorators[index]!.patch
     return patch.handler({ args, self, invoke: next => runDecorators(index + 1, next ?? args) })
   }
 
   const runAfter = (index: number, result: unknown): unknown => {
     if (index === after.length) return result
-    const patch = after[index]!.patch as HarmonySemanticPatch
+    const patch = after[index]!.patch
     const changed = patch.handler({ args: initialArgs, self, result, invoke: () => result })
     const proceed = (value: unknown): unknown => runAfter(index + 1, value === undefined ? result : value)
     return isPromiseLike(changed) ? changed.then(proceed) : proceed(changed)
@@ -1251,6 +1554,15 @@ function invokeSemantic(bindingKey: string, self: unknown, initialArgs: unknown[
 export function getPatchStatuses(): HarmonyPatchStatus[] {
   return orderedPatches([...providers.values()].flatMap(provider => provider.patches))
     .map(registered => patchStatuses.get(registered.key) ?? freshStatus(registered))
+}
+
+export function getPatchOrderViolations(): ReturnType<typeof patchOrderViolations> {
+  const profile = currentProfile()
+  return patchOrderViolations(
+    patchOrder,
+    [...providers.values()].flatMap(provider => provider.patches).map(orderItem),
+    profile.plugins,
+  )
 }
 
 export function getPatchInspections(packageName?: string, file?: string): HarmonyPatchInspection[] {
@@ -1273,13 +1585,14 @@ export function inspectPatchDependencies(owner: string): HarmonyPatchDependency[
     for (const step of record.inspection.steps) {
       if (step.owner === owner) {
         const item = registered.get(step.key)
-        if (item !== undefined && patchKind(item.patch) === 'source') {
+        for (const patch of item?.members ?? []) {
+          if (patchKind(patch) !== 'source' || patch.target.package !== pkg.name) continue
           try {
-            applySourcePatch(record.filename, target, base, base, item, [])
+            applySourcePatch(record.filename, target, base, base, item!, patch as HarmonySourcePatch, [])
           } catch (error) {
             const candidates = [...new Set(previousOwners.filter(candidate => candidate !== owner))]
             if (candidates.length > 0) dependencies.push({
-              patch: item.key,
+              patch: item!.key,
               target: { package: pkg.name, file: relativeFile },
               providerCandidates: candidates,
               reason: error instanceof Error ? error.message : String(error),
@@ -1294,60 +1607,130 @@ export function inspectPatchDependencies(owner: string): HarmonyPatchDependency[
 }
 
 export function inspectPatchTargets(continueOnError = false): HarmonyPatchInspection[] {
-  inspectTargets(providerOrder, disabledPatchKeys, continueOnError, true)
+  inspectTargets(patchOrder, disabledPatchKeys, continueOnError, true)
   return getPatchInspections()
 }
 
-function inspectTargets(order: string[], disabled: Set<string>, continueOnError: boolean, bind: boolean): void {
+function inspectTargets(order: string[], disabled: Set<string>, _continueOnError: boolean, bind: boolean): void {
   const profileManifest = pathToFileURL(join(activeProfileDir!, 'package.json'))
-  const allPatches = [...providers.values()].flatMap(provider => provider.patches)
-  const targetPackages = new Set(allPatches.map(item => item.patch.target.package))
+  const allPatches = orderedPatches([...providers.values()].flatMap(provider => provider.patches), order)
+  const targetPackages = new Set(allPatches.flatMap(item => item.members.map(patch => patch.target.package)))
+  const working = new Map<string, WorkingTransform>()
+  const applications = new Map<string, Map<string, HarmonyPatch[]>>()
+  const failures = new Map<string, string>()
+  const unavailable = new Set<string>()
+  const loaded = new Set<string>()
   for (const packageName of targetPackages) {
     let manifest: string | undefined
     try {
       manifest = findPackageJSON(packageName, profileManifest)
     } catch {}
     if (manifest === undefined) {
-      const error = new Error(`dsh-harmony: target package ${JSON.stringify(packageName)} is not installed`)
-      if (bind) {
-        for (const item of allPatches.filter(patch => patch.patch.target.package === packageName)) {
-          updateStatus(item, { state: 'failed', loaded: false, matches: 0, error: error.message, file: undefined, generation })
-        }
+      const error = `dsh-harmony: target package ${JSON.stringify(packageName)} is not installed`
+      for (const item of allPatches.filter(registered => registered.members.some(patch => patch.target.package === packageName))) {
+        failures.set(item.key, error)
+        unavailable.add(item.key)
       }
       continue
     }
     const pkg = readPackageInfo(dirname(manifest))
     packageCache.set(pkg.dir, pkg)
-    const registered = allPatches.filter(item => item.patch.target.package === packageName)
-    const files = new Set(registered.map(item => resolvedTargetFile(item, pkg)).filter(file => file !== undefined))
-    if (bind) {
-      for (const item of registered) {
-        if (resolvedTargetFile(item, pkg) !== undefined) continue
-        const incompatible = versionError(item, pkg)
-        updateStatus(item, isPatchDisabled(item, disabled)
-          ? { state: 'disabled', loaded: true, matches: 0, error: undefined, file: undefined, generation }
-          : {
-              state: 'failed', loaded: true, matches: 0, file: undefined, generation,
-              error: incompatible ?? `none of the target files exist: ${item.patch.target.files.join(', ')}`,
-            })
+    for (const item of allPatches) {
+      const members = item.members.filter(patch => patch.target.package === packageName)
+      if (members.length === 0) continue
+      loaded.add(item.key)
+      for (const patch of members) {
+        const incompatible = versionError(patch, pkg)
+        const file = resolvedTargetFile(patch, pkg)
+        if (incompatible !== undefined || file === undefined) {
+          failures.set(item.key, incompatible ?? `none of the target files exist: ${patch.target.files.join(', ')}`)
+          continue
+        }
+        const filename = join(pkg.dir, file)
+        if (!working.has(filename)) {
+          working.set(filename, beginWorkingTransform(filename, nativeReadFileSync(filename, 'utf8')))
+        }
+        const files = applications.get(item.key) ?? new Map<string, HarmonyPatch[]>()
+        const applicable = files.get(filename) ?? []
+        applicable.push(patch)
+        files.set(filename, applicable)
+        applications.set(item.key, files)
       }
     }
-    for (const file of files) {
-      const filename = join(pkg.dir, file)
-      const source = nativeReadFileSync(filename, 'utf8')
+  }
+
+  const outcomes = new Map<string, { matches: number; files: string[]; error?: string }>()
+  const scheduled = allPatches.filter(item => !disabled.has(item.key)
+    && !disabled.has(`${item.owner}/*`)
+    && !failures.has(item.key)
+    && applications.has(item.key))
+  const batches = schedulePatchBatches(scheduled.map(item => ({
+    key: item.key,
+    files: [...applications.get(item.key)!.keys()],
+  })))
+  const byKey = new Map(allPatches.map(item => [item.key, item]))
+  for (const batch of batches) {
+    // Items in one batch touch disjoint file slices. Patch callbacks are synchronous,
+    // so they are drained together without making unrelated files wait on one another.
+    for (const key of batch) {
+      const item = byKey.get(key)!
+      const targets = applications.get(key)!
+      const snapshots = new Map([...targets].map(([filename]) => [
+        filename,
+        snapshotWorkingTransform(working.get(filename)!),
+      ]))
+      let matches = 0
       try {
-        const result = buildTransform(filename, source, order, disabled, bind)
-        if (bind) transformCache.set(`${generation}\0${filename}`, result)
+        for (const [filename, members] of targets) {
+          matches += applyRegisteredPatch(working.get(filename)!, item, members, generation)
+        }
+        outcomes.set(key, {
+          matches,
+          files: [...targets.keys()].map(filename => working.get(filename)!.relativeFile),
+        })
       } catch (error) {
-        if (!continueOnError) throw error
+        for (const [filename, snapshot] of snapshots) restoreWorkingTransform(working.get(filename)!, snapshot)
+        const message = error instanceof Error ? error.message : String(error)
+        const failedMatches = (error as { matches?: number }).matches ?? 0
+        failures.set(key, message)
+        outcomes.set(key, { matches: failedMatches, files: [], error: message })
       }
+    }
+  }
+
+  if (bind) {
+    for (const [filename, state] of working) {
+      const result = finishWorkingTransform(state, generation, true)
+      transformCache.set(`${generation}\0${filename}`, result)
+    }
+    for (const item of allPatches) {
+      const disabledPatch = isPatchDisabled(item, disabled)
+      const failure = failures.get(item.key)
+      const outcome = outcomes.get(item.key)
+      const files = outcome?.files ?? []
+      updateStatus(item, disabledPatch ? {
+        state: 'disabled', loaded: loaded.has(item.key) && !unavailable.has(item.key), matches: 0,
+        files: [], file: undefined, error: undefined, generation,
+      } : failure !== undefined ? {
+        state: 'failed', loaded: loaded.has(item.key) && !unavailable.has(item.key), matches: outcome?.matches ?? 0,
+        files: [], file: undefined, error: failure, generation,
+      } : {
+        state: 'bound', loaded: true, matches: outcome?.matches ?? 0,
+        files, file: files.length === 1 ? files[0] : undefined, error: undefined, generation,
+      })
     }
   }
 }
 
-export function preflightProfileUpdate(input: { order?: string[]; disabled?: string[] }): void {
+export function preflightProfileUpdate(input: {
+  order?: string[]
+  patchOrder?: string[]
+  disabled?: string[]
+}): void {
+  const order = input.patchOrder
+    ?? (input.order === undefined ? patchOrder : groupHarmonyPatchOrder(pinHarmonyOrder(input.order), patchOrder))
   inspectTargets(
-    pinHarmonyOrder(input.order ?? providerOrder),
+    order,
     new Set(input.disabled ?? disabledPatchKeys),
     false,
     false,

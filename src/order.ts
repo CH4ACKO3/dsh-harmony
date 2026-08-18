@@ -10,6 +10,14 @@ export interface HarmonyOrderViolation {
   declaredBy: string
 }
 
+export interface HarmonyPatchOrderItem {
+  key: string
+  owner: string
+  index: number
+  before?: string[]
+  after?: string[]
+}
+
 interface Edge extends HarmonyOrderViolation {
   from: number
   to: number
@@ -134,6 +142,85 @@ function orderComponent(component: number[], edges: Edge[]): number[] {
 
 export function autoSortOrder(order: string[], providers: HarmonyProvider[]): string[] {
   const edges = edgesOf(order, providers)
+  const groups = components(order.length, edges)
+  const groupOf = new Map<number, number>()
+  groups.forEach((group, index) => group.forEach(node => groupOf.set(node, index)))
+  const outgoing = groups.map(() => new Set<number>())
+  const incoming = groups.map(() => 0)
+  for (const edge of edges) {
+    const from = groupOf.get(edge.from)!
+    const to = groupOf.get(edge.to)!
+    if (from === to || outgoing[from]!.has(to)) continue
+    outgoing[from]!.add(to)
+    incoming[to]! += 1
+  }
+  const rank = groups.map(group => Math.min(...group))
+  const remaining = new Set(groups.map((_, index) => index))
+  const result: string[] = []
+  while (remaining.size > 0) {
+    const next = [...remaining]
+      .filter(index => incoming[index] === 0)
+      .sort((a, b) => rank[a]! - rank[b]!)[0]!
+    remaining.delete(next)
+    for (const node of orderComponent(groups[next]!, edges)) result.push(order[node]!)
+    for (const target of outgoing[next]!) incoming[target]! -= 1
+  }
+  return result
+}
+
+function patchEdges(
+  order: string[],
+  patches: HarmonyPatchOrderItem[],
+  providers: HarmonyProvider[],
+): Edge[] {
+  const index = new Map(order.map((key, position) => [key, position]))
+  const byOwner = new Map<string, HarmonyPatchOrderItem[]>()
+  for (const patch of patches) {
+    const owned = byOwner.get(patch.owner) ?? []
+    owned.push(patch)
+    byOwner.set(patch.owner, owned)
+  }
+  const provider = new Map(providers.map(item => [item.name, item]))
+  const edges = new Map<string, Edge>()
+  const add = (before: string, after: string, declaredBy: string): void => {
+    const from = index.get(before)
+    const to = index.get(after)
+    if (from === undefined || to === undefined || from === to) return
+    const key = `${from}:${to}`
+    if (!edges.has(key)) edges.set(key, { before, after, declaredBy, from, to })
+  }
+  for (const patch of patches) {
+    const specific = patch.before !== undefined || patch.after !== undefined
+    const before = specific ? patch.before ?? [] : provider.get(patch.owner)?.before ?? []
+    const after = specific ? patch.after ?? [] : provider.get(patch.owner)?.after ?? []
+    const declaredBy = specific ? patch.key : patch.owner
+    for (const owner of before) {
+      for (const target of byOwner.get(owner) ?? []) add(patch.key, target.key, declaredBy)
+    }
+    for (const owner of after) {
+      for (const target of byOwner.get(owner) ?? []) add(target.key, patch.key, declaredBy)
+    }
+  }
+  return [...edges.values()]
+}
+
+export function patchOrderViolations(
+  order: string[],
+  patches: HarmonyPatchOrderItem[],
+  providers: HarmonyProvider[],
+): HarmonyOrderViolation[] {
+  const position = new Map(order.map((key, index) => [key, index]))
+  return patchEdges(order, patches, providers)
+    .filter(edge => position.get(edge.before)! > position.get(edge.after)!)
+    .map(({ before, after, declaredBy }) => ({ before, after, declaredBy }))
+}
+
+export function autoSortPatchOrder(
+  order: string[],
+  patches: HarmonyPatchOrderItem[],
+  providers: HarmonyProvider[],
+): string[] {
+  const edges = patchEdges(order, patches, providers)
   const groups = components(order.length, edges)
   const groupOf = new Map<number, number>()
   groups.forEach((group, index) => group.forEach(node => groupOf.set(node, index)))

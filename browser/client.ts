@@ -4,10 +4,11 @@ window.__ModuleLoader__.load({
     const module: BrowserPluginModule = { exports: {} }
     const exports = module.exports
     const React = require('react')
-    const { createElement: h, useEffect, useMemo, useRef, useState } = React
+    const { createElement: h, useEffect, useLayoutEffect, useMemo, useRef, useState } = React
 
     const css = `
 .dshHarmonyPage{height:100%;min-height:0;display:flex;flex-direction:column;gap:14px;color:var(--dsw-alias-label-primary)}
+.dshHarmonySettingsPanel:has(.dshHarmonyPage){width:1200px}
 .dshHarmonyTabs{flex:none;display:flex;gap:22px;border-bottom:1px solid var(--dsw-alias-border-l2)}
 .dshHarmonyTab{position:relative;padding:0 2px 10px;border:0;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;line-height:20px;cursor:pointer}
 .dshHarmonyTab[aria-selected=true]{color:var(--dsw-alias-label-primary);font-weight:600}
@@ -16,18 +17,55 @@ window.__ModuleLoader__.load({
 .dshHarmonyHeading{margin:0;font-size:18px;line-height:26px;font-weight:600}
 .dshHarmonyIntro{max-width:68ch;margin:2px 0 0;color:var(--dsw-alias-label-tertiary);font-size:13px;line-height:20px}
 .dshHarmonyWarning{margin:0;padding:8px 10px;border:1px solid rgba(217,119,6,.24);border-radius:8px;background:rgba(217,119,6,.1);color:var(--dsw-alias-label-secondary);font-size:12px;line-height:19px}
-.dshHarmonyWorkspace{flex:1;min-height:0;display:grid;grid-template-columns:minmax(210px,2fr) minmax(0,3fr);gap:14px}
-.dshHarmonyList{min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:2px;margin:0;padding:6px;list-style:none;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-layer-1)}
-.dshHarmonyRow{width:100%;min-height:44px;display:flex;align-items:center;gap:9px;padding:8px 9px;border:0;border-radius:9px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:grab;user-select:none;touch-action:none}
-.dshHarmonyRow:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.dshHarmonyRow[data-selected=true]{background:var(--dsw-specific-sidebar-nav-item-active)}
-.dshHarmonyRow[data-dragging=true]{opacity:.58;cursor:grabbing}
-.dshHarmonyRow[data-fixed=true]{cursor:default}
-.dshHarmonyRow:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}
-.dshHarmonyGrip{flex:none;width:12px;color:var(--dsw-alias-label-tertiary);font-size:15px;line-height:16px;letter-spacing:-3px}
-.dshHarmonyIndex{flex:none;width:22px;color:var(--dsw-alias-label-tertiary);font-variant-numeric:tabular-nums;font-size:11px;text-align:right}
-.dshHarmonyName{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;line-height:20px}
-.dshHarmonyBadge{flex:none;border-radius:5px;padding:1px 5px;background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 11%,transparent);color:var(--dsw-alias-state-business-primary);font-size:10px;line-height:16px}
+.dshHarmonyWorkspace{flex:1;min-height:0;display:grid;grid-template-columns:minmax(250px,450px) minmax(0,1fr);gap:16px}
+.dshHarmonyList{min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:10px;margin:0;padding:10px;list-style:none;border:1px solid var(--dsw-alias-border-l2);border-radius:14px;background:var(--dsw-alias-bg-layer-1);scrollbar-color:var(--dsw-alias-border-l2) transparent;scrollbar-width:thin}
+.dshHarmonyStack{position:relative;width:100%;min-width:0;isolation:isolate}
+.dshHarmonyStack[data-collapsed=true]{cursor:grab}
+.dshHarmonyStack[data-collapsed=true]:active{cursor:grabbing}
+.dshHarmonyStackCover{--dsh-card-border:var(--dsw-alias-border-l2);position:absolute;inset:0 0 auto;z-index:100;min-height:48px;border:1px solid var(--dsh-card-border);border-radius:10px;background:var(--dsw-alias-bg-layer-2);overflow:hidden}
+.dshHarmonyStack[data-collapsed=true] .dshHarmonyStackCover{position:relative;inset:auto}
+.dshHarmonyStack[data-expanded=true] .dshHarmonyStackCover{opacity:0;pointer-events:none}
+.dshHarmonyPatchGrip{display:flex;align-items:center;justify-content:center;border:0;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:grab;touch-action:none}
+.dshHarmonyPatchGrip::before{content:'';width:12px;height:16px;background:radial-gradient(circle,currentColor 1.2px,transparent 1.4px) 0 0/6px 6px}
+.dshHarmonyPatchGrip:active{cursor:grabbing}
+.dshHarmonyPatchGrip:focus-visible,.dshHarmonyStackSummary:focus-visible,.dshHarmonyPatchCard:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-3px}
+.dshHarmonyStackSummary{width:100%;min-width:0;display:flex;align-items:center;gap:10px;padding:9px 11px;border:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:grab;user-select:none;touch-action:none}
+.dshHarmonyStackSummary:active{cursor:grabbing}
+.dshHarmonyStack[data-collapsed=true]:hover .dshHarmonyStackCover,.dshHarmonyPatchCard:hover{box-shadow:inset 0 0 0 1px var(--dsh-card-border)}
+.dshHarmonyStack[data-selected=true] .dshHarmonyStackCover,.dshHarmonyPatchCard[data-selected=true]{box-shadow:inset 0 0 0 1px var(--dsh-card-border)}
+.dshHarmonyList[data-has-selection=true]>.dshHarmonyStack:not([data-owner-selected=true]),.dshHarmonyList[data-has-selection=true]>.dshHarmonyPatchItem>.dshHarmonyPatchCard:not([data-owner-selected=true]){width:75%}
+.dshHarmonyPatchCard[data-status=disabled],.dshHarmonyDragPatch[data-status=disabled],.dshHarmonyDragLayer[data-status=disabled]{--dsh-card-border:color-mix(in srgb,var(--dsw-alias-label-tertiary) 13%,var(--dsw-alias-border-l2));border-color:var(--dsh-card-border);background:color-mix(in srgb,var(--dsw-alias-label-tertiary) 7%,var(--dsw-alias-bg-layer-2));color:var(--dsw-alias-label-secondary)}
+.dshHarmonyPatchCard[data-status=warning],.dshHarmonyDragPatch[data-status=warning],.dshHarmonyDragLayer[data-status=warning]{--dsh-card-border:color-mix(in srgb,#d97706 25%,var(--dsw-alias-border-l2));border-color:var(--dsh-card-border);background:color-mix(in srgb,#d97706 9%,var(--dsw-alias-bg-layer-2))}
+.dshHarmonyPatchCard[data-status=error],.dshHarmonyDragPatch[data-status=error],.dshHarmonyDragLayer[data-status=error]{--dsh-card-border:color-mix(in srgb,var(--dsw-alias-state-error-primary) 22%,var(--dsw-alias-border-l2));border-color:var(--dsh-card-border);background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 7%,var(--dsw-alias-bg-layer-2))}
+.dshHarmonyStack[data-dragging=true],.dshHarmonyPatchCard[data-dragging=true]{opacity:.54}
+.dshHarmonyStackGlyph{flex:none;width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-secondary);font-size:12px;font-weight:650}
+.dshHarmonyStackText,.dshHarmonyPatchText{min-width:0;flex:1;display:flex;flex-direction:column;gap:1px}
+.dshHarmonyName,.dshHarmonyPatchName{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;line-height:20px;font-weight:600}
+.dshHarmonyStackMeta,.dshHarmonyPatchOwner{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary);font-size:10px;line-height:16px}
+.dshHarmonyStackPatches{display:flex;flex-direction:column;gap:10px;margin:0;padding:0;list-style:none}
+.dshHarmonyStack[data-collapsed=true] .dshHarmonyStackPatches{position:absolute;inset:0;display:block;pointer-events:none}
+.dshHarmonyPatchItem{min-width:0}
+.dshHarmonyStack[data-collapsed=true] .dshHarmonyPatchItem{position:absolute}
+.dshHarmonyPatchCard{--dsh-card-border:var(--dsw-alias-border-l2);width:100%;min-height:48px;display:grid;grid-template-columns:30px 24px minmax(0,1fr) auto;align-items:center;gap:7px;padding:6px 9px 6px 0;border:1px solid var(--dsh-card-border);border-radius:10px;background:var(--dsw-alias-bg-layer-2);color:inherit;font:inherit;text-align:left;cursor:grab;user-select:none;touch-action:none}
+.dshHarmonyPatchCard:active{cursor:grabbing}
+.dshHarmonyDropSlot{height:10px;display:flex;align-items:center;padding:0 4px;pointer-events:none}
+.dshHarmonyDropSlot::before{content:'';width:100%;height:2px;border-radius:2px;background:#3b82f6;box-shadow:0 0 4px #3b82f6,0 0 11px color-mix(in srgb,#3b82f6 72%,transparent)}
+.dshHarmonyDragPreview{position:fixed;z-index:1400;pointer-events:none;filter:drop-shadow(0 10px 18px rgba(0,0,0,.18))}
+.dshHarmonyDragPatch,.dshHarmonyDragCover,.dshHarmonyDragLayer{height:48px;box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;background:var(--dsw-alias-bg-layer-2)}
+.dshHarmonyDragPatch,.dshHarmonyDragCover{position:relative;z-index:30;display:flex;align-items:center;gap:9px;padding:8px 11px;color:var(--dsw-alias-label-primary)}
+.dshHarmonyDragStack{position:relative}
+.dshHarmonyDragLayer{position:absolute}
+.dshHarmonyDragTitle{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;line-height:20px;font-weight:600}
+.dshHarmonyDragMeta{flex:none;color:var(--dsw-alias-label-tertiary);font-size:10px;line-height:16px}
+.dshHarmonyIndex{color:var(--dsw-alias-label-tertiary);font-variant-numeric:tabular-nums;font-size:10px;text-align:right}
+.dshHarmonyOrderState{flex:none;width:8px;height:8px;border-radius:50%;background:var(--dsw-alias-label-tertiary)}
+.dshHarmonyOrderState[data-state=bound]{background:var(--dsw-alias-state-business-primary)}
+.dshHarmonyOrderState[data-state=failed]{background:var(--dsw-alias-state-error-primary)}
+.dshHarmonyOrderState[data-state=disabled]{background:var(--dsw-alias-label-tertiary)}
+.dshHarmonyPatchCard[data-status=warning] .dshHarmonyOrderState{background:#d97706}
+.dshHarmonyPatchCard[data-status=error] .dshHarmonyOrderState{background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 78%,transparent)}
+.dshHarmonyPatchCard[data-status=disabled] .dshHarmonyOrderState{background:color-mix(in srgb,var(--dsw-alias-label-tertiary) 72%,transparent)}
+.dshHarmonyStackState{box-sizing:border-box;border:1px solid color-mix(in srgb,var(--dsw-alias-label-primary) 20%,transparent)}
 .dshHarmonyDetail{min-width:0;min-height:0;display:flex;flex-direction:column;gap:12px;overflow-y:auto}
 .dshHarmonyPreview{position:relative;flex:none;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:12px;background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-tertiary)}
 .dshHarmonyPreviewImage{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
@@ -49,7 +87,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
 .dshHarmonyFacts a:hover{text-decoration:underline}
 .dshHarmonyFacts a:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px}
 .dshHarmonyPatchPage{flex:1;min-height:0;display:flex;flex-direction:column;gap:14px}
-.dshHarmonyPatchWorkspace{flex:1;min-height:0;display:grid;grid-template-columns:minmax(260px,2fr) minmax(0,3fr);gap:14px}
+.dshHarmonyPatchWorkspace{flex:1;min-height:0;display:grid;grid-template-columns:minmax(260px,450px) minmax(0,1fr);gap:14px}
 .dshHarmonyPatchList{min-height:0;overflow:auto;display:flex;flex-direction:column;gap:5px;margin:0;padding:6px;list-style:none;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-layer-1)}
 .dshHarmonyPatchRow{width:100%;display:grid;grid-template-columns:8px minmax(0,1fr);gap:9px;padding:9px;border:0;border-radius:9px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .dshHarmonyPatchRow:hover{background:var(--dsw-alias-interactive-bg-hover)}
@@ -67,6 +105,8 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
 .dshHarmonyPatchChain{display:flex;flex-wrap:wrap;gap:6px}
 .dshHarmonyPatchChain span{padding:3px 7px;border-radius:6px;background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-secondary);font-size:10px;line-height:16px}
 .dshHarmonyFooter{flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:30px}
+.dshHarmonyFooterActions{display:flex;align-items:center;gap:8px}
+.dshHarmonyFooterActions .dshHarmonySecondary{height:30px}
 .dshHarmonyHint{margin:0;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:18px}
 .dshHarmonyButton{min-width:68px;height:30px;padding:0 12px;border:0;border-radius:8px;background:var(--dsw-alias-state-business-primary);color:#fff;font:inherit;font-size:13px;cursor:pointer}
 .dshHarmonyButton:hover:not(:disabled){filter:brightness(.96)}
@@ -93,9 +133,10 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
 .dshHarmonyToast{position:fixed;z-index:1200;top:24px;left:50%;display:flex;align-items:center;gap:9px;max-width:min(560px,calc(100vw - 32px));padding:10px 14px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);box-shadow:var(--dsw-shadow-lv2);font-size:13px;line-height:20px;transform:translateX(-50%)}
 .dshHarmonyToastDot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--dsw-alias-state-business-primary)}
 .dshHarmonyToast[data-state=failed] .dshHarmonyToastDot{background:var(--dsw-alias-state-error-primary)}
-@media(max-width:680px){.dshHarmonyWorkspace,.dshHarmonyPatchWorkspace{grid-template-columns:1fr;overflow-y:auto}.dshHarmonyList,.dshHarmonyPatchList{min-height:220px;max-height:260px}.dshHarmonyDetail,.dshHarmonyPatchDetail{overflow:visible}.dshHarmonySkeleton{grid-template-columns:1fr}}
-@media(prefers-reduced-motion:no-preference){.dshHarmonyRow{transition:background-color .16s ease,opacity .16s ease}.dshHarmonyToast{animation:dshHarmonyToastIn .18s ease-out}}
+@media(max-width:680px){[role=dialog]:has(.dshHarmonyPage){max-width:calc(100vw - 24px)}[role=dialog]:has(.dshHarmonyPage)>nav{width:52px;gap:10px;padding:16px 6px 0}[role=dialog]:has(.dshHarmonyPage)>nav>div:first-child,[role=dialog]:has(.dshHarmonyPage)>nav button>span:last-child{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}[role=dialog]:has(.dshHarmonyPage)>nav button{justify-content:center;width:40px;padding:9px}[role=dialog]:has(.dshHarmonyPage)>div:last-child>div:last-child{padding-right:12px;padding-bottom:12px;padding-left:12px}.dshHarmonyPage{gap:8px}.dshHarmonyTabs{gap:12px}.dshHarmonyTab{padding-bottom:7px;font-size:11px}.dshHarmonyHeading{font-size:16px;line-height:22px}.dshHarmonyIntro{display:none}.dshHarmonyWorkspace,.dshHarmonyPatchWorkspace{display:block;overflow-y:auto}.dshHarmonyList,.dshHarmonyPatchList{min-height:220px;max-height:360px;padding:5px;gap:8px;border-radius:10px}.dshHarmonyDetail,.dshHarmonyPatchDetail{display:none}.dshHarmonyStackSummary{gap:4px;padding:8px 5px}.dshHarmonyStackGlyph{display:none}.dshHarmonyStackMeta{font-size:9px}.dshHarmonyPatchCard{grid-template-columns:22px minmax(0,1fr) auto;gap:4px;padding-right:5px}.dshHarmonyPatchGrip{display:none}.dshHarmonyIndex{font-size:9px}.dshHarmonyFooter{align-items:stretch;flex-direction:column}.dshHarmonyHint{display:none}.dshHarmonyButton{width:100%}.dshHarmonyFooterActions{width:100%}.dshHarmonyFooterActions>.dshHarmonyButton,.dshHarmonyFooterActions>.dshHarmonySecondary{width:auto;flex:1}.dshHarmonySkeleton{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:no-preference){.dshHarmonySettingsPanel{transition:width .28s cubic-bezier(.16,1,.3,1)}.dshHarmonyStack{transition:width .22s cubic-bezier(.16,1,.3,1)}.dshHarmonyStackCover{transition:opacity .11s ease-out,box-shadow .16s ease-out}.dshHarmonyStack[data-collapsed=true] .dshHarmonyStackCover{transition:opacity .14s ease-out .14s,box-shadow .16s ease-out}.dshHarmonyPatchCard{transition:width .22s cubic-bezier(.16,1,.3,1),opacity .16s ease-out,box-shadow .16s ease-out}.dshHarmonyDropSlot{animation:dshHarmonyDropIn .13s cubic-bezier(.16,1,.3,1)}.dshHarmonyToast{animation:dshHarmonyToastIn .18s ease-out}}
 @keyframes dshHarmonyToastIn{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1;transform:translate(-50%,0)}}
+@keyframes dshHarmonyDropIn{from{height:0;opacity:0}to{height:10px;opacity:1}}
 `
     const styleId = 'dsh-harmony/client.css'
     if (!document.querySelector(`style[data-plugin-css="${styleId}"]`)) {
@@ -109,7 +150,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
     const dictionaries = {
       zh: {
         nav: 'Harmony',
-        orderPage: '插件排序',
+        orderPage: '应用顺序',
         patchPage: 'Patch 状态',
         patchTitle: '运行时 Patch',
         patchIntro: '查看 Patch 的绑定、冲突和当前变换结果，或单独启用与停用 Patch。',
@@ -122,12 +163,16 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         patchLoaded: '目标已加载',
         patchGeneration: '运行代次',
         patchOperation: '操作',
+        patchProvider: '插件',
+        patchDeclaration: '声明文件',
         patchChain: '变换链',
         patchOriginal: '原始源码',
         patchIntermediate: '中间结果',
         patchFinal: '最终源码',
         patchPending: '等待目标加载',
         patchBound: '已绑定',
+        patchHealthy: '健康',
+        patchWarning: '警告',
         patchDisabled: '已停用',
         patchFailed: '失败',
         enable: '启用',
@@ -140,8 +185,13 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         bugs: '问题反馈',
         license: '许可证',
         patchCount: 'Patch',
-        title: '插件加载顺序',
-        intro: '拖动插件来调整 Patch 的应用顺序',
+        title: 'Patch 应用顺序',
+        intro: '拖动插件封面移动整堆；展开后可将单个 Patch 拖到任意位置。',
+        expandStack: '展开 Patch 卡片堆',
+        collapseStack: '折叠 Patch 卡片堆',
+        movePatch: '拖动 Patch',
+        dropAt: '放到第',
+        orderEmpty: '当前没有可排序的 Harmony Patch。',
         preview: '插件示意图占位',
         noDescription: '这个插件没有提供介绍。',
         before: '需要位于这些插件之前',
@@ -149,16 +199,16 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         conflicts: '声明不兼容',
         incompatibilityWarning: '检测到插件不兼容声明；这些插件仍会正常加载：',
         noConstraints: '没有声明 Harmony 顺序约束。',
-        harmony: 'Harmony',
         fixed: '固定',
-        keyboard: '方向键选择 · Alt + 方向键移动 · 拖动时可继续滚动列表',
+        keyboard: '长按卡片召回同插件 Patch · 拖动封面或单个 Patch · 滚轮仍可滚动',
         save: '保存',
+        undo: '撤回',
         saving: '保存中…',
-        loading: '正在读取插件…',
-        loadError: '无法读取插件顺序。',
+        loading: '正在读取 Patch 顺序…',
+        loadError: '无法读取 Patch 顺序。',
         retry: '重试',
-        confirmTitle: '保存插件顺序？',
-        confirmBody: '退出设置前，可以保存并热加载新的顺序，也可以放弃这次调整。',
+        confirmTitle: '保存 Patch 顺序？',
+        confirmBody: '退出设置前，可以保存并热加载新的 Patch 顺序，也可以放弃这次调整。',
         saveExit: '保存并退出',
         discard: '不保存',
         cancel: '取消',
@@ -180,7 +230,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       },
       en: {
         nav: 'Harmony',
-        orderPage: 'Plugin order',
+        orderPage: 'Apply order',
         patchPage: 'Patch status',
         patchTitle: 'Runtime patches',
         patchIntro: 'Inspect patch bindings, conflicts and transformed source, or enable and disable individual patches.',
@@ -193,12 +243,16 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         patchLoaded: 'Target loaded',
         patchGeneration: 'Generation',
         patchOperation: 'Operation',
+        patchProvider: 'Plugin',
+        patchDeclaration: 'Declaration',
         patchChain: 'Transform chain',
         patchOriginal: 'Original source',
         patchIntermediate: 'Intermediate result',
         patchFinal: 'Final source',
         patchPending: 'Waiting for target',
         patchBound: 'Bound',
+        patchHealthy: 'Healthy',
+        patchWarning: 'Warning',
         patchDisabled: 'Disabled',
         patchFailed: 'Failed',
         enable: 'Enable',
@@ -211,8 +265,13 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         bugs: 'Issues',
         license: 'License',
         patchCount: 'Patches',
-        title: 'Plugin load order',
-        intro: 'Drag plugins to adjust the order in which patches are applied.',
+        title: 'Patch application order',
+        intro: 'Drag a plugin cover to move its stack, or expand it to place an individual Patch.',
+        expandStack: 'Expand patch stack',
+        collapseStack: 'Collapse patch stack',
+        movePatch: 'Drag patch',
+        dropAt: 'Drop at position',
+        orderEmpty: 'There are no Harmony patches to order.',
         preview: 'Plugin preview placeholder',
         noDescription: 'This plugin does not provide a description.',
         before: 'Must load before',
@@ -220,16 +279,16 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         conflicts: 'Declares incompatible',
         incompatibilityWarning: 'Plugin incompatibilities were declared; all plugins remain loaded:',
         noConstraints: 'No Harmony order constraints declared.',
-        harmony: 'Harmony',
         fixed: 'Pinned',
-        keyboard: 'Arrow keys select · Alt + Arrow moves · Scrolling remains available while dragging',
+        keyboard: 'Hold a card to recall its plugin Patches · Drag a cover or one Patch · Wheel scrolling stays available',
         save: 'Save',
+        undo: 'Undo',
         saving: 'Saving…',
-        loading: 'Reading plugins…',
-        loadError: 'Plugin order could not be loaded.',
+        loading: 'Reading Patch order…',
+        loadError: 'Patch order could not be loaded.',
         retry: 'Retry',
-        confirmTitle: 'Save plugin order?',
-        confirmBody: 'Save and hot-reload the new order before leaving Settings, or discard these changes.',
+        confirmTitle: 'Save Patch order?',
+        confirmBody: 'Save and hot-reload the new Patch order before leaving Settings, or discard these changes.',
         saveExit: 'Save and exit',
         discard: 'Discard',
         cancel: 'Cancel',
@@ -272,17 +331,23 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
 
     interface PatchStatus {
       key: string
+      id: string
       owner: string
-      target: { package: string; version?: string; files: string[] }
-      kind: 'source' | 'semantic' | 'loader'
+      index: number
+      targets: Array<{ package: string; version?: string; files: string[] }>
+      kind: 'source' | 'semantic' | 'loader' | 'composite'
       operation?: 'before' | 'after' | 'around' | 'replace'
       loader?: 'typescript'
       state: 'pending' | 'bound' | 'disabled' | 'failed'
+      status: 'normal' | 'warning' | 'error' | 'disabled'
       loaded: boolean
       matches: number
       generation: number
+      declaration: string
       file?: string
+      files?: string[]
       error?: string
+      members?: Array<{ id: string; kind: 'source' | 'semantic' | 'loader' }>
     }
 
     interface PatchInspection {
@@ -309,8 +374,57 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
 
     interface ProfileView {
       order: string[]
+      patchOrder: string[]
+      disabled: string[]
       plugins: PluginView[]
+      orderViolations: Array<{ before: string; after: string; declaredBy: string }>
+      patchOrderViolations: Array<{ before: string; after: string; declaredBy: string }>
       incompatibilities: Array<{ declaredBy: string; conflictsWith: string }>
+    }
+
+    interface PatchRun {
+      owner: string
+      keys: string[]
+      start: number
+      end: number
+    }
+
+    type PatchViewNode =
+      | { type: 'patch'; key: string; owner: string; index: number }
+      | { type: 'stack'; id: string; owner: string; keys: string[]; start: number; end: number; expanded: boolean }
+      | { type: 'placeholder'; index: number }
+    type PatchStackNode = Extract<PatchViewNode, { type: 'stack' }>
+    type PatchCardStatus = PatchStatus['status']
+    type OrderSelection = { kind: 'plugin'; key: string } | { kind: 'patch'; key: string }
+
+    interface PatchDragProjection {
+      keys: string[]
+      target: number
+      visible: boolean
+    }
+
+    interface PatchDragPreview {
+      keys: string[]
+      owner: string
+      kind: 'patch' | 'stack'
+      x: number
+      y: number
+      width: number
+      height: number
+      offsetX: number
+      offsetY: number
+    }
+
+    interface ActivePatchDrag extends PatchDragPreview {
+      pointerId: number
+      originX: number
+      originY: number
+      lastX: number
+      lastY: number
+      moved: boolean
+      recalled: boolean
+      target: number
+      markerVisible: boolean
     }
 
     interface HarmonyClientContext {
@@ -332,6 +446,90 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
     const listName = (name: string) => displayName(name).replace(/^dsh-/, '')
     const packageScope = (name: string) => name.match(/^(@[^/]+)\//)?.[1] ?? ''
     const detailAuthor = (plugin: PluginView) => [packageScope(plugin.name), plugin.author].filter(Boolean).join(' · ')
+    const patchTargetLabel = (patch: PatchStatus | undefined) => patch?.targets
+      .map(target => `${target.package}/${target.files.join(' | ')}`)
+      .join(', ') ?? ''
+    const stackId = (owner: string, keys: string[]) => `${owner}:${keys.join('|')}`
+    const stackBoundary = (left: string, right: string) => `${left}\0${right}`
+    const stackMinGap = 2
+    const stackLogGapScale = 12
+    const stackBottomInset = 12
+    const dragStartDistance = 8
+    const longPressDelay = 620
+    const stackStatusWeight: Record<PatchCardStatus, number> = { normal: 1, disabled: 0.5, warning: 1.5, error: 1.5 }
+    const stackGeometry = (statuses: PatchCardStatus[]) => {
+      const base = Math.log(Math.max(1, statuses.length)) * stackLogGapScale / Math.max(1, statuses.length)
+      const gaps = statuses.map(status => Math.max(base * stackStatusWeight[status], stackMinGap))
+      const positions = [0]
+      for (const gap of gaps) positions.push(positions.at(-1)! + gap)
+      return { gaps, positions, height: positions.at(-1)! }
+    }
+    const stackLayer = (statuses: PatchCardStatus[], depth: number) => {
+      const { positions, height } = stackGeometry(statuses)
+      const bottom = positions[depth + 1]!
+      const inset = bottom / height * stackBottomInset
+      return { bottom, left: inset, right: inset }
+    }
+    const patchOwner = (key: string, patches: ReadonlyMap<string, PatchStatus>) => patches.get(key)?.owner ?? key.slice(0, Math.max(0, key.lastIndexOf('/')))
+    const insertPatches = (order: string[], keys: string[], target: number): string[] => {
+      const moving = new Set(keys)
+      const remaining = order.filter(item => !moving.has(item))
+      remaining.splice(Math.max(0, Math.min(target, remaining.length)), 0, ...keys)
+      return remaining
+    }
+    const reconcilePatchView = (
+      order: string[],
+      patches: ReadonlyMap<string, PatchStatus>,
+      expandedKeys: ReadonlySet<string>,
+      stackBreaks: ReadonlySet<string>,
+      dragProjection: PatchDragProjection | null,
+    ): PatchViewNode[] => {
+      const entries: Array<string | null> = dragProjection === null
+        ? [...order]
+        : (() => {
+            const moving = new Set(dragProjection.keys)
+            const remaining: Array<string | null> = order.filter(key => !moving.has(key))
+            if (dragProjection.visible) remaining.splice(Math.max(0, Math.min(dragProjection.target, remaining.length)), 0, null)
+            return remaining
+          })()
+      const nodes: PatchViewNode[] = []
+      let run: PatchRun | null = null
+      const flush = () => {
+        if (run === null) return
+        if (run.keys.length === 1) nodes.push({ type: 'patch', key: run.keys[0]!, owner: run.owner, index: run.start })
+        else nodes.push({
+          type: 'stack',
+          id: stackId(run.owner, run.keys),
+          owner: run.owner,
+          keys: run.keys,
+          start: run.start,
+          end: run.end,
+          expanded: run.keys.some(key => expandedKeys.has(key)),
+        })
+        run = null
+      }
+      let patchIndex = 0
+      for (const entry of entries) {
+        if (entry === null) {
+          flush()
+          nodes.push({ type: 'placeholder', index: patchIndex })
+          continue
+        }
+        const owner = patchOwner(entry, patches)
+        const currentRun = run as PatchRun | null
+        const previous = currentRun?.keys.at(-1)
+        if (currentRun !== null && currentRun.owner === owner && previous !== undefined && !stackBreaks.has(stackBoundary(previous, entry))) {
+          currentRun.keys.push(entry)
+          currentRun.end = patchIndex + 1
+        } else {
+          flush()
+          run = { owner, keys: [entry], start: patchIndex, end: patchIndex + 1 }
+        }
+        patchIndex += 1
+      }
+      flush()
+      return nodes
+    }
 
     function RuntimePrompt({ t }: { t: Translate }) {
       const [status, setStatus] = useState<RuntimeStatus | null>(null)
@@ -485,10 +683,10 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
 
       useEffect(() => { void load() }, [])
       useEffect(() => {
-        if (patch?.file === undefined) return setInspection(null)
+        if (patch?.file === undefined || patch.targets.length !== 1) return setInspection(null)
         let current = true
         setInspection(null)
-        const query = new URLSearchParams({ package: patch.target.package, file: patch.file })
+        const query = new URLSearchParams({ package: patch.targets[0]!.package, file: patch.file })
         fetch(`/dsh-harmony/inspect?${query}`, { cache: 'no-store' })
           .then(response => response.ok ? response.json() : Promise.reject(new Error(`${response.status}`)))
           .then((value: { inspections: PatchInspection[] }) => { if (current) setInspection(value.inspections[0] ?? null) })
@@ -535,7 +733,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
                   h('span', { className: 'dshHarmonyPatchState', 'data-state': item.state, title: stateLabel(item.state) }),
                   h('span', null,
                     h('span', { className: 'dshHarmonyPatchKey', title: item.key }, item.key),
-                    h('span', { className: 'dshHarmonyPatchTarget' }, `${item.target.package}/${item.file ?? item.target.files.join(' | ')} · ${stateLabel(item.state)}`)))))),
+                    h('span', { className: 'dshHarmonyPatchTarget' }, `${patchTargetLabel(item)} · ${stateLabel(item.state)}`)))))),
               patch === undefined ? h('p', { className: 'dshHarmonyStatus' }, t('patchSelect')) :
                 h('article', { className: 'dshHarmonyPatchDetail' },
                   h('div', { className: 'dshHarmonyPatchHeader' },
@@ -552,9 +750,11 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
                         onClick: () => { void toggle(false) },
                       }, t(patch.state === 'disabled' ? 'enable' : 'disable')))),
                   h('div', { className: 'dshHarmonyFacts' },
-                    h('span', null, `${t('patchTarget')}: ${patch.target.package}`),
-                    patch.target.version ? h('span', null, `${t('patchVersion')}: ${patch.target.version}`) : null,
-                    h('span', null, `${t('patchFile')}: ${patch.file ?? patch.target.files.join(' | ')}`),
+                    h('span', null, `${t('patchTarget')}: ${patchTargetLabel(patch)}`),
+                    patch.targets.length === 1 && patch.targets[0]!.version
+                      ? h('span', null, `${t('patchVersion')}: ${patch.targets[0]!.version}`)
+                      : null,
+                    h('span', null, `${t('patchFile')}: ${patch.files?.join(' | ') ?? patch.file ?? patchTargetLabel(patch)}`),
                     h('span', null, `${t('patchLoaded')}: ${patch.loaded ? '✓' : '—'}`),
                     h('span', null, `${t('patchMatches')}: ${patch.matches}`),
                     h('span', null, `${t('patchGeneration')}: ${patch.generation}`),
@@ -576,42 +776,135 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
     function HarmonySettings({ t }: { t: Translate }) {
       const [page, setPage] = useState<'order' | 'patches'>('order')
       const [view, setView] = useState<ProfileView | null>(null)
-      const [savedOrder, setSavedOrder] = useState<string[]>([])
-      const [draftOrder, setDraftOrder] = useState<string[]>([])
-      const [selected, setSelected] = useState<string | null>(null)
+      const [patches, setPatches] = useState<PatchStatus[]>([])
+      const [savedPatchOrder, setSavedPatchOrder] = useState<string[]>([])
+      const [draftPatchOrder, setDraftPatchOrder] = useState<string[]>([])
+      const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set<string>())
+      const [stackBreaks, setStackBreaks] = useState<Set<string>>(new Set<string>())
+      const [draggingKeys, setDraggingKeys] = useState<string[]>([])
+      const [dragProjection, setDragProjection] = useState<PatchDragProjection | null>(null)
+      const [dragPreview, setDragPreview] = useState<PatchDragPreview | null>(null)
+      const [selected, setSelected] = useState<OrderSelection | null>(null)
       const [loading, setLoading] = useState(true)
       const [error, setError] = useState('')
       const [saving, setSaving] = useState(false)
       const [closePrompt, setClosePrompt] = useState<boolean | null>(null)
-      const [dragging, setDragging] = useState<string | null>(null)
-      const listRef = useRef<HTMLUListElement | null>(null)
-      const rowRefs = useRef(new Map<string, HTMLButtonElement>())
-      const drag = useRef<{ name: string; pointerId: number } | null>(null)
+      const listRef = useRef<HTMLDivElement | null>(null)
+      const patchRefs = useRef(new Map<string, HTMLButtonElement>())
+      const coverRefs = useRef(new Map<string, HTMLDivElement>())
+      const drag = useRef<ActivePatchDrag | null>(null)
+      const collapseTimers = useRef(new Map<string, { timer: number; keys: string[] }>())
+      const hoverExpand = useRef<{ id: string; timer: number } | null>(null)
+      const pendingLayout = useRef<{ positions: Map<string, DOMRect>; duration: number } | null>(null)
       const pendingClose = useRef<{ promise: Promise<boolean>; resolve(allow: boolean): void } | null>(null)
       const promptButton = useRef<HTMLButtonElement | null>(null)
-      const draftRef = useRef(draftOrder)
+      const finishDragRef = useRef<((event: PointerEvent) => void) | null>(null)
+      const longPress = useRef<number | null>(null)
+      const suppressCardClick = useRef(false)
+      const draftPatchOrderRef = useRef(draftPatchOrder)
+      const viewNodesRef = useRef<PatchViewNode[]>([])
+      const stackBreaksRef = useRef(stackBreaks)
       const dirtyRef = useRef(false)
       const saveRef = useRef<(() => Promise<void>) | null>(null)
 
-      const dirty = !sameOrder(savedOrder, draftOrder)
-      draftRef.current = draftOrder
+      const dirty = !sameOrder(savedPatchOrder, draftPatchOrder)
+      draftPatchOrderRef.current = draftPatchOrder
+      stackBreaksRef.current = stackBreaks
       dirtyRef.current = dirty
       const plugins = useMemo(() => new Map((view?.plugins ?? []).map(plugin => [plugin.name, plugin])), [view])
-      const firstPlugin = draftOrder[0] === undefined ? undefined : plugins.get(draftOrder[0])
-      const selectedPlugin = (selected === null ? undefined : plugins.get(selected)) ?? firstPlugin
+      const patchMap = useMemo(() => new Map(patches.map(patch => [patch.key, patch])), [patches])
+      const warningPatchKeys = useMemo(() => new Set((view?.patchOrderViolations ?? [])
+        .flatMap(violation => [violation.before, violation.after])), [view])
+      const cardStatus = (key: string): PatchCardStatus => {
+        const patch = patchMap.get(key)
+        if (patch?.status === 'disabled' || patch?.state === 'disabled') return 'disabled'
+        if (patch?.status === 'error' || patch?.state === 'failed') return 'error'
+        if (patch?.status === 'warning' || warningPatchKeys.has(key)) return 'warning'
+        return 'normal'
+      }
+      const stackStatuses = (keys: string[]) => keys.map(cardStatus)
+      const stackHealthColor = (keys: string[]) => {
+        const statuses = stackStatuses(keys).filter(status => status !== 'disabled')
+        if (statuses.length === 0) return 'var(--dsw-alias-label-tertiary)'
+        const warning = statuses.filter(status => status === 'warning').length / statuses.length
+        const error = statuses.filter(status => status === 'error').length / statuses.length
+        const nonError = 1 - error
+        const warningWithinNonError = nonError === 0 ? 0 : warning / nonError
+        const whiteOrange = `color-mix(in srgb,#fff ${Math.round((1 - warningWithinNonError) * 100)}%,#f59e0b)`
+        return error === 0
+          ? whiteOrange
+          : `color-mix(in srgb,${whiteOrange} ${Math.round(nonError * 100)}%,var(--dsw-alias-state-error-primary))`
+      }
+      const stackCoverColor = (keys: string[]) => stackStatuses(keys).every(status => status === 'disabled')
+        ? 'color-mix(in srgb,var(--dsw-alias-label-tertiary) 10%,var(--dsw-alias-bg-layer-2))'
+        : `color-mix(in srgb,${stackHealthColor(keys)} 10%,var(--dsw-alias-bg-layer-2))`
+      const stackHealthTitle = (keys: string[]) => {
+        const statuses = stackStatuses(keys)
+        if (statuses.every(status => status === 'disabled')) return t('patchDisabled')
+        const warnings = statuses.filter(status => status === 'warning').length
+        const errors = statuses.filter(status => status === 'error').length
+        return warnings + errors === 0
+          ? t('patchHealthy')
+          : [warnings > 0 ? `${warnings} ${t('patchWarning')}` : '', errors > 0 ? `${errors} ${t('patchFailed')}` : ''].filter(Boolean).join(' · ')
+      }
+      const viewNodes = useMemo(
+        () => reconcilePatchView(draftPatchOrder, patchMap, expandedKeys, stackBreaks, dragProjection),
+        [draftPatchOrder, patchMap, expandedKeys, stackBreaks, dragProjection],
+      )
+      viewNodesRef.current = viewNodes
+      useLayoutEffect(() => {
+        const pending = pendingLayout.current
+        pendingLayout.current = null
+        if (pending === null) return
+        for (const [token, previous] of pending.positions) {
+          const element = token.startsWith('patch:')
+            ? patchRefs.current.get(token.slice(6))
+            : coverRefs.current.get(token.slice(6))
+          if (element === undefined) continue
+          const current = element.getBoundingClientRect()
+          const x = previous.left - current.left
+          const y = previous.top - current.top
+          if (Math.abs(x) < 0.5 && Math.abs(y) < 0.5) continue
+          element.animate([
+            { transform: `translate(${x}px, ${y}px)` },
+            { transform: 'translate(0, 0)' },
+          ], { duration: pending.duration, easing: 'cubic-bezier(.16,1,.3,1)' })
+        }
+      }, [viewNodes])
+      const selectedPatch = selected?.kind === 'patch' ? patchMap.get(selected.key) : undefined
+      const selectedOwner = selectedPatch?.owner ?? (selected?.kind === 'plugin' ? selected.key : undefined)
+      const selectedPlugin = selectedPatch === undefined
+        ? (selected?.kind === 'plugin' ? plugins.get(selected.key) : undefined)
+          ?? plugins.get(viewNodes.find((node): node is Extract<PatchViewNode, { owner: string }> => node.type !== 'placeholder')?.owner ?? '')
+        : plugins.get(selectedPatch.owner)
       const selectedAuthor = selectedPlugin === undefined ? '' : detailAuthor(selectedPlugin)
+      const orderStateLabel = (state: PatchStatus['state']) => t({ pending: 'patchPending', bound: 'patchBound', disabled: 'patchDisabled', failed: 'patchFailed' }[state] as TranslationKey)
 
       const load = async () => {
         setLoading(true)
         setError('')
         try {
-          const response = await fetch('/dsh-harmony/order')
-          if (!response.ok) throw new Error(`${response.status}`)
-          const next = await response.json() as ProfileView
+          const [profileResponse, patchResponse] = await Promise.all([
+            fetch('/dsh-harmony/profile', { cache: 'no-store' }),
+            fetch('/dsh-harmony/patches', { cache: 'no-store' }),
+          ])
+          if (!profileResponse.ok) throw new Error(`${profileResponse.status}`)
+          if (!patchResponse.ok) throw new Error(`${patchResponse.status}`)
+          const next = await profileResponse.json() as ProfileView
+          const patchResult = await patchResponse.json() as { patches: PatchStatus[] }
           setView(next)
-          setSavedOrder(next.order)
-          setDraftOrder(next.order)
-          setSelected(current => current !== null && next.order.includes(current) ? current : next.order[0] ?? null)
+          setPatches(patchResult.patches)
+          setSavedPatchOrder(next.patchOrder)
+          setDraftPatchOrder(next.patchOrder)
+          setExpandedKeys(new Set())
+          setStackBreaks(new Set())
+          const owners = new Set(patchResult.patches.map(patch => patch.owner))
+          setSelected(current => {
+            if (current?.kind === 'patch' && patchResult.patches.some(patch => patch.key === current.key)) return current
+            if (current?.kind === 'plugin' && owners.has(current.key)) return current
+            const owner = patchResult.patches[0]?.owner
+            return owner === undefined ? null : { kind: 'plugin', key: owner }
+          })
         } catch (reason) {
           setError(reason instanceof Error ? reason.message : String(reason))
         } finally {
@@ -623,16 +916,19 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         setSaving(true)
         setError('')
         try {
-          const response = await fetch('/dsh-harmony/order', {
+          const patchOrder = draftPatchOrderRef.current
+          const response = await fetch('/dsh-harmony/profile', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ order: draftRef.current }),
+            body: JSON.stringify({ patchOrder }),
           })
           const next = await response.json() as ProfileView & { error?: string }
           if (!response.ok) throw new Error(next.error ?? `${response.status}`)
           setView(next)
-          setSavedOrder(next.order)
-          setDraftOrder(next.order)
+          setSavedPatchOrder(next.patchOrder)
+          setDraftPatchOrder(next.patchOrder)
+          const patchResponse = await fetch('/dsh-harmony/patches', { cache: 'no-store' })
+          if (patchResponse.ok) setPatches((await patchResponse.json() as { patches: PatchStatus[] }).patches)
         } catch (reason) {
           setError(reason instanceof Error ? reason.message : String(reason))
           throw reason
@@ -644,6 +940,20 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
 
       useEffect(() => { void load() }, [])
       useEffect(() => { if (closePrompt !== null) promptButton.current?.focus() }, [closePrompt])
+      useEffect(() => () => {
+        for (const item of collapseTimers.current.values()) window.clearTimeout(item.timer)
+        if (hoverExpand.current !== null) window.clearTimeout(hoverExpand.current.timer)
+        if (longPress.current !== null) window.clearTimeout(longPress.current)
+      }, [])
+      useEffect(() => {
+        const finish = (event: PointerEvent) => finishDragRef.current?.(event)
+        window.addEventListener('pointerup', finish, true)
+        window.addEventListener('pointercancel', finish, true)
+        return () => {
+          window.removeEventListener('pointerup', finish, true)
+          window.removeEventListener('pointercancel', finish, true)
+        }
+      }, [])
       useEffect(() => {
         const guard = () => {
           if (!dirtyRef.current) return Promise.resolve(true)
@@ -667,51 +977,405 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         }
       }, [])
 
-      const focus = (name: string) => requestAnimationFrame(() => rowRefs.current.get(name)?.focus())
-      const moveTo = (name: string, target: number) => {
+      const currentStacks = () => viewNodesRef.current.filter((node): node is PatchStackNode => node.type === 'stack')
+      const captureLayout = (duration: number, overrides?: ReadonlyMap<string, DOMRect>) => {
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+        const positions = new Map([
+          ...[...patchRefs.current].map(([key, element]) => [`patch:${key}`, element.getBoundingClientRect()] as const),
+          ...[...coverRefs.current].map(([id, element]) => [`cover:${id}`, element.getBoundingClientRect()] as const),
+        ])
+        for (const [key, bounds] of overrides ?? []) positions.set(`patch:${key}`, bounds)
+        pendingLayout.current = { positions, duration }
+      }
+      const setExpandedWithMotion = (update: (current: Set<string>) => Set<string>, duration: number) => {
+        captureLayout(duration)
+        setExpandedKeys(update)
+      }
+      const cancelCollapse = (keys: readonly string[]) => {
+        for (const [id, item] of collapseTimers.current) {
+          if (!item.keys.some(key => keys.includes(key))) continue
+          window.clearTimeout(item.timer)
+          collapseTimers.current.delete(id)
+        }
+      }
+      const collapseStack = (stack: PatchStackNode) => {
+        cancelCollapse(stack.keys)
+        setExpandedWithMotion(current => {
+          const next = new Set(current)
+          for (const key of stack.keys) next.delete(key)
+          return next
+        }, 320)
+      }
+      const scheduleCollapse = (owner: string, keys: readonly string[]) => {
+        const id = stackId(owner, [...keys])
+        if (collapseTimers.current.has(id)) return
+        const pendingKeys = [...keys]
+        const timer = window.setTimeout(() => {
+          collapseTimers.current.delete(id)
+          setExpandedWithMotion(current => {
+            const next = new Set(current)
+            for (const key of pendingKeys) next.delete(key)
+            return next
+          }, 320)
+        }, 520)
+        collapseTimers.current.set(id, { timer, keys: pendingKeys })
+      }
+      const patchBounds = (key: string) => {
+        const element = patchRefs.current.get(key)
+        return (element?.parentElement ?? element)?.getBoundingClientRect()
+      }
+      const expandedGroups = () => {
+        const groups: Array<{
+          owner: string
+          expandedKeys: string[]
+          nodes: Array<Exclude<PatchViewNode, { type: 'placeholder' }>>
+        }> = []
+        let activeOwner: string | null = null
+        for (const node of viewNodesRef.current) {
+          if (node.type === 'placeholder') continue
+          const keys = node.type === 'patch' ? [node.key] : node.keys
+          const openKeys = keys.filter(key => expandedKeys.has(key))
+          if (activeOwner === node.owner) {
+            const group = groups.at(-1)!
+            group.nodes.push(node)
+            group.expandedKeys.push(...openKeys)
+          }
+          else {
+            activeOwner = node.owner
+            groups.push({ owner: node.owner, expandedKeys: openKeys, nodes: [node] })
+          }
+        }
+        return groups.filter(group => group.expandedKeys.length > 0)
+      }
+      const reconcileCollapses = (clientY: number) => {
+        for (const group of expandedGroups()) {
+          const bounds = group.nodes.map(nodeBounds).filter((value): value is DOMRect => value !== undefined)
+          if (bounds.length === 0) continue
+          const top = Math.min(...bounds.map(value => value.top))
+          const bottom = Math.max(...bounds.map(value => value.bottom))
+          if (clientY >= top && clientY <= bottom) cancelCollapse(group.expandedKeys)
+          else scheduleCollapse(group.owner, group.expandedKeys)
+        }
+      }
+      const nodeKeys = (node: Exclude<PatchViewNode, { type: 'placeholder' }>) => node.type === 'patch' ? [node.key] : node.keys
+      const nodeBounds = (node: Exclude<PatchViewNode, { type: 'placeholder' }>): DOMRect | undefined => {
+        if (node.type === 'patch') return patchBounds(node.key)
+        if (!node.expanded) return coverRefs.current.get(node.id)?.getBoundingClientRect()
+        const bounds = node.keys.map(patchBounds).filter((value): value is DOMRect => value !== undefined)
+        if (bounds.length === 0) return undefined
+        const left = Math.min(...bounds.map(value => value.left))
+        const top = Math.min(...bounds.map(value => value.top))
+        const right = Math.max(...bounds.map(value => value.right))
+        const bottom = Math.max(...bounds.map(value => value.bottom))
+        return new DOMRect(
+          left,
+          top,
+          right - left,
+          bottom - top,
+        )
+      }
+      const reconcileMerges = (clientY: number) => {
+        const remove: string[] = []
+        const runs: Array<Array<Exclude<PatchViewNode, { type: 'placeholder' }>>> = []
+        for (const node of viewNodesRef.current) {
+          if (node.type === 'placeholder') continue
+          const active = runs.at(-1)
+          if (active?.[0]?.owner === node.owner) active.push(node)
+          else runs.push([node])
+        }
+        for (const run of runs) {
+          if (run.length > 1) {
+            const boundaries = run.slice(1).map((right, index) => stackBoundary(nodeKeys(run[index]!).at(-1)!, nodeKeys(right)[0]!))
+              .filter(boundary => stackBreaksRef.current.has(boundary))
+            const bounds = run.map(nodeBounds).filter((value): value is DOMRect => value !== undefined)
+            if (boundaries.length > 0 && bounds.length === run.length) {
+              const top = Math.min(...bounds.map(value => value.top))
+              const bottom = Math.max(...bounds.map(value => value.bottom))
+              if (clientY < top || clientY > bottom) remove.push(...boundaries)
+            }
+          }
+        }
+        if (remove.length === 0) return
+        captureLayout(320)
+        const next = new Set(stackBreaksRef.current)
+        for (const boundary of remove) next.delete(boundary)
+        stackBreaksRef.current = next
+        setStackBreaks(next)
+      }
+      const expandStack = (stack: PatchStackNode, clientY?: number) => {
+        cancelCollapse(stack.keys)
+        setExpandedWithMotion(current => new Set([...current, ...stack.keys]), 380)
+        if (clientY !== undefined && clientY > 0) {
+          window.setTimeout(() => reconcileCollapses(clientY), 0)
+        }
+      }
+      const cancelHoverExpand = () => {
+        if (hoverExpand.current === null) return
+        window.clearTimeout(hoverExpand.current.timer)
+        hoverExpand.current = null
+      }
+      const updateHoverExpand = (clientX: number, clientY: number, active: ActivePatchDrag) => {
+        const moving = new Set(active.keys)
+        const target = currentStacks().find(stack => {
+          if (stack.expanded || stack.keys.some(key => moving.has(key))) return false
+          const element = coverRefs.current.get(stack.id)
+          if (element === undefined) return false
+          const bounds = element.getBoundingClientRect()
+          return clientX >= bounds.left && clientX <= bounds.right && clientY >= bounds.top && clientY <= bounds.bottom
+        })
+        const id = target?.id ?? ''
+        if (hoverExpand.current?.id === id) return
+        cancelHoverExpand()
+        if (target === undefined) return
+        const keys = [...target.keys]
+        const timer = window.setTimeout(() => {
+          hoverExpand.current = null
+          setExpandedWithMotion(current => new Set([...current, ...keys]), 380)
+        }, 460)
+        hoverExpand.current = { id, timer }
+      }
+      const applyPatchOrder = (next: string[], overrides?: ReadonlyMap<string, DOMRect>) => {
+        const breaks = new Set([...stackBreaksRef.current].filter(boundary => {
+          const [left, right] = boundary.split('\0')
+          const index = next.indexOf(left!)
+          return index >= 0 && next[index + 1] === right
+        }))
+        captureLayout(320, overrides)
+        stackBreaksRef.current = breaks
+        setStackBreaks(breaks)
+        if (sameOrder(draftPatchOrderRef.current, next)) return
+        draftPatchOrderRef.current = next
+        setDraftPatchOrder(next)
+      }
+      const undoPatchOrder = () => {
+        if (!dirty || saving) return
+        captureLayout(320)
+        const next = [...savedPatchOrder]
+        const breaks = new Set<string>()
+        draftPatchOrderRef.current = next
+        stackBreaksRef.current = breaks
+        setExpandedKeys(new Set())
+        setStackBreaks(breaks)
+        setDraftPatchOrder(next)
+      }
+      const moveByKeyboard = (key: string, offset: -1 | 1) => {
         if (saving) return
-        setDraftOrder(current => {
-          const from = current.indexOf(name)
-          const firstMovable = current[0] === harmonyPlugin ? 1 : 0
-          target = Math.max(firstMovable, target)
-          if (name === harmonyPlugin || from === -1 || target >= current.length || from === target) return current
-          const next = [...current]
-          next.splice(from, 1)
-          next.splice(target, 0, name)
+        const index = draftPatchOrderRef.current.indexOf(key)
+        if (index < 0) return
+        const target = offset < 0 ? Math.max(0, index - 1) : Math.min(draftPatchOrderRef.current.length - 1, index + 1)
+        applyPatchOrder(insertPatches(draftPatchOrderRef.current, [key], target))
+        requestAnimationFrame(() => patchRefs.current.get(key)?.focus())
+      }
+      const cancelLongPress = () => {
+        if (longPress.current === null) return
+        window.clearTimeout(longPress.current)
+        longPress.current = null
+      }
+      const recallPluginPatches = (active: ActivePatchDrag) => {
+        const order = draftPatchOrderRef.current
+        const anchor = Math.min(...active.keys.map(key => order.indexOf(key)).filter(index => index >= 0))
+        const keys = [...patchMap.values()]
+          .filter(patch => patch.owner === active.owner)
+          .sort((left, right) => left.index - right.index)
+          .map(patch => patch.key)
+        if (keys.length === 0 || !Number.isFinite(anchor)) return
+        active.recalled = true
+        const target = order.slice(0, anchor).filter(key => patchOwner(key, patchMap) !== active.owner).length
+        const recalled = new Set(keys)
+        const breaks = new Set([...stackBreaksRef.current].filter(boundary => {
+          const [left, right] = boundary.split('\0')
+          return !recalled.has(left!) || !recalled.has(right!)
+        }))
+        stackBreaksRef.current = breaks
+        setStackBreaks(breaks)
+        cancelCollapse(keys)
+        setExpandedKeys(current => {
+          const next = new Set(current)
+          for (const key of keys) next.delete(key)
           return next
         })
+        setSelected(active.kind === 'patch'
+          ? { kind: 'patch', key: active.keys[0]! }
+          : { kind: 'plugin', key: active.owner })
+        applyPatchOrder(insertPatches(order, keys, target))
       }
-      const moveBy = (name: string, offset: number) => {
-        const index = draftRef.current.indexOf(name)
-        moveTo(name, index + offset)
-        focus(name)
+      const beginDrag = (event: PointerEvent, keys: string[], owner: string, kind: 'patch' | 'stack', element: HTMLElement) => {
+        if (event.button !== 0 || saving) return
+        listRef.current?.setPointerCapture(event.pointerId)
+        const bounds = element.getBoundingClientRect()
+        const index = Math.min(...keys.map(key => draftPatchOrderRef.current.indexOf(key)).filter(value => value >= 0))
+        const active: ActivePatchDrag = {
+          keys: [...keys], owner, kind, pointerId: event.pointerId,
+          originX: event.clientX, originY: event.clientY, lastX: event.clientX, lastY: event.clientY,
+          moved: false, recalled: false, target: Math.max(0, index), markerVisible: false,
+          x: event.clientX, y: event.clientY, width: bounds.width, height: bounds.height,
+          offsetX: event.clientX - bounds.left, offsetY: event.clientY - bounds.top,
+        }
+        drag.current = active
+        cancelLongPress()
+        const timer = window.setTimeout(() => {
+          if (drag.current !== active || active.moved) return
+          longPress.current = null
+          recallPluginPatches(active)
+        }, longPressDelay)
+        longPress.current = timer
       }
-      const moveFromPointer = (event: PointerEvent & { currentTarget: HTMLElement }) => {
-        if (saving) return
+      const visibleDropCards = () => {
+        const moving = new Set(drag.current?.keys ?? [])
+        const cards: Array<{ start: number; end: number; bounds: DOMRect }> = []
+        let position = 0
+        for (const node of viewNodesRef.current) {
+          if (node.type === 'placeholder') continue
+          if (node.type === 'patch') {
+            if (moving.has(node.key)) continue
+            const element = patchRefs.current.get(node.key)
+            if (element !== undefined) cards.push({ start: position, end: position + 1, bounds: element.getBoundingClientRect() })
+            position += 1
+            continue
+          }
+          const keys = node.keys.filter(key => !moving.has(key))
+          if (keys.length === 0) continue
+          if (!node.expanded) {
+            const element = coverRefs.current.get(node.id)
+            if (element !== undefined) cards.push({ start: position, end: position + keys.length, bounds: element.getBoundingClientRect() })
+            position += keys.length
+            continue
+          }
+          for (const key of keys) {
+            const element = patchRefs.current.get(key)
+            if (element !== undefined) cards.push({ start: position, end: position + 1, bounds: element.getBoundingClientRect() })
+            position += 1
+          }
+        }
+        return cards.sort((left, right) => left.bounds.top - right.bounds.top)
+      }
+      const dropProjectionAt = (clientX: number, clientY: number) => {
+        const cards = visibleDropCards()
+        if (cards.length === 0) return { target: 0, visible: true }
+        const over = cards.find(({ bounds }) => clientX >= bounds.left && clientX <= bounds.right && clientY >= bounds.top && clientY <= bounds.bottom)
+        if (over !== undefined) {
+          return { target: clientY < over.bounds.top + over.bounds.height / 2 ? over.start : over.end, visible: false }
+        }
+        const gaps = [
+          { target: cards[0]!.start, y: cards[0]!.bounds.top },
+          ...cards.slice(1).map((card, index) => ({
+            target: card.start,
+            y: (cards[index]!.bounds.bottom + card.bounds.top) / 2,
+          })),
+          { target: cards.at(-1)!.end, y: cards.at(-1)!.bounds.bottom },
+        ]
+        const nearest = gaps.reduce((current, gap) => Math.abs(clientY - gap.y) < Math.abs(clientY - current.y) ? gap : current, gaps[0]!)
+        return { target: nearest.target, visible: true }
+      }
+      const updateDropProjection = (clientX: number, clientY: number) => {
         const active = drag.current
-        if (active?.pointerId !== event.pointerId) return
-        const rows = [...event.currentTarget.querySelectorAll<HTMLElement>('[data-plugin-name]')]
-          .filter(row => row.dataset.pluginName !== active.name)
-        const target = rows.findIndex(row => {
-          const bounds = row.getBoundingClientRect()
-          return event.clientY < bounds.top + bounds.height / 2
-        })
-        moveTo(active.name, target === -1 ? rows.length : target)
+        if (active === null || !active.moved) return
+        updateHoverExpand(clientX, clientY, active)
+        const projection = dropProjectionAt(clientX, clientY)
+        if (active.target === projection.target && active.markerVisible === projection.visible) return
+        active.target = projection.target
+        active.markerVisible = projection.visible
+        captureLayout(180)
+        setDragProjection({ keys: active.keys, target: projection.target, visible: projection.visible })
+      }
+      const moveFromPointer = (event: PointerEvent & { currentTarget: HTMLDivElement }) => {
+        reconcileCollapses(event.clientY)
+        reconcileMerges(event.clientY)
+        const active = drag.current
+        if (active?.pointerId !== event.pointerId || saving) return
+        active.lastX = event.clientX
+        active.lastY = event.clientY
+        if (active.recalled) return
+        if (!active.moved && Math.hypot(event.clientX - active.originX, event.clientY - active.originY) < dragStartDistance) return
+        let started = false
+        if (!active.moved) {
+          cancelLongPress()
+          active.moved = true
+          started = true
+          setDraggingKeys(active.keys)
+          setSelected(active.kind === 'patch'
+            ? { kind: 'patch', key: active.keys[0]! }
+            : { kind: 'plugin', key: active.owner })
+          setDragPreview({ ...active })
+          active.markerVisible = false
+          captureLayout(180)
+          setDragProjection({ keys: active.keys, target: active.target, visible: false })
+        }
+        const bounds = event.currentTarget.getBoundingClientRect()
+        if (event.clientY < bounds.top + 32) event.currentTarget.scrollTop -= 10
+        else if (event.clientY > bounds.bottom - 32) event.currentTarget.scrollTop += 10
+        setDragPreview({ ...active, x: event.clientX, y: event.clientY })
+        if (started) updateHoverExpand(event.clientX, event.clientY, active)
+        else updateDropProjection(event.clientX, event.clientY)
       }
       const finishDrag = (event: PointerEvent) => {
         const active = drag.current
         if (active?.pointerId !== event.pointerId) return
+        cancelLongPress()
+        active.lastX = event.clientX
+        active.lastY = event.clientY
+        const target = active.moved ? dropProjectionAt(event.clientX, event.clientY).target : active.target
         drag.current = null
-        setDragging(null)
-        setSelected(active.name)
-      }
-      const selectBy = (name: string, offset: number) => {
-        const index = draftRef.current.indexOf(name)
-        const next = draftRef.current[Math.max(0, Math.min(draftRef.current.length - 1, index + offset))]
-        if (next !== undefined) {
-          setSelected(next)
-          focus(next)
+        cancelHoverExpand()
+        if (!active.moved && event.type === 'pointerup') {
+          suppressCardClick.current = true
+          window.setTimeout(() => { suppressCardClick.current = false }, 0)
+          if (!active.recalled && active.kind === 'stack') {
+            cancelCollapse(active.keys)
+            setSelected({ kind: 'plugin', key: active.owner })
+            setExpandedWithMotion(current => new Set([...current, ...active.keys]), 380)
+          }
+          else if (!active.recalled) {
+            setSelected({ kind: 'patch', key: active.keys[0]! })
+          }
         }
+        if (active.moved) {
+          setDraggingKeys([])
+          setDragProjection(null)
+          setDragPreview(null)
+          setExpandedKeys(current => {
+            const next = new Set(current)
+            for (const key of active.keys) next.delete(key)
+            return next
+          })
+          const nextOrder = insertPatches(draftPatchOrderRef.current, active.keys, target)
+          const firstIndex = nextOrder.indexOf(active.keys[0]!)
+          const lastIndex = firstIndex + active.keys.length - 1
+          const nextBreaks = new Set([...stackBreaksRef.current].filter(boundary => {
+            const [left, right] = boundary.split('\0')
+            const index = nextOrder.indexOf(left!)
+            return index >= 0 && nextOrder[index + 1] === right
+          }))
+          const previous = nextOrder[firstIndex - 1]
+          const next = nextOrder[lastIndex + 1]
+          if (previous !== undefined && patchOwner(previous, patchMap) === active.owner) nextBreaks.add(stackBoundary(previous, active.keys[0]!))
+          if (next !== undefined && patchOwner(next, patchMap) === active.owner) nextBreaks.add(stackBoundary(active.keys.at(-1)!, next))
+          stackBreaksRef.current = nextBreaks
+          const left = active.lastX - active.offsetX
+          const top = active.lastY - active.offsetY
+          const statuses = stackStatuses(active.keys)
+          const previewBounds = new Map(active.keys.map((key, depth) => {
+            const layer = active.kind === 'stack' ? stackLayer(statuses, depth) : { bottom: 0, left: 0, right: 0 }
+            const height = patchRefs.current.get(key)?.getBoundingClientRect().height ?? active.height
+            const y = active.kind === 'stack' ? top + active.height + layer.bottom - height : top
+            return [key, new DOMRect(left + layer.left, y, active.width - layer.left - layer.right, height)] as const
+          }))
+          applyPatchOrder(nextOrder, previewBounds)
+          requestAnimationFrame(() => reconcileMerges(event.clientY))
+        }
+        reconcileCollapses(event.clientY)
+      }
+      finishDragRef.current = finishDrag
+      const scrollWhileDragging = (event: WheelEvent) => {
+        const active = drag.current
+        const list = listRef.current
+        if (!active?.moved || list === null) return
+        const bounds = list.getBoundingClientRect()
+        if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) {
+          event.preventDefault()
+          list.scrollTop += event.deltaY
+        }
+        requestAnimationFrame(() => updateDropProjection(active.lastX, active.lastY))
       }
       const finishPrompt = (allow: boolean) => {
         const prompt = pendingClose.current
@@ -735,8 +1399,65 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         selectedPlugin.after.length > 0 ? `${t('after')}: ${selectedPlugin.after.join(', ')}` : '',
         selectedPlugin.conflicts.length > 0 ? `${t('conflicts')}: ${selectedPlugin.conflicts.join(', ')}` : '',
       ].filter(Boolean)
+      const renderPatch = (key: string, stack?: PatchStackNode, depth = 0) => {
+        const patch = patchMap.get(key)
+        const index = draftPatchOrder.indexOf(key)
+        const owner = patch?.owner ?? key.slice(0, Math.max(0, key.lastIndexOf('/')))
+        const stacked = stack !== undefined && !stack.expanded
+        const status = cardStatus(key)
+        const geometry = stack === undefined ? null : stackGeometry(stackStatuses(stack.keys))
+        const layer = stack === undefined ? { bottom: 0, left: 0, right: 0 } : stackLayer(stackStatuses(stack.keys), depth)
+        return h('div', {
+          className: 'dshHarmonyPatchItem',
+          key,
+          role: 'listitem',
+          style: stacked ? {
+            bottom: `${geometry!.height - layer.bottom}px`,
+            right: `${layer.right}px`,
+            left: `${layer.left}px`,
+            zIndex: stack.keys.length - depth,
+          } : undefined,
+        },
+          h('button', {
+            ref: (element: HTMLButtonElement | null) => element === null ? patchRefs.current.delete(key) : patchRefs.current.set(key, element),
+            type: 'button',
+            className: 'dshHarmonyPatchCard',
+            'data-patch-key': key,
+            'data-status': status,
+            'data-selected': selected?.kind === 'patch' && selected.key === key ? 'true' : undefined,
+            'data-owner-selected': selectedOwner === owner ? 'true' : undefined,
+            'data-dragging': draggingKeys.includes(key) ? 'true' : undefined,
+            'aria-hidden': stacked ? 'true' : undefined,
+            'aria-label': key,
+            tabIndex: stacked ? -1 : undefined,
+            onClick: () => {
+              if (suppressCardClick.current) {
+                suppressCardClick.current = false
+                return
+              }
+              setSelected({ kind: 'patch', key })
+            },
+            onPointerDown: (event: PointerEvent & { currentTarget: HTMLButtonElement }) => beginDrag(event, [key], owner, 'patch', event.currentTarget),
+            onKeyDown: (event: KeyboardEvent) => {
+              if (event.key === 'Escape' && stack?.expanded) {
+                event.preventDefault()
+                collapseStack(stack)
+                return
+              }
+              if (!event.altKey || event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+              event.preventDefault()
+              moveByKeyboard(key, event.key === 'ArrowUp' ? -1 : 1)
+            },
+          },
+          h('span', { className: 'dshHarmonyPatchGrip', 'aria-hidden': 'true' }),
+          h('span', { className: 'dshHarmonyIndex' }, String(index + 1).padStart(2, '0')),
+          h('span', { className: 'dshHarmonyPatchText' },
+            h('span', { className: 'dshHarmonyPatchName', title: key }, patch?.id ?? key.slice(owner.length + 1)),
+            h('span', { className: 'dshHarmonyPatchOwner' }, displayName(owner))),
+          h('span', { className: 'dshHarmonyOrderState', 'data-state': patch?.state, title: status === 'normal' ? patch?.state ?? '' : status })))
+      }
 
-      return h('div', { className: 'dshHarmonyPage' },
+      return h('div', { className: 'dshHarmonyPage', onWheel: scrollWhileDragging },
         h('nav', { className: 'dshHarmonyTabs', role: 'tablist', 'aria-label': t('nav') },
           h('button', {
             className: 'dshHarmonyTab', type: 'button', role: 'tab', 'aria-selected': page === 'order',
@@ -752,63 +1473,97 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
           h('p', { className: 'dshHarmonyIntro' }, t('intro'))),
         view.incompatibilities.length > 0
           ? h('p', { className: 'dshHarmonyWarning', role: 'status' },
-            `${t('incompatibilityWarning')} ${view.incompatibilities
-              .map(item => `${item.declaredBy} ↔ ${item.conflictsWith}`)
-              .join(' · ')}`)
+            `${t('incompatibilityWarning')} ${view.incompatibilities.map(item => `${item.declaredBy} ↔ ${item.conflictsWith}`).join(' · ')}`)
           : null,
         h('div', { className: 'dshHarmonyWorkspace' },
-          h('ul', {
-            ref: listRef,
-            className: 'dshHarmonyList',
-            role: 'listbox',
-            'aria-label': t('title'),
-            onPointerMove: moveFromPointer,
-            onPointerUp: finishDrag,
-            onPointerCancel: finishDrag,
-          },
-            draftOrder.map((name, index) => {
-              const plugin = plugins.get(name)
-              const isDragging = dragging === name
-              const isFixed = name === harmonyPlugin
-              return h('li', { key: name },
-                h('button', {
-                  ref: (element: HTMLButtonElement | null) => element === null ? rowRefs.current.delete(name) : rowRefs.current.set(name, element),
-                  type: 'button',
-                  role: 'option',
-                  className: 'dshHarmonyRow',
-                  'data-plugin-name': name,
-                  'data-selected': selectedPlugin?.name === name ? 'true' : undefined,
-                  'data-dragging': isDragging ? 'true' : undefined,
-                  'data-fixed': isFixed ? 'true' : undefined,
-                  'aria-selected': selectedPlugin?.name === name,
-                  'aria-grabbed': isDragging,
-                  'aria-disabled': saving || isFixed,
-                  onClick: () => { setSelected(name) },
-                  onPointerDown: (event: PointerEvent) => {
-                    if (event.button !== 0 || isFixed || saving) return
-                    listRef.current?.setPointerCapture(event.pointerId)
-                    drag.current = { name, pointerId: event.pointerId }
-                    setDragging(name)
-                    setSelected(name)
-                  },
-                  onKeyDown: (event: KeyboardEvent) => {
-                    if (saving) return
-                    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
-                    event.preventDefault()
-                    const offset = event.key === 'ArrowUp' ? -1 : 1
-                    if (event.altKey) moveBy(name, offset)
-                    else selectBy(name, offset)
-                  },
+          draftPatchOrder.length === 0
+            ? h('p', { className: 'dshHarmonyStatus' }, t('orderEmpty'))
+            : h('div', {
+              ref: listRef,
+              className: 'dshHarmonyList',
+              role: 'list',
+              'aria-label': t('title'),
+              'data-has-selection': selectedOwner === undefined ? undefined : 'true',
+              onPointerMove: moveFromPointer,
+              onPointerLeave: (event: PointerEvent) => {
+                for (const group of expandedGroups()) scheduleCollapse(group.owner, group.expandedKeys)
+                reconcileMerges(event.clientY)
+              },
+              onPointerUp: finishDrag,
+              onPointerCancel: finishDrag,
+            }, viewNodes.map(node => {
+              if (node.type === 'patch') return renderPatch(node.key)
+              if (node.type === 'placeholder') return h('div', { className: 'dshHarmonyPatchItem', key: 'drag-placeholder', role: 'listitem' },
+                h('div', { className: 'dshHarmonyDropSlot', role: 'status', 'aria-label': `${t('dropAt')} ${node.index + 1}` }))
+              return h('div', {
+                key: node.id,
+                className: 'dshHarmonyStack',
+                role: 'presentation',
+                'data-collapsed': node.expanded ? undefined : 'true',
+                'data-expanded': node.expanded ? 'true' : undefined,
+                'data-selected': selected?.kind === 'plugin' && selected.key === node.owner ? 'true' : undefined,
+                'data-owner-selected': selectedOwner === node.owner ? 'true' : undefined,
+                'data-dragging': node.keys.every(key => draggingKeys.includes(key)) ? 'true' : undefined,
+                style: node.expanded ? undefined : { paddingBottom: `${stackGeometry(stackStatuses(node.keys)).height}px` },
+                onPointerDown: (event: PointerEvent & { currentTarget: HTMLDivElement }) => {
+                  if (node.expanded) return
+                  beginDrag(event, node.keys, node.owner, 'stack', coverRefs.current.get(node.id) ?? event.currentTarget)
                 },
-                h('span', { className: 'dshHarmonyGrip', 'aria-hidden': 'true' }, isFixed ? '•' : '⠿'),
-                h('span', { className: 'dshHarmonyIndex' }, String(index + 1).padStart(2, '0')),
-                h('span', { className: 'dshHarmonyName', title: name }, listName(name)),
-                isFixed
-                  ? h('span', { className: 'dshHarmonyBadge' }, t('fixed'))
-                  : plugin?.harmony ? h('span', { className: 'dshHarmonyBadge' }, t('harmony')) : null))
+                onClick: (event: MouseEvent) => {
+                  if (node.expanded) return
+                  if (suppressCardClick.current) {
+                    suppressCardClick.current = false
+                    return
+                  }
+                  setSelected({ kind: 'plugin', key: node.owner })
+                  expandStack(node, event.detail === 0 ? undefined : event.clientY)
+                },
+              },
+              h('div', {
+                ref: (element: HTMLDivElement | null) => element === null ? coverRefs.current.delete(node.id) : coverRefs.current.set(node.id, element),
+                className: 'dshHarmonyStackCover',
+                role: node.expanded ? undefined : 'listitem',
+                'aria-hidden': node.expanded ? 'true' : undefined,
+                style: { background: stackCoverColor(node.keys) },
+              },
+                h('button', {
+                  className: 'dshHarmonyStackSummary', type: 'button',
+                  'aria-expanded': node.expanded,
+                  'aria-label': `${t(node.expanded ? 'collapseStack' : 'expandStack')}: ${node.owner}`,
+                  tabIndex: node.expanded ? -1 : undefined,
+                },
+                h('span', { className: 'dshHarmonyStackGlyph', 'aria-hidden': 'true' }, displayName(node.owner).charAt(0).toUpperCase()),
+                  h('span', { className: 'dshHarmonyStackText' },
+                  h('span', { className: 'dshHarmonyName', title: node.owner }, displayName(node.owner)),
+                  h('span', { className: 'dshHarmonyStackMeta' }, `${node.keys.length} ${t('patchCount')} · ${node.start + 1}–${node.end}`)),
+                h('span', {
+                  className: 'dshHarmonyOrderState dshHarmonyStackState',
+                  style: { background: stackHealthColor(node.keys) },
+                  title: stackHealthTitle(node.keys),
+                  'aria-label': stackHealthTitle(node.keys),
+                }))),
+              h('div', { className: 'dshHarmonyStackPatches', inert: node.expanded ? undefined : true }, node.keys.map((key, depth) => renderPatch(key, node, depth))))
             })),
-          selectedPlugin === undefined ? h('p', { className: 'dshHarmonyStatus' }, t('noDescription')) :
-            h('section', { className: 'dshHarmonyDetail', 'aria-live': 'polite' },
+          selectedPatch !== undefined
+            ? h('section', { className: 'dshHarmonyDetail', 'aria-live': 'polite' },
+              h('div', { className: 'dshHarmonyIdentity' },
+                h('div', { className: 'dshHarmonyMeta' },
+                  h('h3', { className: 'dshHarmonyTitle' }, selectedPatch.id),
+                  h('span', { className: 'dshHarmonyVersion' }, orderStateLabel(selectedPatch.state))),
+                h('p', { className: 'dshHarmonyScope' }, selectedPatch.key)),
+              h('p', { className: 'dshHarmonyDescription' }, `${selectedPatch.kind}${selectedPatch.operation ? ` / ${selectedPatch.operation}` : selectedPatch.loader ? ` / ${selectedPatch.loader}` : ''}`),
+              h('div', { className: 'dshHarmonyFacts' },
+                h('span', null, `${t('patchProvider')}: ${displayName(selectedPatch.owner)}`),
+                selectedAuthor ? h('span', null, `${t('author')}: ${selectedAuthor}`) : null,
+                h('span', null, `${t('patchTarget')}: ${patchTargetLabel(selectedPatch)}`),
+                h('span', null, `${t('patchDeclaration')}: ${selectedPatch.declaration}`),
+                h('span', null, `${t('patchLoaded')}: ${selectedPatch.loaded ? '✓' : '—'}`),
+                h('span', null, `${t('patchMatches')}: ${selectedPatch.matches}`),
+                h('span', null, `${t('patchGeneration')}: ${selectedPatch.generation}`)),
+              selectedPatch.members === undefined ? null : h('p', { className: 'dshHarmonyConstraint' }, selectedPatch.members.map(member => `${member.id} · ${member.kind}`).join(' · ')),
+              selectedPatch.error ? h('p', { className: 'dshHarmonyConstraint dshHarmonyError', role: 'alert' }, selectedPatch.error) : null)
+            : selectedPlugin === undefined ? h('p', { className: 'dshHarmonyStatus' }, t('noDescription')) :
+              h('section', { className: 'dshHarmonyDetail', 'aria-live': 'polite' },
               h('div', { className: 'dshHarmonyPreview' },
                 selectedPlugin.name === harmonyPlugin
                   ? h(React.Fragment, null,
@@ -832,9 +1587,43 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
               selectedPlugin.harmony
                 ? h('p', { className: 'dshHarmonyConstraint' }, constraints.length > 0 ? constraints.join(' · ') : t('noConstraints'))
                 : null)),
+        dragPreview === null ? null : h('div', {
+          className: 'dshHarmonyDragPreview',
+          'aria-hidden': 'true',
+          style: {
+            left: `${dragPreview.x - dragPreview.offsetX}px`,
+            top: `${dragPreview.y - dragPreview.offsetY}px`,
+            width: `${dragPreview.width}px`,
+          },
+        }, dragPreview.kind === 'patch'
+          ? h('div', { className: 'dshHarmonyDragPatch', 'data-status': cardStatus(dragPreview.keys[0]!) },
+            h('span', { className: 'dshHarmonyPatchGrip' }),
+            h('span', { className: 'dshHarmonyDragTitle' }, patchMap.get(dragPreview.keys[0]!)?.id ?? dragPreview.keys[0]),
+            h('span', { className: 'dshHarmonyDragMeta' }, displayName(dragPreview.owner)))
+          : h('div', { className: 'dshHarmonyDragStack', style: { height: `${dragPreview.height + stackGeometry(stackStatuses(dragPreview.keys)).height}px` } },
+            dragPreview.keys.map((key, depth) => {
+              const statuses = stackStatuses(dragPreview.keys)
+              const geometry = stackGeometry(statuses)
+              const layer = stackLayer(statuses, depth)
+              return h('div', {
+                className: 'dshHarmonyDragLayer', key,
+                'data-status': cardStatus(key),
+                style: {
+                  bottom: `${geometry.height - layer.bottom}px`, right: `${layer.right}px`, left: `${layer.left}px`,
+                  zIndex: dragPreview.keys.length - depth,
+                },
+              })
+            }),
+            h('div', { className: 'dshHarmonyDragCover', style: { height: `${dragPreview.height}px`, background: stackCoverColor(dragPreview.keys) } },
+              h('span', { className: 'dshHarmonyStackGlyph' }, displayName(dragPreview.owner).charAt(0).toUpperCase()),
+              h('span', { className: 'dshHarmonyDragTitle' }, displayName(dragPreview.owner)),
+              h('span', { className: 'dshHarmonyDragMeta' }, `${dragPreview.keys.length} ${t('patchCount')}`),
+              h('span', { className: 'dshHarmonyOrderState dshHarmonyStackState', style: { background: stackHealthColor(dragPreview.keys) } })))),
         h('footer', { className: 'dshHarmonyFooter' },
           h('p', { className: 'dshHarmonyHint' }, t('keyboard')),
-          h('button', { className: 'dshHarmonyButton', type: 'button', disabled: !dirty || saving, onClick: () => { void save().catch(() => {}) } }, saving ? t('saving') : t('save'))),
+          h('div', { className: 'dshHarmonyFooterActions' },
+            h('button', { className: 'dshHarmonySecondary', type: 'button', disabled: !dirty || saving, onClick: undoPatchOrder }, t('undo')),
+            h('button', { className: 'dshHarmonyButton', type: 'button', disabled: !dirty || saving, onClick: () => { void save().catch(() => {}) } }, saving ? t('saving') : t('save')))),
         error ? h('p', { className: 'dshHarmonyHint dshHarmonyError', role: 'alert' }, `${t('loadError')} ${error}`) : null,
         closePrompt ? h('div', { className: 'dshHarmonyConfirmLayer', role: 'presentation' },
           h('div', { className: 'dshHarmonyConfirm', role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'dsh-harmony-confirm-title' },

@@ -1,22 +1,13 @@
-import type { HarmonyPatchContext, HarmonySourcePatch } from 'dsh-harmony'
+import type { HarmonyPatchContext, HarmonySourcePatch, HarmonySourceTrace } from 'dsh-harmony'
 import type ts from 'typescript'
 import type {
-  ClientExport,
+  ClientReference,
+  ComponentPatchOptions,
+  ComponentSelector,
+  ElementPatchOptions,
   ElementSelector,
-  InsertElementOptions,
-  RemoveElementOptions,
-  ReplaceElementOptions,
-  ReplaceStringLiteralOptions,
-  TransformPropsOptions,
-  WrapElementOptions,
+  ReactPatchTarget,
 } from './types.js'
-
-type ElementPatchOptions =
-  | InsertElementOptions
-  | RemoveElementOptions
-  | ReplaceElementOptions
-  | TransformPropsOptions
-  | WrapElementOptions
 
 interface JsxCall {
   call: ts.CallExpression
@@ -27,16 +18,27 @@ interface JsxCall {
 
 type Overwrite = (start: number, end: number, content: string) => void
 
-interface SourceTrace {
-  select: string
-  effect: 'replace-element' | 'wrap-element' | 'insert-before' | 'insert-after' | 'transform-props'
-  maxMatches: number
+function assertText(value: string, name: string): void {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error(`dsh-harmony-react: ${name} must not be empty`)
+  }
 }
 
-type TraceableSourcePatch = HarmonySourcePatch & { trace?: SourceTrace }
+function validateTarget(target: ReactPatchTarget): void {
+  assertText(target.package, 'target.package')
+  assertText(target.version, 'target.version')
+  if (!Array.isArray(target.files) || target.files.length === 0) {
+    throw new Error('dsh-harmony-react: target.files must contain at least one file')
+  }
+  for (const file of target.files) assertText(file, 'target.files entry')
+}
 
-function assertText(value: string, name: string): void {
-  if (value.length === 0) throw new Error(`dsh-harmony-react: ${name} must not be empty`)
+function validatePatch(options: { id: string; target: ReactPatchTarget; expect: number }): void {
+  assertText(options.id, 'id')
+  validateTarget(options.target)
+  if (!Number.isInteger(options.expect) || options.expect < 0) {
+    throw new Error('dsh-harmony-react: expect must be a non-negative integer')
+  }
 }
 
 function factorySelector(argument: string): string {
@@ -46,7 +48,7 @@ function factorySelector(argument: string): string {
   ].join(', ')
 }
 
-function exportSelector(value: ClientExport, argument: 'arguments.0' | 'arguments.1'): string {
+function exportSelector(value: ClientReference, argument: 'arguments.0' | 'arguments.1'): string {
   const access = argument === 'arguments.0' ? argument : `${argument}.expression`
   return factorySelector([
     `${access}.expression.expression.name="require"`,
@@ -55,7 +57,7 @@ function exportSelector(value: ClientExport, argument: 'arguments.0' | 'argument
   ].join(']['))
 }
 
-function selectorOf(selector: ElementSelector): string {
+function elementSelector(selector: ElementSelector): string {
   if ('tsquery' in selector) {
     assertText(selector.tsquery, 'select.tsquery')
     return selector.tsquery
@@ -70,6 +72,15 @@ function selectorOf(selector: ElementSelector): string {
   }
   assertText(selector.intrinsic, 'select.intrinsic')
   return factorySelector(`arguments.0.text=${JSON.stringify(selector.intrinsic)}`)
+}
+
+function componentSelector(selector: ComponentSelector): string {
+  if ('tsquery' in selector) {
+    assertText(selector.tsquery, 'select.tsquery')
+    return selector.tsquery
+  }
+  assertText(selector.name, 'select.name')
+  return `VariableDeclaration[name.name=${JSON.stringify(selector.name)}]`
 }
 
 function sourceOf(context: HarmonyPatchContext, node: ts.Node): string {
@@ -93,10 +104,20 @@ function jsxCallOf(context: HarmonyPatchContext): JsxCall {
       }
     }
   }
-  throw new Error('dsh-harmony-react: selector must directly match a compiled jsx/jsxs call')
+  throw new Error('dsh-harmony-react: element selector must directly match a compiled jsx/jsxs call')
 }
 
-function clientExport(value: ClientExport, name: string): string {
+function componentInitializerOf(context: HarmonyPatchContext): ts.Expression {
+  if (context.ts.isVariableDeclaration(context.node) && context.node.initializer !== undefined) {
+    return context.node.initializer
+  }
+  throw new Error('dsh-harmony-react: component selector must directly match a variable declaration with an initializer')
+}
+
+function clientReference(value: ClientReference, name: string): string {
+  if (typeof value !== 'object' || value === null) {
+    throw new Error(`dsh-harmony-react: ${name} must be a client reference`)
+  }
   assertText(value.module, `${name}.module`)
   assertText(value.export, `${name}.export`)
   return `require(${JSON.stringify(value.module)})[${JSON.stringify(value.export)}]`
@@ -110,35 +131,29 @@ function jsx(context: HarmonyPatchContext, call: JsxCall, type: string, props: s
   return `(0, ${call.runtime}.jsx)(${type}, ${props})`
 }
 
-function fragment(
-  context: HarmonyPatchContext,
-  call: JsxCall,
-  children: [string, string],
-): string {
+function fragment(context: HarmonyPatchContext, call: JsxCall, children: [string, string]): string {
   return `(0, ${call.runtime}.jsxs)(${call.runtime}.Fragment, { children: [${children.join(', ')}] }${keyArgument(context, call)})`
 }
 
-function patch(
-  options: ElementPatchOptions,
-  trace: SourceTrace | undefined,
-  apply: (context: HarmonyPatchContext, call: JsxCall, overwrite: Overwrite) => void,
-): TraceableSourcePatch {
-  assertText(options.id, 'id')
-  assertText(options.target.package, 'target.package')
-  assertText(options.target.version, 'target.version')
-  if (!Number.isInteger(options.expect) || options.expect < 0) {
-    throw new Error('dsh-harmony-react: expect must be a non-negative integer')
-  }
+function sourcePatch(
+  options: ElementPatchOptions | ComponentPatchOptions,
+  select: string,
+  trace: HarmonySourceTrace | undefined,
+  apply: (context: HarmonyPatchContext, overwrite: Overwrite) => void,
+): HarmonySourcePatch {
+  validatePatch(options)
   const rangesByEdit = new WeakMap<object, Array<{ start: number; end: number }>>()
   return {
     id: options.id,
     target: {
       package: options.target.package,
       version: options.target.version,
-      files: ['lib/client.js'],
+      files: [...options.target.files],
     },
-    select: selectorOf(options.select),
+    select,
     expect: options.expect,
+    ...(options.before === undefined ? {} : { before: [...options.before] }),
+    ...(options.after === undefined ? {} : { after: [...options.after] }),
     ...(trace === undefined ? {} : { trace }),
     apply(context) {
       const ranges = rangesByEdit.get(context.edit) ?? []
@@ -150,97 +165,91 @@ function patch(
         ranges.push({ start, end })
         context.edit.overwrite(start, end, content)
       }
-      apply(context, jsxCallOf(context), overwrite)
+      apply(context, overwrite)
     },
   }
 }
 
-export function replaceElement(options: ReplaceElementOptions): HarmonySourcePatch {
-  const replacement = clientExport(options.with, 'with')
-  return patch(options, {
-    select: exportSelector(options.with, 'arguments.0'), effect: 'replace-element', maxMatches: options.expect,
-  }, (context, { call }, overwrite) => {
-    const type = call.arguments[0]!
-    overwrite(type.getStart(context.sourceFile), type.getEnd(), replacement)
-  })
-}
-
-export function wrapElement(options: WrapElementOptions): HarmonySourcePatch {
-  const wrapper = clientExport(options.with, 'with')
-  return patch(options, {
-    select: exportSelector(options.with, 'arguments.0'), effect: 'wrap-element', maxMatches: options.expect,
-  }, (context, call, overwrite) => {
-    const original = sourceOf(context, call.call)
-    const replacement = `(0, ${call.runtime}.jsx)(${wrapper}, { children: ${original} }${keyArgument(context, call)})`
-    overwrite(call.call.getStart(context.sourceFile), call.call.getEnd(), replacement)
-  })
-}
-
-function insertElement(options: InsertElementOptions, position: 'before' | 'after'): HarmonySourcePatch {
-  const inserted = clientExport(options.insert, 'insert')
-  return patch(options, {
-    select: exportSelector(options.insert, 'arguments.0'),
-    effect: position === 'before' ? 'insert-before' : 'insert-after',
-    maxMatches: options.expect,
-  }, (context, call, overwrite) => {
-    const addition = jsx(context, call, inserted, '{}')
-    const original = sourceOf(context, call.call)
-    const children: [string, string] = position === 'before' ? [addition, original] : [original, addition]
-    overwrite(
-      call.call.getStart(context.sourceFile),
-      call.call.getEnd(),
-      fragment(context, call, children),
-    )
-  })
-}
-
-export function insertBefore(options: InsertElementOptions): HarmonySourcePatch {
-  return insertElement(options, 'before')
-}
-
-export function insertAfter(options: InsertElementOptions): HarmonySourcePatch {
-  return insertElement(options, 'after')
-}
-
-export function transformProps(options: TransformPropsOptions): HarmonySourcePatch {
-  const transform = clientExport(options.transform, 'transform')
-  return patch(options, {
-    select: exportSelector(options.transform, 'arguments.1'), effect: 'transform-props', maxMatches: options.expect,
-  }, (context, call, overwrite) => {
-    const props = sourceOf(context, call.props)
-    overwrite(
-      call.props.getStart(context.sourceFile),
-      call.props.getEnd(),
-      `${transform}(${props})`,
-    )
-  })
-}
-
-export function removeElement(options: RemoveElementOptions): HarmonySourcePatch {
-  return patch(options, undefined, (context, call, overwrite) => {
-    overwrite(call.call.getStart(context.sourceFile), call.call.getEnd(), 'null')
-  })
-}
-
-export function replaceStringLiteral(options: ReplaceStringLiteralOptions): HarmonySourcePatch {
-  assertText(options.id, 'id')
-  assertText(options.target.package, 'target.package')
-  assertText(options.target.version, 'target.version')
-  assertText(options.text, 'text')
-  if (!Number.isInteger(options.expect) || options.expect < 0) {
-    throw new Error('dsh-harmony-react: expect must be a non-negative integer')
+export function element(options: ElementPatchOptions): HarmonySourcePatch {
+  const select = elementSelector(options.select)
+  const operation = options.operation
+  if (typeof operation !== 'object' || operation === null) {
+    throw new Error('dsh-harmony-react: unknown element operation')
   }
-  return {
-    id: options.id,
-    target: {
-      package: options.target.package,
-      version: options.target.version,
-      files: ['lib/client.js'],
-    },
-    select: `StringLiteral[text=${JSON.stringify(options.text)}]`,
-    expect: options.expect,
-    apply({ node, sourceFile, edit }) {
-      edit.overwrite(node.getStart(sourceFile), node.getEnd(), JSON.stringify(options.with))
-    },
+  if (operation.kind === 'replace') {
+    const replacement = clientReference(operation.with, 'operation.with')
+    return sourcePatch(options, select, {
+      select: exportSelector(operation.with, 'arguments.0'), effect: 'replace-element', maxMatches: options.expect,
+    }, (context, overwrite) => {
+      const call = jsxCallOf(context)
+      const type = call.call.arguments[0]!
+      overwrite(type.getStart(context.sourceFile), type.getEnd(), replacement)
+    })
   }
+  if (operation.kind === 'wrap') {
+    const wrapper = clientReference(operation.with, 'operation.with')
+    return sourcePatch(options, select, {
+      select: exportSelector(operation.with, 'arguments.0'), effect: 'wrap-element', maxMatches: options.expect,
+    }, (context, overwrite) => {
+      const call = jsxCallOf(context)
+      const original = sourceOf(context, call.call)
+      overwrite(
+        call.call.getStart(context.sourceFile),
+        call.call.getEnd(),
+        `(0, ${call.runtime}.jsx)(${wrapper}, { children: ${original} }${keyArgument(context, call)})`,
+      )
+    })
+  }
+  if (operation.kind === 'insert-before' || operation.kind === 'insert-after') {
+    const inserted = clientReference(operation.with, 'operation.with')
+    const position = operation.kind === 'insert-before' ? 'before' : 'after'
+    return sourcePatch(options, select, {
+      select: exportSelector(operation.with, 'arguments.0'),
+      effect: position === 'before' ? 'insert-before' : 'insert-after',
+      maxMatches: options.expect,
+    }, (context, overwrite) => {
+      const call = jsxCallOf(context)
+      const addition = jsx(context, call, inserted, '{}')
+      const original = sourceOf(context, call.call)
+      const children: [string, string] = position === 'before' ? [addition, original] : [original, addition]
+      overwrite(call.call.getStart(context.sourceFile), call.call.getEnd(), fragment(context, call, children))
+    })
+  }
+  if (operation.kind === 'transform-props') {
+    const transform = clientReference(operation.with, 'operation.with')
+    return sourcePatch(options, select, {
+      select: exportSelector(operation.with, 'arguments.1'), effect: 'transform-props', maxMatches: options.expect,
+    }, (context, overwrite) => {
+      const call = jsxCallOf(context)
+      overwrite(
+        call.props.getStart(context.sourceFile),
+        call.props.getEnd(),
+        `${transform}(${sourceOf(context, call.props)})`,
+      )
+    })
+  }
+  if (operation.kind === 'remove') {
+    return sourcePatch(options, select, undefined, (context, overwrite) => {
+      const call = jsxCallOf(context)
+      overwrite(call.call.getStart(context.sourceFile), call.call.getEnd(), 'null')
+    })
+  }
+  throw new Error('dsh-harmony-react: unknown element operation')
+}
+
+export function component(options: ComponentPatchOptions): HarmonySourcePatch {
+  const select = componentSelector(options.select)
+  const operation = options.operation
+  if (typeof operation !== 'object' || operation === null
+    || operation.kind !== 'decorate' && operation.kind !== 'replace') {
+    throw new Error('dsh-harmony-react: unknown component operation')
+  }
+  const reference = clientReference(operation.with, 'operation.with')
+  return sourcePatch(options, select, undefined, (context, overwrite) => {
+    const initializer = componentInitializerOf(context)
+    const replacement = operation.kind === 'decorate'
+      ? `${reference}(${sourceOf(context, initializer)})`
+      : reference
+    overwrite(initializer.getStart(context.sourceFile), initializer.getEnd(), replacement)
+  })
 }

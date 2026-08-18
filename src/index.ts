@@ -49,7 +49,14 @@ export interface HarmonyPatchTarget {
   version?: string
 }
 
-export interface HarmonySourcePatch {
+export interface HarmonyPatchOrder {
+  /** Apply this Patch before every Patch owned by the named providers. Defining either field replaces the provider-wide rule. */
+  before?: string[]
+  /** Apply this Patch after every Patch owned by the named providers. Defining either field replaces the provider-wide rule. */
+  after?: string[]
+}
+
+export interface HarmonySourcePatch extends HarmonyPatchOrder {
   id: string
   target: HarmonyPatchTarget
   select: string
@@ -58,7 +65,7 @@ export interface HarmonySourcePatch {
   apply(context: HarmonyPatchContext): void
 }
 
-export interface HarmonyLoaderPatch {
+export interface HarmonyLoaderPatch extends HarmonyPatchOrder {
   id: string
   target: HarmonyPatchTarget
   loader: 'typescript'
@@ -79,7 +86,7 @@ export interface HarmonySemanticContext {
   invoke(args?: unknown[]): unknown
 }
 
-export interface HarmonySemanticPatch {
+export interface HarmonySemanticPatch extends HarmonyPatchOrder {
   id: string
   target: HarmonyPatchTarget & { function: string }
   operation: HarmonySemanticOperation
@@ -88,6 +95,17 @@ export interface HarmonySemanticPatch {
 }
 
 export type HarmonyPatch = HarmonySourcePatch | HarmonySemanticPatch | HarmonyLoaderPatch
+
+/**
+ * A single ordered and toggleable Patch made from several ordinary Patches.
+ * Members keep declaration order and commit atomically across their resolved targets.
+ */
+export interface HarmonyCompositePatch extends HarmonyPatchOrder {
+  id: string
+  patches: HarmonyPatch[]
+}
+
+export type HarmonyPatchDeclaration = HarmonyPatch | HarmonyCompositePatch
 
 export interface HarmonyPatchContext {
   patch: { key: string; owner: string }
@@ -102,16 +120,26 @@ export interface HarmonyPatchStatus {
   key: string
   id: string
   owner: string
-  target: HarmonyPatchTarget
-  kind: 'source' | 'semantic' | 'loader'
+  index: number
+  targets: HarmonyPatchTarget[]
+  kind: 'source' | 'semantic' | 'loader' | 'composite'
   operation?: HarmonySemanticOperation
   loader?: HarmonyLoaderPatch['loader']
   state: 'pending' | 'bound' | 'disabled' | 'failed'
+  status: 'normal' | 'warning' | 'error' | 'disabled'
   loaded: boolean
   matches: number
   generation: number
   declaration: string
+  members?: Array<{
+    id: string
+    target: HarmonyPatchTarget
+    kind: 'source' | 'semantic' | 'loader'
+    operation?: HarmonySemanticOperation
+    loader?: HarmonyLoaderPatch['loader']
+  }>
   file?: string
+  files?: string[]
   error?: string
 }
 
@@ -134,8 +162,8 @@ export type { HarmonyExtension } from './extension.js'
 export {
   preflightHarmonyProfileUpdate,
   readHarmonyProfile,
-  updateHarmonyProfile,
 } from './profile.js'
+export { updateHarmonyProfile } from './control.js'
 export type {
   HarmonyIncompatibility,
   HarmonyProfilePluginView,
@@ -143,4 +171,4 @@ export type {
   HarmonyProfileView,
 } from './profile.js'
 export type { HarmonyReloadStatus } from './installer.js'
-export type { HarmonyOrderViolation } from './order.js'
+export type { HarmonyOrderViolation, HarmonyPatchOrderItem } from './order.js'

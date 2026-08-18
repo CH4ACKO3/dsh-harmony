@@ -6,21 +6,15 @@ import MagicString from 'magic-string'
 import ts from 'typescript'
 import { describe, expect, test } from 'vitest'
 import type { HarmonySourcePatch } from 'dsh-harmony'
-import {
-  insertAfter,
-  insertBefore,
-  removeElement,
-  replaceElement,
-  replaceStringLiteral,
-  transformProps,
-  wrapElement,
-} from './index.js'
+import * as api from './index.js'
+import { component, element } from './index.js'
 
 const require = createRequire(import.meta.url)
 
 const target = {
   package: '@deepseek-ai/dsh-client-ui-example',
   version: '0.1.0-rc.6',
+  files: ['lib/client.js'],
 }
 
 function applyPatch(source: string, patch: HarmonySourcePatch): string {
@@ -34,36 +28,52 @@ function applyPatch(source: string, patch: HarmonySourcePatch): string {
   return edit.toString()
 }
 
+function applyPatches(source: string, patches: HarmonySourcePatch[]): string {
+  return patches.reduce(applyPatch, source)
+}
+
 describe('React source patches', () => {
   test('uses the current core workspace during development', () => {
     const resolvedCore = dirname(require.resolve('dsh-harmony/package.json'))
     expect(realpathSync(resolvedCore)).toBe(realpathSync(new URL('../../..', import.meta.url)))
   })
 
-  test('replaces member components and preserves props and key', () => {
+  test('exports only the element and component patch factories', () => {
+    expect(Object.keys(api).sort()).toEqual(['component', 'element'])
+  })
+
+  test('replaces an element component while preserving props and key', () => {
     const source = '(0, react_jsx_runtime.jsx)(primitives.BrandWordmark, { compact: true }, "brand")'
-    const patch = replaceElement({
+    const patch = element({
       id: 'brand',
       target,
       select: { component: 'BrandWordmark' },
       expect: 1,
-      with: { module: 'example-plugin', export: 'CustomBrand' },
+      before: ['late-provider'],
+      operation: {
+        kind: 'replace',
+        with: { module: 'example-plugin', export: 'CustomBrand' },
+      },
     })
 
-    expect(patch.target).toEqual({ ...target, files: ['lib/client.js'] })
+    expect(patch.target).toEqual(target)
+    expect(patch.before).toEqual(['late-provider'])
     expect(applyPatch(source, patch)).toBe(
       '(0, react_jsx_runtime.jsx)(require("example-plugin")["CustomBrand"], { compact: true }, "brand")',
     )
   })
 
-  test('replaces local components selected by name', () => {
+  test('selects local element components by name', () => {
     const source = '(0, react_jsx_runtime.jsx)(ChatNodeSeat, { nodeKey })'
-    const patch = replaceElement({
+    const patch = element({
       id: 'chat-node',
       target,
       select: { component: 'ChatNodeSeat' },
       expect: 1,
-      with: { module: 'example-plugin', export: 'ChatNode' },
+      operation: {
+        kind: 'replace',
+        with: { module: 'example-plugin', export: 'ChatNode' },
+      },
     })
 
     expect(applyPatch(source, patch)).toContain(
@@ -73,12 +83,15 @@ describe('React source patches', () => {
 
   test('wraps an intrinsic element with the original element as children', () => {
     const source = '(0, react_jsx_runtime.jsx)("button", { type: "button" }, item.id)'
-    const patch = wrapElement({
+    const patch = element({
       id: 'button-boundary',
       target,
       select: { intrinsic: 'button' },
       expect: 1,
-      with: { module: 'example-plugin', export: 'ButtonBoundary' },
+      operation: {
+        kind: 'wrap',
+        with: { module: 'example-plugin', export: 'ButtonBoundary' },
+      },
     })
 
     expect(applyPatch(source, patch)).toBe(
@@ -89,19 +102,25 @@ describe('React source patches', () => {
 
   test('inserts sibling elements through keyed fragments', () => {
     const source = '(0, react_jsx_runtime.jsx)(ChatNode, { node }, node.id)'
-    const before = insertBefore({
+    const before = element({
       id: 'before-chat-node',
       target,
       select: { component: 'ChatNode' },
       expect: 1,
-      insert: { module: 'example-plugin', export: 'BeforeNode' },
+      operation: {
+        kind: 'insert-before',
+        with: { module: 'example-plugin', export: 'BeforeNode' },
+      },
     })
-    const after = insertAfter({
+    const after = element({
       id: 'after-chat-node',
       target,
       select: { component: 'ChatNode' },
       expect: 1,
-      insert: { module: 'example-plugin', export: 'AfterNode' },
+      operation: {
+        kind: 'insert-after',
+        with: { module: 'example-plugin', export: 'AfterNode' },
+      },
     })
 
     expect(applyPatch(source, before)).toBe(
@@ -116,97 +135,213 @@ describe('React source patches', () => {
     )
   })
 
-  test('transforms props in the browser and removes elements', () => {
+  test('transforms props in order and removes elements', () => {
     const source = '(0, react_jsx_runtime.jsxs)(Composer, { children: [left, right] })'
-    const propsPatch = transformProps({
-      id: 'composer-props',
+    const first = element({
+      id: 'composer-props-a',
       target,
       select: { component: 'Composer' },
       expect: 1,
-      transform: { module: 'example-plugin', export: 'composerProps' },
+      operation: {
+        kind: 'transform-props',
+        with: { module: 'example-plugin', export: 'firstProps' },
+      },
     })
-    const removePatch = removeElement({
+    const second = element({
+      id: 'composer-props-b',
+      target,
+      select: { component: 'Composer' },
+      expect: 1,
+      operation: {
+        kind: 'transform-props',
+        with: { module: 'example-plugin', export: 'secondProps' },
+      },
+    })
+    const remove = element({
       id: 'remove-composer',
       target,
       select: { component: 'Composer' },
       expect: 1,
+      operation: { kind: 'remove' },
     })
 
-    expect(applyPatch(source, propsPatch)).toBe(
-      '(0, react_jsx_runtime.jsxs)(Composer, require("example-plugin")["composerProps"]({ children: [left, right] }))',
+    expect(applyPatches(source, [first, second])).toBe(
+      '(0, react_jsx_runtime.jsxs)(Composer, require("example-plugin")["secondProps"]('
+      + 'require("example-plugin")["firstProps"]({ children: [left, right] })))',
     )
-    expect(applyPatch(source, removePatch)).toBe('null')
+    expect(applyPatch(source, remove)).toBe('null')
   })
 
-  test('accepts a raw TSQuery that directly selects a JSX call', () => {
-    const source = '(0, react_jsx_runtime.jsx)(primitives.BrandWordmark, {})'
-    const patch = wrapElement({
-      id: 'raw-selector',
+  test('decorates a component binding once for every use and composes in patch order', () => {
+    const source = [
+      'const Button = props => (0, react_jsx_runtime.jsx)("button", props);',
+      'const first = (0, react_jsx_runtime.jsx)(Button, { id: "first" });',
+      'const second = (0, react_jsx_runtime.jsx)(Button, { id: "second" });',
+    ].join('\n')
+    const first = component({
+      id: 'button-feature-a',
+      target,
+      select: { name: 'Button' },
+      expect: 1,
+      operation: {
+        kind: 'decorate',
+        with: { module: 'example-plugin', export: 'withFirstFeature' },
+      },
+    })
+    const second = component({
+      id: 'button-feature-b',
+      target,
+      select: { name: 'Button' },
+      expect: 1,
+      operation: {
+        kind: 'decorate',
+        with: { module: 'example-plugin', export: 'withSecondFeature' },
+      },
+    })
+
+    expect(applyPatches(source, [first, second])).toBe([
+      'const Button = require("example-plugin")["withSecondFeature"]('
+      + 'require("example-plugin")["withFirstFeature"](props => (0, react_jsx_runtime.jsx)("button", props)));',
+      'const first = (0, react_jsx_runtime.jsx)(Button, { id: "first" });',
+      'const second = (0, react_jsx_runtime.jsx)(Button, { id: "second" });',
+    ].join('\n'))
+  })
+
+  test('replaces a component binding without rewriting its call sites', () => {
+    const source = 'const Button = originalButton; const view = (0, runtime.jsx)(Button, {})'
+    const patch = component({
+      id: 'replace-button',
+      target,
+      select: { name: 'Button' },
+      expect: 1,
+      after: ['base-provider'],
+      operation: {
+        kind: 'replace',
+        with: { module: 'example-plugin', export: 'Button' },
+      },
+    })
+
+    expect(patch.after).toEqual(['base-provider'])
+    expect(applyPatch(source, patch)).toBe(
+      'const Button = require("example-plugin")["Button"]; const view = (0, runtime.jsx)(Button, {})',
+    )
+  })
+
+  test('accepts raw selectors for elements and component bindings', () => {
+    const elementPatch = element({
+      id: 'raw-element',
       target,
       select: { tsquery: 'CallExpression[arguments.0.name.name="BrandWordmark"]' },
       expect: 1,
-      with: { module: 'example-plugin', export: 'Boundary' },
+      operation: {
+        kind: 'wrap',
+        with: { module: 'example-plugin', export: 'Boundary' },
+      },
     })
-
-    expect(applyPatch(source, patch)).toContain('{ children: (0, react_jsx_runtime.jsx)(primitives.BrandWordmark, {}) }')
-  })
-
-  test('replaces exact string literals without claiming they are visible text', () => {
-    const source = 'const route = "/internal/path"'
-    const patch = replaceStringLiteral({
-      id: 'internal-route',
+    const componentPatch = component({
+      id: 'raw-component',
       target,
-      text: '/internal/path',
-      with: '/replacement/path',
+      select: { tsquery: 'VariableDeclaration[name.name="Card"]' },
       expect: 1,
+      operation: {
+        kind: 'decorate',
+        with: { module: 'example-plugin', export: 'withCard' },
+      },
     })
 
-    expect(applyPatch(source, patch)).toBe('const route = "/replacement/path"')
+    expect(applyPatch('(0, runtime.jsx)(primitives.BrandWordmark, {})', elementPatch)).toContain(
+      '{ children: (0, runtime.jsx)(primitives.BrandWordmark, {}) }',
+    )
+    expect(applyPatch('const Card = makeCard()', componentPatch)).toBe(
+      'const Card = require("example-plugin")["withCard"](makeCard())',
+    )
   })
 
-  test('requires raw selectors to match the JSX call itself', () => {
-    const source = '(0, react_jsx_runtime.jsx)(Card, { title: "one", label: "two" })'
-    const patch = wrapElement({
+  test('requires selectors to match their abstraction directly', () => {
+    const elementPatch = element({
       id: 'raw-leaves',
       target,
       select: { tsquery: 'StringLiteral' },
       expect: 2,
-      with: { module: 'example-plugin', export: 'Boundary' },
+      operation: {
+        kind: 'wrap',
+        with: { module: 'example-plugin', export: 'Boundary' },
+      },
+    })
+    const componentPatch = component({
+      id: 'function-declaration',
+      target,
+      select: { tsquery: 'FunctionDeclaration[name.name="Card"]' },
+      expect: 1,
+      operation: {
+        kind: 'decorate',
+        with: { module: 'example-plugin', export: 'withCard' },
+      },
     })
 
-    expect(() => applyPatch(source, patch)).toThrow(
-      'selector must directly match a compiled jsx/jsxs call',
+    expect(() => applyPatch('(0, runtime.jsx)(Card, { title: "one", label: "two" })', elementPatch)).toThrow(
+      'element selector must directly match a compiled jsx/jsxs call',
+    )
+    expect(() => applyPatch('function Card() {}', componentPatch)).toThrow(
+      'component selector must directly match a variable declaration with an initializer',
     )
   })
 
   test('rejects overlapping edits from nested matched elements', () => {
-    const source = '(0, react_jsx_runtime.jsx)(Card, { children: (0, react_jsx_runtime.jsx)(Card, {}) })'
-    const patch = wrapElement({
+    const source = '(0, runtime.jsx)(Card, { children: (0, runtime.jsx)(Card, {}) })'
+    const patch = element({
       id: 'nested-cards',
       target,
       select: { component: 'Card' },
       expect: 2,
-      with: { module: 'example-plugin', export: 'Boundary' },
+      operation: {
+        kind: 'wrap',
+        with: { module: 'example-plugin', export: 'Boundary' },
+      },
     })
 
-    expect(() => applyPatch(source, patch)).toThrow(
-      'selector resolved to overlapping source ranges',
-    )
+    expect(() => applyPatch(source, patch)).toThrow('selector resolved to overlapping source ranges')
   })
 
   test('rejects invalid declarations before Harmony loads them', () => {
-    expect(() => removeElement({
+    expect(() => element({
       id: '',
       target,
       select: { component: 'Composer' },
       expect: 1,
+      operation: { kind: 'remove' },
     })).toThrow('id must not be empty')
 
-    expect(() => removeElement({
+    expect(() => element({
+      id: 'missing-files',
+      target: { ...target, files: [] },
+      select: { component: 'Composer' },
+      expect: 1,
+      operation: { kind: 'remove' },
+    })).toThrow('target.files must contain at least one file')
+
+    expect(() => element({
       id: 'invalid-expect',
       target,
       select: { component: 'Composer' },
       expect: -1,
+      operation: { kind: 'remove' },
     })).toThrow('expect must be a non-negative integer')
+
+    expect(() => element({
+      id: 'invalid-element-operation',
+      target,
+      select: { component: 'Composer' },
+      expect: 1,
+      operation: { kind: 'unknown' } as never,
+    })).toThrow('unknown element operation')
+
+    expect(() => component({
+      id: 'invalid-component-operation',
+      target,
+      select: { name: 'Composer' },
+      expect: 1,
+      operation: { kind: 'unknown' } as never,
+    })).toThrow('unknown component operation')
   })
 })
