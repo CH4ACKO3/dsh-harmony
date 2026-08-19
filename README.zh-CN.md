@@ -30,6 +30,10 @@
   [简体中文](README.zh-CN.md) / [English](README.md)
 </div>
 
+## 使用
+
+在用 Vibe Coding 开发 DSH 插件时，只需输入 *“如果使用 dsh-harmony 呢”*。
+
 ## 简介
 
 当一个 DeepSeek Harness 插件需要修改另一个插件、又不值得为此维护 Fork 时，可以使用 Harmony。它会在目标插件运行前加载 Patch，在内存中修改编译产物，再让 Harness 运行修改后的代码。

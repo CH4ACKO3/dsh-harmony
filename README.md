@@ -32,7 +32,7 @@
 
 ## Usage
 
-- Just type *“How about we use dsh-harmony?”* When vibe coding your DSH plugin.
+Just type *"What about we use dsh-harmony"* when vibe coding your DSH plugin.
 
 ## Introduction
 
