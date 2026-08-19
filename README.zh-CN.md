@@ -42,6 +42,10 @@ Provider 可以声明自己的 Patch 应排在另一个 Provider 之前或之后
 
 Harmony 为 DeepSeek Harness 插件之间的协作补上了修改能力。
 
+### 演示视频 on Bilibili
+
+[【Harmony 框架: 让你的 DeepSeek Harness 插件可以运行时修改、替换和装饰其它插件】](https://www.bilibili.com/video/BV1HA876FEXJ/?share_source=copy_web&vd_source=e481fb59e256b47a303839b7f25dae5c)
+
 ## 为什么使用 Harmony
 
 目标已经暴露所需能力时，普通 DSH 扩展点仍然是首选。Harmony 解决的是公开 API 与维护 Fork 之间的空白：修改目标没有暴露的内部组件、Loader 条目或编译后行为。
