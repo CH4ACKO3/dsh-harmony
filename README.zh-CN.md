@@ -78,10 +78,10 @@ Harmony 不会把编译内部变成稳定的公开 API；它让这项依赖变�
 
 ## 安装
 
-需要 Node.js `^22.22.3` 或 `>=24.11.1`，以及 `@deepseek-ai/dsh@0.1.0-rc.7`。
+需要 Node.js `^22.22.3` 或 `>=24.11.1`，以及 `@deepseek-ai/dsh@0.1.0-rc.8`。
 
 ```sh
-npm install -g @deepseek-ai/dsh@0.1.0-rc.7
+npm install -g @deepseek-ai/dsh@0.1.0-rc.8
 npm install -g dsh-harmony
 dsh web
 ```
