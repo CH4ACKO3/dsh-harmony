@@ -30,6 +30,10 @@
   [简体中文](README.zh-CN.md) / [English](README.md)
 </div>
 
+## Usage
+
+- Just type *“How about we use dsh-harmony?”* When vibe coding your DSH plugin.
+
 ## Introduction
 
 Use Harmony when one DeepSeek Harness plugin needs to change another without maintaining a fork. Harmony loads Patches before the target runs, changes its compiled code in memory, and starts Harness with the result.
