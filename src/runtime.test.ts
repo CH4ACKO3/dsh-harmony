@@ -981,11 +981,10 @@ test('applies providers in the persisted manual order', () => {
   writeFileSync(join(target, 'lib/index.js'), 'export const value = 1\n')
   writeFileSync(join(first, 'package.json'), JSON.stringify({
     name: 'first-provider',
-    dsh: { harmony: {
-      patches: ['./patch.cjs'],
-      after: ['second-provider'],
-      conflicts: ['second-provider'],
-    } },
+    dsh: {
+      plugin: { conflicts: { 'second-provider': '*' } },
+      harmony: { patches: ['./patch.cjs'], after: ['second-provider'] },
+    },
   }))
   writeFileSync(join(second, 'package.json'), JSON.stringify({
     name: 'second-provider',
@@ -1013,9 +1012,10 @@ module.exports = {
   readFileSync(join(target, 'lib/index.js'), 'utf8')
 
   expect((globalThis as any).__harmonyOrder).toEqual(['second', 'first'])
-  expect(currentProfile().incompatibilities).toEqual([{
-    declaredBy: 'first-provider',
-    conflictsWith: 'second-provider',
+  expect(currentProfile().pluginConflicts).toEqual([{
+    left: { package: 'first-provider', version: '0.0.0', entryIds: [] },
+    right: { package: 'second-provider', version: '0.0.0', entryIds: [] },
+    declaredBy: ['first-provider'],
   }])
 })
 
@@ -1099,16 +1099,25 @@ test('reconciles the existing Loader tree when Harmony activates', async () => {
   const profile = join(root, 'initial-loader-profile')
   const provider = join(profile, 'node_modules', 'initial-loader-provider')
   const incompatible = join(profile, 'node_modules', 'incompatible-loader-provider')
+  const disabled = join(profile, 'node_modules', 'disabled-loader-plugin')
   const target = join(root, 'initial-loader-target')
   mkdirSync(provider, { recursive: true })
   mkdirSync(incompatible, { recursive: true })
+  mkdirSync(disabled, { recursive: true })
   mkdirSync(join(target, 'lib'), { recursive: true })
   writeFileSync(join(profile, 'package.json'), JSON.stringify({
-    dependencies: { 'initial-loader-provider': '1', 'incompatible-loader-provider': '1' },
+    dependencies: {
+      'initial-loader-provider': '1',
+      'incompatible-loader-provider': '1',
+      'disabled-loader-plugin': '1',
+    },
   }))
   writeFileSync(join(provider, 'package.json'), JSON.stringify({
     name: 'initial-loader-provider',
-    dsh: { harmony: { patches: ['./patch.cjs'], conflicts: ['incompatible-loader-provider'] } },
+    dsh: {
+      plugin: { conflicts: { 'incompatible-loader-provider': '*' } },
+      harmony: { patches: ['./patch.cjs'] },
+    },
   }))
   writeFileSync(join(provider, 'patch.cjs'), `
 module.exports = [{
@@ -1131,16 +1140,13 @@ module.exports = [{
 `)
   writeFileSync(join(incompatible, 'package.json'), JSON.stringify({
     name: 'incompatible-loader-provider',
-    dsh: { harmony: { patches: ['./patch.cjs'] } },
+    version: '2.0.0',
   }))
-  writeFileSync(join(incompatible, 'patch.cjs'), `
-module.exports = {
-  id: 'test-patch',
-  target: { package: 'initial-loader-target', files: ['lib/index.js'] },
-  select: 'SourceFile',
-  apply() {},
-}
-`)
+  writeFileSync(join(disabled, 'package.json'), JSON.stringify({
+    name: 'disabled-loader-plugin',
+    version: '1.0.0',
+    dsh: { plugin: { conflicts: { 'initial-loader-provider': '*' } } },
+  }))
   writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'initial-loader-target' }))
   writeFileSync(join(target, 'lib/index.js'), 'export const value = 1\n')
   synchronizeProfile(profile)
@@ -1149,6 +1155,7 @@ module.exports = {
   const nextPlugin = () => {}
   const started: unknown[] = []
   const targetEntry = {
+    id: 'target-entry',
     options: { name: 'initial-loader-target' },
     fiber: { uid: 1, runtime: { callback: previousPlugin } },
     loader: { unwrapExports(value: unknown) { return value } },
@@ -1162,9 +1169,10 @@ module.exports = {
   } as any
   const entries = [
     targetEntry,
-    { options: { name: 'initial-loader-provider' } },
-    { options: { name: 'incompatible-loader-provider' } },
-    { options: { name: 'dsh-harmony' } },
+    { id: 'provider-entry', options: { name: 'initial-loader-provider' }, disabled: false },
+    { id: 'incompatible-entry', options: { name: 'incompatible-loader-provider' }, disabled: false },
+    { id: 'disabled-entry', options: { name: 'disabled-loader-plugin' }, disabled: true },
+    { id: 'harmony-entry', options: { name: 'dsh-harmony' }, disabled: false },
   ]
   const disposers: (() => void)[] = []
   const warnings: string[] = []
@@ -1185,7 +1193,7 @@ module.exports = {
   await new Promise<void>(resolve => setImmediate(resolve))
   await new Promise<void>(resolve => setImmediate(resolve))
   expect(started).toEqual([nextPlugin])
-  expect(warnings[0]).toBe('dsh-harmony: "initial-loader-provider" declares "incompatible-loader-provider" incompatible; both remain loaded')
+  expect(warnings[0]).toBe('dsh-harmony: incompatible-loader-provider@2.0.0 conflicts with initial-loader-provider@0.0.0; both remain enabled')
   expect(warnings[1]).toContain('skipped Patch "initial-loader-provider/wrong-count"')
   expect(warnings[1]).toContain('expected 2 match(es)')
   expect(warnings[2]).toContain('skipped Patch "initial-loader-provider/missing-target"')

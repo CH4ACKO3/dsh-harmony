@@ -74,7 +74,7 @@ runInNewContext(readFileSync(new URL('../browser-dist/client.js', import.meta.ur
   fetch: async (url: string) => ({
     ok: true,
     json: async () => url === '/dsh-harmony/profile'
-      ? { order: [], patchOrder: ['alpha/first', 'beta/only', 'alpha/last'], disabled: [], plugins: [{ name: 'alpha', harmony: true }, { name: 'beta', harmony: true }], orderViolations: [], patchOrderViolations: [], incompatibilities: [] }
+      ? { order: [], patchOrder: ['alpha/first', 'beta/only', 'alpha/last'], disabled: [], plugins: [{ name: 'alpha', harmony: true }, { name: 'beta', harmony: true }], orderViolations: [], patchOrderViolations: [], pluginConflicts: [] }
       : { state: 'active' },
   }),
   navigator: { language: 'zh-CN' },
@@ -212,6 +212,8 @@ assert.match(clientSource, /statuses\.every\(status => status === 'disabled'\)/)
 assert.match(clientSource, /const warning = statuses\.filter\(status => status === 'warning'\)\.length \/ statuses\.length/)
 assert.match(clientSource, /const error = statuses\.filter\(status => status === 'error'\)\.length \/ statuses\.length/)
 assert.match(clientSource, /const warningWithinNonError = nonError === 0 \? 0 : warning \/ nonError/)
+assert.match(clientSource, /view\.pluginConflicts\.length > 0/)
+assert.doesNotMatch(clientSource, /view\.incompatibilities/)
 assert.match(clientSource, /color-mix\(in srgb,#fff/)
 assert.match(clientSource, /dshHarmonyStackState/)
 assert.match(clientSource, /stackHealthColor\(keys\)\} 10%,var\(--dsw-alias-bg-layer-2\)/)

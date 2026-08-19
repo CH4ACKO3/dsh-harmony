@@ -94,6 +94,25 @@ Harmony 按一份全局 `patchOrder` 运行所有 Patch。Provider 级 `before` 
 
 组合 Patch 让多个 Patch 共用一个排序位置和开关。成员按声明顺序执行，而且只有全部成功才会应用。独立 Patch 失败时，Harmony 会报告并跳过它；后续 Patch 和 Host 仍会运行。
 
+## 插件冲突
+
+任何 DSH 插件包都可以在 `dsh.plugin.conflicts` 中声明不兼容的插件版本，无论它是否提供 Harmony Patch：
+
+```json
+{
+  "dsh": {
+    "plugin": {
+      "conflicts": {
+        "legacy-plugin": "*",
+        "@vendor/other-plugin": "<2.0.0"
+      }
+    }
+  }
+}
+```
+
+当匹配的插件包同时启用时，Harmony 会发出警告，但不会停用或阻止任何一方。单方声明即可生效；双方重复声明只产生一条警告；停用 Harmony Patch 不等于停用其所属插件。冲突目标使用包名，值使用 semver 范围。
+
 ## React-aware Patch
 
 修改编译后的 React 目标时，在 Patch Provider 中安装 `dsh-harmony-react`：

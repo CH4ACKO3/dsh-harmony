@@ -196,7 +196,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         before: '需要位于这些插件之前',
         after: '需要位于这些插件之后',
         conflicts: '声明不兼容',
-        incompatibilityWarning: '检测到插件不兼容声明；这些插件仍会正常加载：',
+        incompatibilityWarning: '检测到插件冲突；所有插件仍保持启用：',
         noConstraints: '没有声明 Harmony 顺序约束。',
         fixed: '固定',
         keyboard: '长按卡片召回同插件 Patch · 拖动封面或单个 Patch · 滚轮仍可滚动',
@@ -276,7 +276,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         before: 'Must load before',
         after: 'Must load after',
         conflicts: 'Declares incompatible',
-        incompatibilityWarning: 'Plugin incompatibilities were declared; all plugins remain loaded:',
+        incompatibilityWarning: 'Plugin conflicts detected; all plugins remain enabled:',
         noConstraints: 'No Harmony order constraints declared.',
         fixed: 'Pinned',
         keyboard: 'Hold a card to recall its plugin Patches · Drag a cover or one Patch · Wheel scrolling stays available',
@@ -363,7 +363,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       patchCount: number
       before: string[]
       after: string[]
-      conflicts: string[]
+      conflicts: Record<string, string>
       author: string
       contributors: string[]
       homepage: string
@@ -378,7 +378,11 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       plugins: PluginView[]
       orderViolations: Array<{ before: string; after: string; declaredBy: string }>
       patchOrderViolations: Array<{ before: string; after: string; declaredBy: string }>
-      incompatibilities: Array<{ declaredBy: string; conflictsWith: string }>
+      pluginConflicts: Array<{
+        left: { package: string; version: string; entryIds: string[] }
+        right: { package: string; version: string; entryIds: string[] }
+        declaredBy: string[]
+      }>
     }
 
     interface PatchRun {
@@ -1449,7 +1453,9 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       const constraints = selectedPlugin === undefined ? [] : [
         selectedPlugin.before.length > 0 ? `${t('before')}: ${selectedPlugin.before.join(', ')}` : '',
         selectedPlugin.after.length > 0 ? `${t('after')}: ${selectedPlugin.after.join(', ')}` : '',
-        selectedPlugin.conflicts.length > 0 ? `${t('conflicts')}: ${selectedPlugin.conflicts.join(', ')}` : '',
+        Object.keys(selectedPlugin.conflicts).length > 0
+          ? `${t('conflicts')}: ${Object.entries(selectedPlugin.conflicts).map(([name, range]) => range === '*' ? name : `${name}@${range}`).join(', ')}`
+          : '',
       ].filter(Boolean)
       const renderPatch = (key: string, stack?: PatchStackNode, depth = 0) => {
         const patch = patchMap.get(key)
@@ -1519,14 +1525,14 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
             className: 'dshHarmonyTab', type: 'button', role: 'tab', 'aria-selected': page === 'patches',
             onClick: () => setPage('patches'),
           }, t('patchPage'))),
+        view.pluginConflicts.length > 0
+          ? h('p', { className: 'dshHarmonyWarning', role: 'status' },
+            `${t('incompatibilityWarning')} ${view.pluginConflicts.map(item => `${item.left.package}@${item.left.version} ↔ ${item.right.package}@${item.right.version}`).join(' · ')}`)
+          : null,
         page === 'patches' ? h(PatchStatusPage, { t }) : h(React.Fragment, null,
         h('header', null,
           h('h2', { className: 'dshHarmonyHeading' }, t('title')),
           h('p', { className: 'dshHarmonyIntro' }, t('intro'))),
-        view.incompatibilities.length > 0
-          ? h('p', { className: 'dshHarmonyWarning', role: 'status' },
-            `${t('incompatibilityWarning')} ${view.incompatibilities.map(item => `${item.declaredBy} ↔ ${item.conflictsWith}`).join(' · ')}`)
-          : null,
         h('div', { className: 'dshHarmonyWorkspace' },
           draftPatchOrder.length === 0
             ? h('p', { className: 'dshHarmonyStatus' }, t('orderEmpty'))

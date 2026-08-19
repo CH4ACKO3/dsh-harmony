@@ -90,6 +90,25 @@ Harmony runs every Patch from one global `patchOrder`. Provider-level `before` a
 
 A composite Patch groups several Patches under one order position and switch. Members keep their declared order and apply only when every member succeeds. A failed standalone Patch is reported and skipped; later Patches and the Host continue to run.
 
+## Plugin conflicts
+
+Any DSH plugin package can declare incompatible plugin versions under `dsh.plugin.conflicts`, whether or not it provides Harmony Patches:
+
+```json
+{
+  "dsh": {
+    "plugin": {
+      "conflicts": {
+        "legacy-plugin": "*",
+        "@vendor/other-plugin": "<2.0.0"
+      }
+    }
+  }
+}
+```
+
+Harmony warns when matching packages are enabled together, but does not disable or block either plugin. One declaration is sufficient, reciprocal declarations produce one warning, and disabling a Harmony Patch does not disable its owning plugin. Conflict targets are package names and values are semver ranges.
+
 ## React-aware patches
 
 Install `dsh-harmony-react` in a Patch provider when the target is compiled React:

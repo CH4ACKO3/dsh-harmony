@@ -25,11 +25,11 @@ import {
   HARMONY_STATE_FILE,
   groupHarmonyPatchOrder,
   pinHarmonyOrder,
-  providerIncompatibilities,
   saveHarmonyState,
   synchronizeHarmonyProfile,
 } from './profile.js'
 import type { HarmonyProfile } from './profile.js'
+import type { HarmonyActivePlugin } from './conflicts.js'
 
 const nativeReadFileSync = fs.readFileSync.bind(fs)
 const nativeReadFile = fs.promises.readFile.bind(fs.promises)
@@ -112,6 +112,7 @@ let activeProfileDir: string | undefined
 let providerOrder: string[] = []
 let patchOrder: string[] = []
 let disabledPatchKeys = new Set<string>()
+let activePlugins: HarmonyActivePlugin[] = []
 let refreshWatchedFiles: (() => void) | undefined
 let moduleHooksInstalled = false
 
@@ -484,17 +485,21 @@ export function discoverPackage(packageDir: string): void {
   notify(targets)
 }
 
-export function synchronizeProfile(profileDir: string, installed?: string[]): HarmonyProfile {
+export function synchronizeProfile(
+  profileDir: string,
+  installed?: string[],
+  enabledPlugins?: HarmonyActivePlugin[],
+): HarmonyProfile {
   const previousTargets = allTargets()
   const previousOrder = providerOrder
   const previousPatchOrder = patchOrder
   const previousDisabled = disabledPatchKeys
-  const profile = synchronizeHarmonyProfile(profileDir, installed, false)
+  const profile = synchronizeHarmonyProfile(profileDir, installed, false, enabledPlugins)
   const harmonyProviders = profile.plugins.filter(plugin => plugin.patches.length > 0)
-  declaredProviderFiles = new Set(harmonyProviders.flatMap(provider => [
-    join(provider.dir, 'package.json'),
-    ...provider.patches.map(file => join(provider.dir, file)),
-  ]))
+  declaredProviderFiles = new Set([
+    ...profile.plugins.map(plugin => join(plugin.dir, 'package.json')),
+    ...harmonyProviders.flatMap(provider => provider.patches.map(file => join(provider.dir, file))),
+  ])
   try {
     const nextProviders = new Map<string, ProviderRecord>()
     for (const provider of harmonyProviders) {
@@ -513,7 +518,7 @@ export function synchronizeProfile(profileDir: string, installed?: string[]): Ha
     mergeTargets(changedTargets, previousTargets)
     mergeTargets(changedTargets, currentTargets)
 
-    synchronizeHarmonyProfile(profileDir, installed)
+    synchronizeHarmonyProfile(profileDir, installed, true, enabledPlugins)
     providers.clear()
     for (const [name, record] of nextProviders) providers.set(name, record)
     loadedPatchFiles.clear()
@@ -522,6 +527,7 @@ export function synchronizeProfile(profileDir: string, installed?: string[]): Ha
       for (const filename of record.files) loadedPatchFiles.add(filename)
     }
     activeProfileDir = profileDir
+    activePlugins = enabledPlugins ?? profile.plugins.map(plugin => ({ name: plugin.name, entryIds: [] }))
     providerOrder = profile.order
     patchOrder = reconcilePatchOrder(profile.patchOrder, providerOrder, nextProviders.values())
     disabledPatchKeys = new Set(profile.disabled)
@@ -539,23 +545,19 @@ export function synchronizeProfile(profileDir: string, installed?: string[]): Ha
 }
 
 export function currentProfile(): HarmonyProfile {
-  const profile = synchronizeHarmonyProfile(activeProfileDir!, undefined, false)
+  const profile = synchronizeHarmonyProfile(activeProfileDir!, undefined, false, activePlugins)
   const disabled = [...disabledPatchKeys]
-  const loaded = new Set(providerOrder)
   return {
     ...profile,
     order: [...providerOrder],
     patchOrder: [...patchOrder],
     disabled,
-    incompatibilities: providerIncompatibilities(
-      profile.plugins.filter(plugin => loaded.has(plugin.name)),
-      disabled,
-    ),
+    pluginConflicts: profile.pluginConflicts,
   }
 }
 
 export function synchronizePluginOrder(installed: string[]): HarmonyProfile {
-  return synchronizeProfile(activeProfileDir!, installed)
+  return synchronizeProfile(activeProfileDir!, installed, activePlugins)
 }
 
 function replaceProviders(next: Map<string, ProviderRecord>): void {
@@ -568,13 +570,18 @@ function replaceProviders(next: Map<string, ProviderRecord>): void {
   }
 }
 
-export function beginPluginUpdate(installed: string[], force = false): ProfileTransaction {
-  const profile = synchronizeHarmonyProfile(activeProfileDir!, installed, false)
+export function beginPluginUpdate(
+  installed: string[],
+  force = false,
+  enabledPlugins: HarmonyActivePlugin[] = installed.map(name => ({ name, entryIds: [] })),
+): ProfileTransaction {
+  activePlugins = enabledPlugins
+  const profile = synchronizeHarmonyProfile(activeProfileDir!, installed, false, activePlugins)
   const harmonyProviders = profile.plugins.filter(plugin => plugin.patches.length > 0)
-  const nextDeclared = new Set(harmonyProviders.flatMap(provider => [
-    join(provider.dir, 'package.json'),
-    ...provider.patches.map(file => join(provider.dir, file)),
-  ]))
+  const nextDeclared = new Set([
+    ...profile.plugins.map(plugin => join(plugin.dir, 'package.json')),
+    ...harmonyProviders.flatMap(provider => provider.patches.map(file => join(provider.dir, file))),
+  ])
   const nextProviders = new Map<string, ProviderRecord>()
   try {
     for (const provider of harmonyProviders) {

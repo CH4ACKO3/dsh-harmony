@@ -10,7 +10,8 @@ function relation(provider: HarmonyProfile['plugins'][number]): string {
   const parts = []
   if (provider.before.length > 0) parts.push(`前于 ${provider.before.join(', ')}`)
   if (provider.after.length > 0) parts.push(`后于 ${provider.after.join(', ')}`)
-  if (provider.conflicts.length > 0) parts.push(`声明不兼容 ${provider.conflicts.join(', ')}`)
+  const conflicts = Object.entries(provider.conflicts).map(([name, range]) => range === '*' ? name : `${name}@${range}`)
+  if (conflicts.length > 0) parts.push(`声明不兼容 ${conflicts.join(', ')}`)
   return parts.join('；')
 }
 
@@ -18,7 +19,7 @@ export function renderHarmonyTui(profile: HarmonyProfile, selected: number, mess
   const byName = new Map(profile.plugins.map(plugin => [plugin.name, plugin]))
   const violations = orderViolations(profile.order, profile.plugins)
   const conflicting = new Set(violations.flatMap(item => [item.before, item.after]))
-  const incompatible = new Set(profile.incompatibilities.flatMap(item => [item.declaredBy, item.conflictsWith]))
+  const incompatible = new Set(profile.pluginConflicts.flatMap(item => [item.left.package, item.right.package]))
   const lines = [
     `${ESC}1mDSH Harmony${ESC}0m  profile: ${profile.dir.split('/').at(-1)}`,
     '',
@@ -45,10 +46,10 @@ export function renderHarmonyTui(profile: HarmonyProfile, selected: number, mess
       lines.push(`  - ${violation.before} 必须在 ${violation.after} 前（由 ${violation.declaredBy} 声明）`)
     }
   }
-  if (profile.incompatibilities.length > 0) {
-    lines.push('', `${ESC}33m${profile.incompatibilities.length} 条插件不兼容声明（仅警告，插件仍会加载）：${ESC}0m`)
-    for (const item of profile.incompatibilities) {
-      lines.push(`  - ${item.declaredBy} 声明与 ${item.conflictsWith} 不兼容`)
+  if (profile.pluginConflicts.length > 0) {
+    lines.push('', `${ESC}33m${profile.pluginConflicts.length} 条插件冲突（仅警告，插件仍保持启用）：${ESC}0m`)
+    for (const item of profile.pluginConflicts) {
+      lines.push(`  - ${item.left.package}@${item.left.version} 与 ${item.right.package}@${item.right.version} 不兼容（由 ${item.declaredBy.join(', ')} 声明）`)
     }
   }
   if (message.length > 0) lines.push('', `${ESC}33m${message}${ESC}0m`)

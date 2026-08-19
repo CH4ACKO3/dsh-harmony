@@ -28,6 +28,7 @@ import {
   watchProfile,
 } from './runtime.js'
 import type { PatchTargets, ProfileTransaction } from './runtime.js'
+import type { HarmonyActivePlugin } from './conflicts.js'
 
 const imageAssets = [
   ['/dsh-harmony/assets/harmony-icon-mono.png', new URL('../assets/harmony-icon-mono.png', import.meta.url), 'image/png'],
@@ -50,13 +51,22 @@ interface ReloadableEntry {
   _start(plugin: unknown): Promise<void>
 }
 
-function loaderPackages(ctx: Context): string[] {
+function loaderInventory(ctx: Context): { packages: string[]; active: HarmonyActivePlugin[] } {
   const packages = new Set<string>()
+  const active = new Map<string, string[]>()
   for (const entry of ctx.loader.entries()) {
     const name = packageNameOf(entry.options.name)
-    if (name !== undefined) packages.add(name)
+    if (name === undefined) continue
+    packages.add(name)
+    if (entry.options.group || entry.disabled) continue
+    const entryIds = active.get(name) ?? []
+    entryIds.push(entry.id)
+    active.set(name, entryIds)
   }
-  return [...packages]
+  return {
+    packages: [...packages],
+    active: [...active].map(([name, entryIds]) => ({ name, entryIds })),
+  }
 }
 
 function profileView(): HarmonyProfileView {
@@ -175,22 +185,24 @@ export async function apply(ctx: Context): Promise<void> {
   let initializing = true
   let updateTail = Promise.resolve()
   const reloadingEntries = new Set<object>()
-  let incompatibilitySignature = ''
+  let warnedPluginConflicts = new Set<string>()
   let patchFailures = new Map<string, string>()
   let reloadSequence = 0
   let reloadStatus: HarmonyReloadStatus = { sequence: 0, state: 'idle' }
 
   registerActiveRuntimeRoute(ctx, () => reloadStatus)
 
-  const warnIncompatibilities = (profile: ProfileTransaction['profile']): void => {
-    const signature = JSON.stringify(profile.incompatibilities)
-    if (signature === incompatibilitySignature) return
-    incompatibilitySignature = signature
-    for (const item of profile.incompatibilities) {
+  const warnPluginConflicts = (profile: ProfileTransaction['profile']): void => {
+    const next = new Set<string>()
+    for (const item of profile.pluginConflicts) {
+      const key = JSON.stringify(item)
+      next.add(key)
+      if (warnedPluginConflicts.has(key)) continue
       ctx.logger.warn?.(
-        `dsh-harmony: ${JSON.stringify(item.declaredBy)} declares ${JSON.stringify(item.conflictsWith)} incompatible; both remain loaded`,
+        `dsh-harmony: ${item.left.package}@${item.left.version} conflicts with ${item.right.package}@${item.right.version}; both remain enabled`,
       )
     }
+    warnedPluginConflicts = next
   }
 
   const warnPatchFailures = (): void => {
@@ -258,7 +270,7 @@ export async function apply(ctx: Context): Promise<void> {
         rebuiltClients.push(packageName)
       }
       transaction.commit()
-      warnIncompatibilities(transaction.profile)
+      warnPluginConflicts(transaction.profile)
       warnPatchFailures()
     } catch (error) {
       const rollbackErrors = []
@@ -285,7 +297,8 @@ export async function apply(ctx: Context): Promise<void> {
   }
 
   const refreshPatches = (force = true, reload?: string): Promise<void> => enqueueUpdate(async () => {
-    const transaction = beginPluginUpdate(loaderPackages(ctx), force)
+    const inventory = loaderInventory(ctx)
+    const transaction = beginPluginUpdate(inventory.packages, force, inventory.active)
     if (reload !== undefined) {
       const files = transaction.targets.get(reload) ?? new Set<string>()
       files.add('lib/index.js')
@@ -442,6 +455,7 @@ export async function apply(ctx: Context): Promise<void> {
   }
   ctx.effect(() => watchProfile(synchronizeLoader, (error) => ctx.logger.error(error)), 'dsh-harmony: profile order watch')
   ctx.effect(() => subscribePatchStatuses(warnPatchFailures), 'dsh-harmony: Patch failure warnings')
+  ctx.on('loader/config-update', synchronizeLoader)
   ctx.on('internal/plugin', (fiber: Fiber) => {
     if (fiber.entry === undefined || !reloadingEntries.has(fiber.entry)) synchronizeLoader()
   })

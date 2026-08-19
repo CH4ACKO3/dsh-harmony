@@ -172,10 +172,14 @@ export {
 } from './profile.js'
 export { updateHarmonyProfile } from './control.js'
 export type {
-  HarmonyIncompatibility,
   HarmonyProfilePluginView,
   HarmonyProfileUpdate,
   HarmonyProfileView,
 } from './profile.js'
+export type {
+  HarmonyPluginConflict,
+  HarmonyPluginConflictDeclarations,
+  HarmonyPluginRef,
+} from './conflicts.js'
 export type { HarmonyReloadStatus } from './installer.js'
 export type { HarmonyOrderViolation, HarmonyPatchOrderItem } from './order.js'

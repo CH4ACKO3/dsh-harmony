@@ -14,17 +14,21 @@ test('TUI shows provider order, declarations, and the conflicting pair', () => {
     order: ['late', 'early'],
     disabled: [],
     plugins: [
-      { name: 'early', dir: '/early', patches: ['patch.cjs'], before: ['late'], after: [], conflicts: ['late'] },
-      { name: 'late', dir: '/late', patches: ['patch.cjs'], before: [], after: [], conflicts: [] },
+      { name: 'early', dir: '/early', version: '1.0.0', patches: ['patch.cjs'], before: ['late'], after: [], conflicts: { late: '*' } },
+      { name: 'late', dir: '/late', version: '2.0.0', patches: ['patch.cjs'], before: [], after: [], conflicts: {} },
     ],
-    incompatibilities: [{ declaredBy: 'early', conflictsWith: 'late' }],
+    pluginConflicts: [{
+      left: { package: 'early', version: '1.0.0', entryIds: ['early'] },
+      right: { package: 'late', version: '2.0.0', entryIds: ['late'] },
+      declaredBy: ['early'],
+    }],
   }, 0, '')
 
   expect(output).toContain('profile: web')
   expect(output).toContain('early 必须在 late 前')
   expect(output).toContain('前于 late')
-  expect(output).toContain('early 声明与 late 不兼容')
-  expect(output).toContain('仅警告，插件仍会加载')
+  expect(output).toContain('early@1.0.0 与 late@2.0.0 不兼容（由 early 声明）')
+  expect(output).toContain('仅警告，插件仍保持启用')
 })
 
 test('TUI saves an order even when one Patch will be skipped', async () => {
@@ -85,7 +89,7 @@ test('the unified profile API sends live updates through the published runtime a
       order: mismatch ? ['unexpected'] : input.order ?? ['a'],
       patchOrder: input.patchOrder ?? [],
       disabled: [...new Set(input.disabled ?? [])],
-      plugins: [], orderViolations: [], patchOrderViolations: [], incompatibilities: [],
+      plugins: [], orderViolations: [], patchOrderViolations: [], pluginConflicts: [],
     }))
   })
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))

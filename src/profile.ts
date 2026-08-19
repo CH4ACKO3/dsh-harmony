@@ -2,6 +2,13 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { findPackageJSON } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import {
+  evaluatePluginConflicts,
+  parsePluginConflicts,
+  type HarmonyActivePlugin,
+  type HarmonyPluginConflict,
+  type HarmonyPluginConflictDeclarations,
+} from './conflicts.js'
 import { orderViolations, type HarmonyOrderViolation, type HarmonyProvider } from './order.js'
 
 export interface InstalledPlugin extends HarmonyProvider {
@@ -9,17 +16,12 @@ export interface InstalledPlugin extends HarmonyProvider {
   version: string
   description: string
   patches: string[]
-  conflicts: string[]
+  conflicts: HarmonyPluginConflictDeclarations
   author: string
   contributors: string[]
   homepage: string
   bugs: string
   license: string
-}
-
-export interface HarmonyIncompatibility {
-  declaredBy: string
-  conflictsWith: string
 }
 
 export interface HarmonyProfile {
@@ -28,7 +30,7 @@ export interface HarmonyProfile {
   patchOrder: string[]
   disabled: string[]
   plugins: InstalledPlugin[]
-  incompatibilities: HarmonyIncompatibility[]
+  pluginConflicts: HarmonyPluginConflict[]
 }
 
 export interface HarmonyProfilePluginView {
@@ -40,7 +42,7 @@ export interface HarmonyProfilePluginView {
   patchCount?: number
   before: string[]
   after: string[]
-  conflicts: string[]
+  conflicts: HarmonyPluginConflictDeclarations
   author: string
   contributors: string[]
   homepage: string
@@ -56,7 +58,7 @@ export interface HarmonyProfileView {
   plugins: HarmonyProfilePluginView[]
   orderViolations: HarmonyOrderViolation[]
   patchOrderViolations: HarmonyOrderViolation[]
-  incompatibilities: HarmonyIncompatibility[]
+  pluginConflicts: HarmonyPluginConflict[]
 }
 
 export interface HarmonyProfileUpdate {
@@ -107,18 +109,21 @@ function installedPlugins(profileDir: string, requested?: string[]): InstalledPl
       homepage?: string
       bugs?: string | { url?: string }
       license?: string
-      dsh?: { harmony?: { patches?: string[]; before?: string[]; after?: string[]; conflicts?: string[] } }
+      dsh?: {
+        plugin?: { conflicts?: unknown }
+        harmony?: { patches?: string[]; before?: string[]; after?: string[] }
+      }
     }
     const harmony = manifest.dsh?.harmony
     plugins.push({
       name: manifest.name,
       dir,
-      version: manifest.version ?? '',
+      version: manifest.version ?? '0.0.0',
       description: manifest.description ?? '',
       patches: harmony?.patches ?? [],
       before: harmony?.before ?? [],
       after: harmony?.after ?? [],
-      conflicts: harmony?.conflicts ?? [],
+      conflicts: parsePluginConflicts(manifest.dsh?.plugin?.conflicts, manifest.name),
       author: person(manifest.author),
       contributors: (manifest.contributors ?? []).map(person).filter(Boolean),
       homepage: manifest.homepage ?? '',
@@ -127,19 +132,6 @@ function installedPlugins(profileDir: string, requested?: string[]): InstalledPl
     })
   }
   return plugins
-}
-
-export function providerIncompatibilities(
-  plugins: InstalledPlugin[],
-  disabled: string[],
-): HarmonyIncompatibility[] {
-  const disabledKeys = new Set(disabled)
-  const active = new Set(plugins
-    .filter(plugin => plugin.patches.length > 0 && !disabledKeys.has(`${plugin.name}/*`))
-    .map(plugin => plugin.name))
-  return plugins.flatMap(plugin => !active.has(plugin.name) ? [] : plugin.conflicts
-    .filter(name => name !== plugin.name && active.has(name))
-    .map(conflictsWith => ({ declaredBy: plugin.name, conflictsWith })))
 }
 
 export interface HarmonyState {
@@ -170,7 +162,12 @@ export function saveHarmonyState(profileDir: string, state: HarmonyState): void 
   renameSync(temporary, path)
 }
 
-export function synchronizeHarmonyProfile(profileDir: string, requested?: string[], persist = true): HarmonyProfile {
+export function synchronizeHarmonyProfile(
+  profileDir: string,
+  requested?: string[],
+  persist = true,
+  activePlugins?: HarmonyActivePlugin[],
+): HarmonyProfile {
   const plugins = installedPlugins(profileDir, requested)
   const installed = new Set(plugins.map(plugin => plugin.name))
   const state = readState(profileDir)
@@ -190,7 +187,10 @@ export function synchronizeHarmonyProfile(profileDir: string, requested?: string
     patchOrder: state.patchOrder,
     disabled: state.disabled,
     plugins,
-    incompatibilities: providerIncompatibilities(plugins, state.disabled),
+    pluginConflicts: evaluatePluginConflicts(
+      plugins,
+      activePlugins ?? plugins.map(plugin => ({ name: plugin.name, entryIds: [] })),
+    ),
   }
 }
 
@@ -249,13 +249,11 @@ export function prepareHarmonyProfileUpdate(profile: HarmonyProfile, input: Harm
     ? groupHarmonyPatchOrder(order, profile.patchOrder)
     : patchOrder(profile.patchOrder, input.patchOrder)
   const disabled = [...new Set(input.disabled === undefined ? profile.disabled : stringList(input.disabled, 'disabled'))]
-  const ordered = new Set(order)
   return {
     ...profile,
     order,
     patchOrder: nextPatchOrder,
     disabled,
-    incompatibilities: providerIncompatibilities(profile.plugins.filter(plugin => ordered.has(plugin.name)), disabled),
   }
 }
 
@@ -271,7 +269,11 @@ export function createHarmonyProfileView(
     disabled: [...profile.disabled],
     orderViolations: orderViolations(profile.order, profile.plugins),
     patchOrderViolations: patchOrderViolations.map(item => ({ ...item })),
-    incompatibilities: profile.incompatibilities.map(item => ({ ...item })),
+    pluginConflicts: profile.pluginConflicts.map(item => ({
+      left: { ...item.left, entryIds: [...item.left.entryIds] },
+      right: { ...item.right, entryIds: [...item.right.entryIds] },
+      declaredBy: [...item.declaredBy],
+    })),
     plugins: profile.plugins.map(({
       name, version, description, patches, before, after, conflicts, author, contributors, homepage, bugs, license,
     }) => ({
@@ -283,7 +285,7 @@ export function createHarmonyProfileView(
       ...(patchCounts.has(name) ? { patchCount: patchCounts.get(name)! } : {}),
       before: [...before],
       after: [...after],
-      conflicts: [...conflicts],
+      conflicts: { ...conflicts },
       author,
       contributors: [...contributors],
       homepage,

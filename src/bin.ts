@@ -6,6 +6,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
   discoverProfile,
+  currentProfile,
   getPatchInspections,
   getPatchStatuses,
   inspectPatchTargets,
@@ -70,6 +71,9 @@ if (isHarmonyCommand) {
     inspectPatchTargets(command === 'status')
     if (command === 'status') {
       const patches = getPatchStatuses()
+      for (const conflict of currentProfile().pluginConflicts) {
+        await writeStdout(`warning  ${conflict.left.package}@${conflict.left.version} conflicts with ${conflict.right.package}@${conflict.right.version}\n`)
+      }
       for (const patch of patches) {
         const targets = patch.targets.map(target => `${target.package}/${target.files.join('|')}`).join(', ')
         await writeStdout(`${patch.state.padEnd(8)} ${patch.key} -> ${patch.file ?? targets}${patch.error === undefined ? '' : `\n  ${patch.error}`}\n`)
