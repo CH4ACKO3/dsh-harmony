@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "main": "./index.cjs",
+  "exports": {
+    ".": "./index.cjs",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
   "dsh": {
     "bundle": {
       "patch": "./harmony.patch.yml"

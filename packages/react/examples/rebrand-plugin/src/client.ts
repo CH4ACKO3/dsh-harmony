@@ -8,6 +8,7 @@ window.__ModuleLoader__.load({
       return React.createElement('strong', null, 'Custom DSH')
     }
 
+    module.exports.apply = () => {}
     module.exports.CustomBrand = CustomBrand
     return module.exports
   },

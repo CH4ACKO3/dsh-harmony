@@ -15,6 +15,9 @@ import {
 import { runHarmonyTui } from './tui.js'
 
 const require = createRequire(import.meta.url)
+const writeStdout = (output: string) => new Promise<void>((resolve, reject) => {
+  process.stdout.write(output, error => error === null || error === undefined ? resolve() : reject(error))
+})
 const configuredDshEntry = process.env.DSH_HARMONY_DSH_ENTRY
 const dshEntry = configuredDshEntry === undefined
   ? require.resolve('@deepseek-ai/dsh/lib/bin.js')
@@ -69,7 +72,7 @@ if (isHarmonyCommand) {
       const patches = getPatchStatuses()
       for (const patch of patches) {
         const targets = patch.targets.map(target => `${target.package}/${target.files.join('|')}`).join(', ')
-        process.stdout.write(`${patch.state.padEnd(8)} ${patch.key} -> ${patch.file ?? targets}${patch.error === undefined ? '' : `\n  ${patch.error}`}\n`)
+        await writeStdout(`${patch.state.padEnd(8)} ${patch.key} -> ${patch.file ?? targets}${patch.error === undefined ? '' : `\n  ${patch.error}`}\n`)
       }
       process.exit(patches.some(patch => patch.state === 'failed') ? 1 : 0)
     } else {
@@ -78,10 +81,10 @@ if (isHarmonyCommand) {
       const file = fileIndex === -1 ? undefined : args[fileIndex + 1]
       const inspections = getPatchInspections(packageName, file)
       for (const inspection of inspections) {
-        process.stdout.write(`=== ${inspection.package}/${inspection.file} ===\n`)
-        process.stdout.write(`--- original ---\n${inspection.original}\n`)
-        for (const step of inspection.steps) process.stdout.write(`--- ${step.key} (${step.matches} match) ---\n${step.source}\n`)
-        process.stdout.write(`--- final ---\n${inspection.final}\n`)
+        await writeStdout(`=== ${inspection.package}/${inspection.file} ===\n`)
+        await writeStdout(`--- original ---\n${inspection.original}\n`)
+        for (const step of inspection.steps) await writeStdout(`--- ${step.key} (${step.matches} match) ---\n${step.source}\n`)
+        await writeStdout(`--- final ---\n${inspection.final}\n`)
       }
     }
     process.exit(0)

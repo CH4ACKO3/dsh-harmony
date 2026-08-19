@@ -20,6 +20,7 @@ const configuredModules = join(root, 'desktop-host/node_modules')
 const configuredOfficialPackage = join(configuredModules, '@deepseek-ai/dsh')
 const configuredAppBoot = join(configuredModules, '@deepseek-ai/dsh-app-boot')
 const home = join(root, 'home')
+const profile = join(root, 'profile')
 mkdirSync(embeddedHarmony, { recursive: true })
 mkdirSync(join(officialPackage, 'lib'), { recursive: true })
 mkdirSync(appBoot, { recursive: true })
@@ -46,7 +47,7 @@ writeFileSync(join(appBoot, 'package.json'), JSON.stringify({
 writeFileSync(join(appBoot, 'index.js'), `
 export const PROFILE_TEMPLATES = {}
 export function initProfile() {}
-export function resolveProfileDir() { throw new Error('profile resolution is not expected') }
+export function resolveProfileDir() { return process.env.DSH_HARMONY_TEST_PROFILE }
 `)
 cpSync(officialPackage, configuredOfficialPackage, { recursive: true })
 cpSync(appBoot, configuredAppBoot, { recursive: true })
@@ -76,6 +77,48 @@ try {
   })
   assert.equal(configured.status, 0, configured.stderr)
   assert.deepEqual(JSON.parse(configured.stdout), { entry: 'configured', active: '1' })
+
+  const profileModules = join(profile, 'node_modules')
+  const provider = join(profileModules, 'large-provider')
+  const target = join(profileModules, 'large-target')
+  mkdirSync(join(target, 'lib'), { recursive: true })
+  mkdirSync(provider, { recursive: true })
+  writeFileSync(join(profile, 'package.json'), JSON.stringify({
+    dependencies: { 'large-provider': '1.0.0', 'large-target': '1.0.0' },
+  }))
+  writeFileSync(join(target, 'package.json'), JSON.stringify({
+    name: 'large-target', version: '1.0.0', type: 'module',
+  }))
+  writeFileSync(join(target, 'lib/client.js'), `${'// inspection padding\n'.repeat(5_000)}export const answer = 1\n`)
+  writeFileSync(join(provider, 'package.json'), JSON.stringify({
+    name: 'large-provider',
+    dsh: { harmony: { patches: ['./patch.cjs'] } },
+  }))
+  writeFileSync(join(provider, 'patch.cjs'), `
+module.exports = {
+  id: 'large-output',
+  target: { package: 'large-target', version: '1.0.0', files: ['lib/client.js'] },
+  select: 'NumericLiteral[text="1"]',
+  expect: 1,
+  apply({ node, sourceFile, edit }) { edit.overwrite(node.getStart(sourceFile), node.getEnd(), '2') },
+}
+`)
+  const inspection = spawnSync(process.execPath, [
+    join(embeddedHarmony, 'lib/bin.js'),
+    'harmony', 'inspect', 'large-target', '--file', 'lib/client.js', '--profile', 'web',
+  ], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      DSH_HOME: home,
+      DSH_HARMONY_TEST_PROFILE: profile,
+    },
+    maxBuffer: 2 * 1024 * 1024,
+  })
+  assert.equal(inspection.status, 0, inspection.stderr)
+  assert.ok(inspection.stdout.length > 64 * 1024)
+  assert.match(inspection.stdout, /--- final ---/)
+  assert.match(inspection.stdout, /export const answer = 2/)
 } finally {
   rmSync(root, { recursive: true })
 }
