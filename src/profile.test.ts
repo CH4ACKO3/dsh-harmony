@@ -192,9 +192,12 @@ test('reads, preflights, and atomically updates a stopped profile', async () => 
 
   const updated = await updateHarmonyProfile(profile, { order: ['second', 'first'], disabled: ['first/*'] })
   expect(updated).toMatchObject({
-    order: ['second', 'first'],
-    patchOrder: ['second/only', 'first/b', 'first/a'],
-    disabled: ['first/*'],
+    mode: 'offline',
+    profile: {
+      order: ['second', 'first'],
+      patchOrder: ['second/only', 'first/b', 'first/a'],
+      disabled: ['first/*'],
+    },
   })
   expect(JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8'))).toEqual({
     order: ['second', 'first'],

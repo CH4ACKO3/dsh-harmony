@@ -84,6 +84,15 @@ dsh web
 
 Open **Settings → Harmony** after starting the WebUI. For profiles, Desktop integration, updates, and removal, see the [installation guide](https://memorax-ai.github.io/dsh-harmony/guide/installation).
 
+Use the terminal UI or non-interactive commands against any profile. Commands contact a running Host transactionally and report `live`; stopped profiles are validated and updated atomically as `offline`.
+
+```sh
+dsh harmony --profile web
+dsh harmony status --json --profile web
+dsh harmony disable my-provider/optional-patch --profile web
+dsh harmony enable-provider my-provider --profile web
+```
+
 ## Patch model
 
 Harmony runs every Patch from one global `patchOrder`. Provider-level `before` and `after` rules set the usual order. A Patch that declares either rule uses its own rules instead. In **Settings → Harmony**, users can move a whole provider or place one Patch between Patches from another provider. Harmony checks that the saved list contains every registered Patch exactly once.

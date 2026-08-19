@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -8,6 +8,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { pathToFileURL } from 'node:url'
 import { afterAll, beforeAll, expect, test } from 'vitest'
 import type { HarmonyService } from './index.js'
+import { readHarmonyRuntime, updateHarmonyProfile } from './control.js'
 import {
   beginProfileUpdate,
   beginPluginUpdate,
@@ -2171,4 +2172,70 @@ module.exports = [{
   expect(second.status).toBe(200)
   expect(JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8')).order).toEqual(desired)
   for (const dispose of disposers) dispose()
+})
+
+test('controls a running profile without a Web server', async () => {
+  const profile = join(root, 'non-web-control-profile')
+  const provider = join(profile, 'node_modules', 'non-web-provider')
+  const target = join(profile, 'node_modules', 'non-web-target')
+  mkdirSync(provider, { recursive: true })
+  mkdirSync(join(target, 'lib'), { recursive: true })
+  writeFileSync(join(profile, 'package.json'), JSON.stringify({
+    dependencies: { 'non-web-provider': '1', 'non-web-target': '1' },
+  }))
+  writeFileSync(join(provider, 'package.json'), JSON.stringify({
+    name: 'non-web-provider',
+    version: '1.0.0',
+    dsh: { harmony: { patches: ['./patch.cjs'] } },
+  }))
+  writeFileSync(join(provider, 'patch.cjs'), `
+module.exports = {
+  id: 'non-web',
+  target: { package: 'non-web-target', files: ['lib/index.js'] },
+  select: 'NumericLiteral', expect: 1, apply() {},
+}
+`)
+  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'non-web-target', version: '1.0.0' }))
+  writeFileSync(join(target, 'lib/index.js'), 'export const value = 1\n')
+  synchronizeProfile(profile)
+
+  const disposers: Array<() => void | Promise<void>> = []
+  await applyHarmonyPlugin({
+    provide() {},
+    logger: { error() {}, warn() {} },
+    on() {},
+    effect(start: () => unknown) {
+      const dispose = start()
+      if (typeof dispose === 'function') disposers.push(dispose as () => void | Promise<void>)
+    },
+    inject() {},
+    loader: {
+      *entries() {
+        yield { options: { name: 'non-web-provider' } }
+        yield { options: { name: 'non-web-target' } }
+      },
+    },
+  } as any)
+  await new Promise<void>(resolve => setImmediate(resolve))
+
+  const addressFile = join(profile, '.dsh-harmony-runtime.json')
+  const address = JSON.parse(readFileSync(addressFile, 'utf8')) as { url: string }
+  if (process.platform !== 'win32') expect(statSync(addressFile).mode & 0o777).toBe(0o600)
+  expect((await fetch(`${address.url}/dsh-harmony/status`)).status).toBe(401)
+
+  const status = await readHarmonyRuntime(profile)
+  expect(status).toMatchObject({
+    profile: { dir: profile },
+    patches: [expect.objectContaining({ key: 'non-web-provider/non-web', state: 'bound' })],
+  })
+  const update = await updateHarmonyProfile(profile, { disabled: ['non-web-provider/non-web'] })
+  expect(update).toMatchObject({
+    mode: 'live',
+    profile: { disabled: ['non-web-provider/non-web'] },
+    reload: { state: 'succeeded' },
+  })
+  expect(JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8')).disabled)
+    .toEqual(['non-web-provider/non-web'])
+
+  for (const dispose of disposers.reverse()) await dispose()
 })

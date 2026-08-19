@@ -78,6 +78,7 @@ test('the unified profile API sends live updates through the published runtime a
   let delay = 0
   let received: unknown
   const server = createServer(async (request, response) => {
+    expect(request.headers.authorization).toBe('Bearer test-token')
     const chunks: Buffer[] = []
     for await (const chunk of request) chunks.push(Buffer.from(chunk))
     received = JSON.parse(Buffer.concat(chunks).toString())
@@ -85,21 +86,32 @@ test('the unified profile API sends live updates through the published runtime a
     response.writeHead(failure ? 500 : 200, { 'content-type': 'application/json' })
     const input = received as { order?: string[]; patchOrder?: string[]; disabled?: string[] }
     response.end(JSON.stringify(failure ? { error: 'reload conflict' } : {
-      dir: profile,
-      order: mismatch ? ['unexpected'] : input.order ?? ['a'],
-      patchOrder: input.patchOrder ?? [],
-      disabled: [...new Set(input.disabled ?? [])],
-      plugins: [], orderViolations: [], patchOrderViolations: [], pluginConflicts: [],
+      mode: 'live',
+      generation: 1,
+      reload: { sequence: 1, state: 'succeeded' },
+      profile: {
+        dir: profile,
+        order: mismatch ? ['unexpected'] : input.order ?? ['a'],
+        patchOrder: input.patchOrder ?? [],
+        disabled: [...new Set(input.disabled ?? [])],
+        plugins: [], orderViolations: [], patchOrderViolations: [], pluginConflicts: [],
+      },
     }))
   })
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
-  const dispose = publishRuntimeAddress(profile, '127.0.0.1', (server.address() as AddressInfo).port)
+  const token = 'test-token'
+  const dispose = publishRuntimeAddress(profile, `http://127.0.0.1:${(server.address() as AddressInfo).port}`, token)
 
-  expect(await updateHarmonyProfile(profile, { order: ['a'] })).toMatchObject({ dir: profile, order: ['a'] })
+  expect(await updateHarmonyProfile(profile, { order: ['a'] })).toMatchObject({
+    mode: 'live', profile: { dir: profile, order: ['a'] },
+  })
   expect(received).toEqual({ order: ['a'] })
   expect(await updateHarmonyProfile(profile, {
     patchOrder: ['provider/patch'], disabled: ['provider/patch', 'provider/patch'],
-  })).toMatchObject({ patchOrder: ['provider/patch'], disabled: ['provider/patch'] })
+  })).toMatchObject({
+    mode: 'live',
+    profile: { patchOrder: ['provider/patch'], disabled: ['provider/patch'] },
+  })
   expect(received).toEqual({
     patchOrder: ['provider/patch'], disabled: ['provider/patch', 'provider/patch'],
   })

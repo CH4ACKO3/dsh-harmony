@@ -1,12 +1,13 @@
 import { emitKeypressEvents } from 'node:readline'
 import type { ReadStream, WriteStream } from 'node:tty'
-import { updateHarmonyProfile } from './control.js'
+import { readHarmonyRuntime, updateHarmonyProfile } from './control.js'
+import type { HarmonyProfileUpdateResult } from './index.js'
 import { autoSortOrder, orderViolations } from './order.js'
-import { HARMONY_PLUGIN, pinHarmonyOrder, synchronizeHarmonyProfile, type HarmonyProfile } from './profile.js'
+import { HARMONY_PLUGIN, pinHarmonyOrder, readHarmonyProfile, type HarmonyProfileView } from './profile.js'
 
 const ESC = '\u001b['
 
-function relation(provider: HarmonyProfile['plugins'][number]): string {
+function relation(provider: HarmonyProfileView['plugins'][number]): string {
   const parts = []
   if (provider.before.length > 0) parts.push(`前于 ${provider.before.join(', ')}`)
   if (provider.after.length > 0) parts.push(`后于 ${provider.after.join(', ')}`)
@@ -15,7 +16,7 @@ function relation(provider: HarmonyProfile['plugins'][number]): string {
   return parts.join('；')
 }
 
-export function renderHarmonyTui(profile: HarmonyProfile, selected: number, message: string): string {
+export function renderHarmonyTui(profile: HarmonyProfileView, selected: number, message: string): string {
   const byName = new Map(profile.plugins.map(plugin => [plugin.name, plugin]))
   const violations = orderViolations(profile.order, profile.plugins)
   const conflicting = new Set(violations.flatMap(item => [item.before, item.after]))
@@ -56,10 +57,15 @@ export function renderHarmonyTui(profile: HarmonyProfile, selected: number, mess
   return lines.join('\n')
 }
 
-export async function saveHarmonyTuiOrder(profileDir: string, order: string[]): Promise<HarmonyProfile> {
+export async function saveHarmonyTuiOrder(profileDir: string, order: string[]): Promise<HarmonyProfileUpdateResult> {
   order = pinHarmonyOrder(order)
-  await updateHarmonyProfile(profileDir, { order })
-  return synchronizeHarmonyProfile(profileDir)
+  return updateHarmonyProfile(profileDir, { order })
+}
+
+function updateMessage(result: HarmonyProfileUpdateResult, action: string): string {
+  return result.mode === 'live'
+    ? `${action}；Harness 已提交 generation ${result.generation} 并完成热重载。`
+    : `${action}；profile 当前未运行，将在下次启动时生效。`
 }
 
 export async function runHarmonyTui(
@@ -68,21 +74,23 @@ export async function runHarmonyTui(
   output: WriteStream = process.stdout,
 ): Promise<void> {
   if (!input.isTTY || !output.isTTY) throw new Error('dsh harmony requires an interactive terminal')
-  let profile = synchronizeHarmonyProfile(profileDir)
+  const readProfile = async () => (await readHarmonyRuntime(profileDir))?.profile ?? readHarmonyProfile(profileDir)
+  let profile = await readProfile()
   let selected = 0
   let message = ''
   let saving = false
   const draw = (): void => {
     output.write(`${ESC}?25l${ESC}2J${ESC}H${renderHarmonyTui(profile, selected, message)}`)
   }
-  const persist = async (order: string[], nextMessage: string): Promise<boolean> => {
+  const persist = async (order: string[], action: string): Promise<boolean> => {
     saving = true
     message = '正在预检并应用顺序…'
     draw()
     try {
-      profile = await saveHarmonyTuiOrder(profileDir, order)
+      const result = await saveHarmonyTuiOrder(profileDir, order)
+      profile = result.profile
       selected = Math.min(selected, Math.max(0, order.length - 1))
-      message = nextMessage
+      message = updateMessage(result, action)
       return true
     } catch (error) {
       message = `保存失败：${error instanceof Error ? error.message : String(error)}`
@@ -98,7 +106,7 @@ export async function runHarmonyTui(
     if (target < firstMovable || target >= profile.order.length) return
     const order = [...profile.order]
     ;[order[selected], order[target]] = [order[target]!, order[selected]!]
-    if (await persist(order, '顺序已保存；运行中的 Harness 已完成热重载。')) selected = target
+    if (await persist(order, '顺序已保存')) selected = target
   }
 
   emitKeypressEvents(input)
@@ -121,12 +129,10 @@ export async function runHarmonyTui(
       if (text === 'd') await move(1)
       if (text === 'a') {
         const order = pinHarmonyOrder(autoSortOrder(profile.order, profile.plugins))
-        await persist(order, `自动排序完成；最少仍有 ${orderViolations(order, profile.plugins).length} 条约束无法满足。`)
+        await persist(order, `自动排序完成，最少仍有 ${orderViolations(order, profile.plugins).length} 条约束无法满足`)
       }
       if (text === 'r') {
-        profile = synchronizeHarmonyProfile(profileDir)
-        selected = Math.min(selected, Math.max(0, profile.order.length - 1))
-        message = '已同步当前安装的 Harmony patch 插件。'
+        await persist((await readProfile()).order, '已同步当前安装的插件')
       }
       draw()
     }

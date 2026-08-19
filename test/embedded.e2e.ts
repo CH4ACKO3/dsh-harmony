@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
-import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -103,22 +103,61 @@ module.exports = {
   apply({ node, sourceFile, edit }) { edit.overwrite(node.getStart(sourceFile), node.getEnd(), '2') },
 }
 `)
+  const cliEnv = {
+    ...process.env,
+    DSH_HOME: home,
+    DSH_HARMONY_TEST_PROFILE: profile,
+  }
   const inspection = spawnSync(process.execPath, [
     join(embeddedHarmony, 'lib/bin.js'),
     'harmony', 'inspect', 'large-target', '--file', 'lib/client.js', '--profile', 'web',
   ], {
     encoding: 'utf8',
-    env: {
-      ...process.env,
-      DSH_HOME: home,
-      DSH_HARMONY_TEST_PROFILE: profile,
-    },
+    env: cliEnv,
     maxBuffer: 2 * 1024 * 1024,
   })
   assert.equal(inspection.status, 0, inspection.stderr)
   assert.ok(inspection.stdout.length > 64 * 1024)
   assert.match(inspection.stdout, /--- final ---/)
   assert.match(inspection.stdout, /export const answer = 2/)
+
+  const status = spawnSync(process.execPath, [
+    join(embeddedHarmony, 'lib/bin.js'),
+    'harmony', 'status', '--json', '--profile', 'web',
+  ], { encoding: 'utf8', env: cliEnv })
+  assert.equal(status.status, 0, status.stderr)
+  const statusBody = JSON.parse(status.stdout)
+  assert.equal(statusBody.mode, 'offline')
+  assert.equal(statusBody.profile.dir, profile)
+  assert.equal(statusBody.patches.length, 1)
+  assert.equal(statusBody.targets, undefined)
+  assert.equal(statusBody.patches[0].key, 'large-provider/large-output')
+  assert.equal(statusBody.patches[0].matches, 1)
+
+  const disabled = spawnSync(process.execPath, [
+    join(embeddedHarmony, 'lib/bin.js'),
+    'harmony', 'disable', 'large-provider/large-output', '--json', '--profile', 'web',
+  ], { encoding: 'utf8', env: cliEnv })
+  assert.equal(disabled.status, 0, disabled.stderr)
+  assert.equal(JSON.parse(disabled.stdout).result.mode, 'offline')
+  assert.equal(JSON.parse(disabled.stdout).patches[0].state, 'disabled')
+  assert.deepEqual(JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8')).disabled, [
+    'large-provider/large-output',
+  ])
+
+  const unknown = spawnSync(process.execPath, [
+    join(embeddedHarmony, 'lib/bin.js'),
+    'harmony', 'unknown', '--profile', 'web',
+  ], { encoding: 'utf8', env: cliEnv })
+  assert.notEqual(unknown.status, 0)
+  assert.match(unknown.stderr, /unknown harmony command/)
+
+  const missing = spawnSync(process.execPath, [
+    join(embeddedHarmony, 'lib/bin.js'),
+    'harmony', 'inspect', 'missing-target', '--profile', 'web',
+  ], { encoding: 'utf8', env: cliEnv })
+  assert.notEqual(missing.status, 0)
+  assert.match(missing.stderr, /no matching Patch target was found/)
 } finally {
   rmSync(root, { recursive: true })
 }

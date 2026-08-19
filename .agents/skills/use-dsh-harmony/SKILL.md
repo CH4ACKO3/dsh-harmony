@@ -172,7 +172,10 @@ Install the provider into the same profile as its targets, then validate the run
 ```sh
 dsh plugin --profile web add ./my-harmony-provider
 dsh harmony status --profile web
+dsh harmony status --json --profile web
 dsh harmony inspect some-dsh-plugin --file lib/index.js --profile web
+dsh harmony disable my-harmony-provider/optional-patch --profile web
+dsh harmony enable-provider my-harmony-provider --profile web
 ```
 
 Require all intended Patches to reach `bound`. Treat `status` exit code `1` as failure. Use `inspect` to compare the original source, every ordered intermediate result, and the final source. Confirm hot reload or restart behavior through the target feature.
@@ -208,6 +211,7 @@ import {
 const current = readHarmonyProfile(profileDir)
 const candidate = preflightHarmonyProfileUpdate(profileDir, { order: current.order })
 const saved = await updateHarmonyProfile(profileDir, { disabled: candidate.disabled })
+console.log(saved.mode === 'live' ? saved.reload.state : 'saved for next start')
 ```
 
 Offline preflight validates and normalizes profile state without writing it. It does not start a Host or bind target Patches; runtime binding still happens when that profile starts. Do not import internal control/profile modules or edit `harmony.json` directly.

@@ -1,5 +1,7 @@
+import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import type { IncomingMessage, ServerResponse } from 'node:http'
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { fileURLToPath } from 'node:url'
 import type { ClientModuleRegistry } from '@deepseek-ai/dsh-client-modules'
 import type { WebServer } from '@deepseek-ai/dsh-host-webserver'
@@ -10,7 +12,7 @@ import { loadHarmonyExtensions } from './extension.js'
 import { readJson, RequestBodyTooLargeError } from './http.js'
 import { registerActiveRuntimeRoute, waitForRuntimeChoice } from './installer.js'
 import type { HarmonyReloadStatus } from './installer.js'
-import type { HarmonyProfileUpdate, HarmonyProfileUpdateResult, HarmonyProfileView } from './index.js'
+import type { HarmonyProfileUpdate, HarmonyProfileView, HarmonyRuntimeProfileUpdateResult } from './index.js'
 import { createHarmonyProfileView, prepareHarmonyProfileUpdate } from './profile.js'
 import {
   beginProfileUpdate,
@@ -308,7 +310,7 @@ export async function apply(ctx: Context): Promise<void> {
     await applyTransaction(transaction)
   })
 
-  const updateProfile = async (input: () => HarmonyProfileUpdate): Promise<HarmonyProfileUpdateResult> => {
+  const updateProfile = async (input: () => HarmonyProfileUpdate): Promise<HarmonyRuntimeProfileUpdateResult> => {
     const generation = await enqueueUpdate(async () => {
       const requested = input()
       const candidate = prepareHarmonyProfileUpdate(currentProfile(), requested)
@@ -321,10 +323,54 @@ export async function apply(ctx: Context): Promise<void> {
       return transaction.generation
     })
     return {
+      mode: 'live',
       profile: profileView(),
       generation,
       reload: { ...reloadStatus },
       ...(clientModules === undefined ? {} : { clientGraphRev: clientModules.graph().rev }),
+    }
+  }
+
+  const updatePatch = async (input: { key?: string; owner?: string; enabled?: unknown }) => {
+    const { key, owner, enabled } = input
+    if (typeof enabled !== 'boolean' || (key === undefined) === (owner === undefined)) {
+      throw new TypeError('dsh-harmony: patch update requires enabled and exactly one of key or owner')
+    }
+    const patches = getPatchStatuses()
+    if (key !== undefined && !patches.some(patch => patch.key === key)) {
+      throw new Error(`dsh-harmony: unknown Patch ${JSON.stringify(key)}`)
+    }
+    if (owner !== undefined && !patches.some(patch => patch.owner === owner)) {
+      throw new Error(`dsh-harmony: unknown Provider ${JSON.stringify(owner)}`)
+    }
+    const result = await updateProfile(() => {
+      const disabled = new Set(currentProfile().disabled)
+      if (owner !== undefined) {
+        const providerKey = `${owner}/*`
+        for (const patch of patches) if (patch.owner === owner) disabled.delete(patch.key)
+        if (enabled) disabled.delete(providerKey)
+        else disabled.add(providerKey)
+      } else {
+        const patch = patches.find(item => item.key === key)!
+        if (disabled.has(`${patch.owner}/*`)) {
+          throw new Error(`dsh-harmony: Provider ${JSON.stringify(patch.owner)} is disabled; enable it first`)
+        }
+        if (enabled) disabled.delete(key!)
+        else disabled.add(key!)
+      }
+      return { disabled: [...disabled] }
+    })
+    return { result, patches: getPatchStatuses() }
+  }
+
+  const inspect = (requestUrl?: string) => {
+    const url = new URL(requestUrl ?? '/', 'http://localhost')
+    return {
+      patches: getPatchStatuses(),
+      targets: getPatchInspections(
+        url.searchParams.get('package') ?? undefined,
+        url.searchParams.get('file') ?? undefined,
+      ),
     }
   }
 
@@ -359,6 +405,57 @@ export async function apply(ctx: Context): Promise<void> {
     await disposeExtensions?.()
   }, 'dsh-harmony: extensions')
 
+  const controlToken = randomBytes(32).toString('hex')
+  const controlServer = createServer((request, response) => {
+    void (async () => {
+      if (request.headers.authorization !== `Bearer ${controlToken}`) {
+        response.writeHead(401)
+        response.end()
+        return
+      }
+      const path = new URL(request.url ?? '/', 'http://localhost').pathname
+      if (path === '/dsh-harmony/status' && request.method === 'GET') {
+        return sendJson(response, {
+          profile: profileView(),
+          patches: getPatchStatuses(),
+          reload: { ...reloadStatus },
+        })
+      }
+      if (path === '/dsh-harmony/profile' && request.method === 'POST') {
+        const input = await readJson<HarmonyProfileUpdate>(request)
+        return sendJson(response, await updateProfile(() => input))
+      }
+      if (path === '/dsh-harmony/patches' && request.method === 'POST') {
+        return sendJson(response, await updatePatch(await readJson<{
+          key?: string
+          owner?: string
+          enabled?: unknown
+        }>(request)))
+      }
+      if (path === '/dsh-harmony/inspect' && request.method === 'GET') {
+        return sendJson(response, inspect(request.url))
+      }
+      response.writeHead(404)
+      response.end()
+    })().catch(error => sendError(response, error))
+  })
+  controlServer.unref()
+  let disposeRuntimeAddress: (() => void) | undefined
+  const controlReady = new Promise<void>((resolve, reject) => {
+    controlServer.once('error', reject)
+    controlServer.listen(0, '127.0.0.1', () => {
+      controlServer.off('error', reject)
+      const port = (controlServer.address() as AddressInfo).port
+      disposeRuntimeAddress = publishRuntimeAddress(profileDir, `http://127.0.0.1:${port}`, controlToken)
+      resolve()
+    })
+  })
+  ctx.effect(() => async () => {
+    disposeRuntimeAddress?.()
+    if (!controlServer.listening) return
+    await new Promise<void>((resolve, reject) => controlServer.close(error => error ? reject(error) : resolve()))
+  }, 'dsh-harmony: runtime control')
+
   ctx.inject(['webServer'], (webCtx) => {
     const dispose = [webCtx.webServer.register({
       kind: 'exact',
@@ -384,25 +481,8 @@ export async function apply(ctx: Context): Promise<void> {
         if (request.method === 'GET') return sendJson(response, { patches: getPatchStatuses() })
         if (request.method === 'POST') {
           try {
-            const { key, owner, enabled } = await readJson(request) as { key?: string; owner?: string; enabled: boolean }
-            await updateProfile(() => {
-              const disabled = new Set(currentProfile().disabled)
-              if (owner !== undefined) {
-                const providerKey = `${owner}/*`
-                if (enabled) {
-                  disabled.delete(providerKey)
-                  for (const patch of getPatchStatuses()) if (patch.owner === owner) disabled.delete(patch.key)
-                } else {
-                  for (const patch of getPatchStatuses()) if (patch.owner === owner) disabled.delete(patch.key)
-                  disabled.add(providerKey)
-                }
-              } else if (key !== undefined) {
-                if (enabled) disabled.delete(key)
-                else disabled.add(key)
-              }
-              return { disabled: [...disabled] }
-            })
-            return sendJson(response, { patches: getPatchStatuses() })
+            const result = await updatePatch(await readJson(request))
+            return sendJson(response, { patches: result.patches })
           } catch (error) {
             return sendError(response, error)
           }
@@ -437,7 +517,6 @@ export async function apply(ctx: Context): Promise<void> {
         },
       }))
     }
-    dispose.push(publishRuntimeAddress(currentProfile().dir, webCtx.webServer.host, webCtx.webServer.port))
     return () => dispose.forEach(stop => stop())
   })
 
@@ -487,7 +566,7 @@ export async function apply(ctx: Context): Promise<void> {
     })
   }), 'dsh-harmony: patch reload')
   synchronizeLoader()
-  await extensionsReady
+  await Promise.all([extensionsReady, controlReady])
 }
 
 export const inject = ['appExit']

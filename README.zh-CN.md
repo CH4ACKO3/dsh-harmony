@@ -88,6 +88,15 @@ dsh web
 
 启动 WebUI 后打开 **设置 → Harmony**。Profile、Desktop 集成、更新和卸载说明参见[安装指南](https://memorax-ai.github.io/dsh-harmony/zh/guide/installation)。
 
+终端 TUI 和非交互命令可操作任意 profile。命令会事务连接正在运行的 Host 并报告 `live`；已停止的 profile 则在本地校验后原子更新并报告 `offline`。
+
+```sh
+dsh harmony --profile web
+dsh harmony status --json --profile web
+dsh harmony disable my-provider/optional-patch --profile web
+dsh harmony enable-provider my-provider --profile web
+```
+
 ## Patch 模型
 
 Harmony 按一份全局 `patchOrder` 运行所有 Patch。Provider 级 `before` / `after` 负责通常的先后关系；单个 Patch 只要声明其中一项，就改用自己的规则。在 **设置 → Harmony** 中，用户可以移动整个 Provider，也可以把一个 Patch 插到另一个 Provider 的两个 Patch 之间。保存时，Harmony 会检查列表是否恰好包含每个已注册 Patch 一次。

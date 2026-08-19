@@ -13,18 +13,26 @@ export interface HarmonyService {
   readonly binEntry: string
   readonly profileDir: string
   profile(): HarmonyProfileView
-  updateProfile(input: HarmonyProfileUpdate): Promise<HarmonyProfileUpdateResult>
+  updateProfile(input: HarmonyProfileUpdate): Promise<HarmonyRuntimeProfileUpdateResult>
   inspect(input?: HarmonyInspectInput): HarmonyInspection
   inspectDependencies(owner: string): HarmonyPatchDependency[]
   reloadPlugin(name: string): Promise<void>
 }
 
-export interface HarmonyProfileUpdateResult {
+export interface HarmonyRuntimeProfileUpdateResult {
+  mode: 'live'
   profile: HarmonyProfileView
   generation: number
   reload: HarmonyReloadStatus
   clientGraphRev?: string
 }
+
+export interface HarmonyOfflineProfileUpdateResult {
+  mode: 'offline'
+  profile: HarmonyProfileView
+}
+
+export type HarmonyProfileUpdateResult = HarmonyRuntimeProfileUpdateResult | HarmonyOfflineProfileUpdateResult
 
 export interface HarmonyInspectInput {
   package?: string
