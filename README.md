@@ -94,9 +94,14 @@ dsh harmony enable-provider my-provider --profile web
 dsh harmony patch-order show --profile web
 dsh harmony patch-order move my-provider/optional-patch --before other-provider/base --profile web
 dsh harmony patch-order auto --profile web
+dsh harmony provider-order move my-provider --after base-provider --profile web
+dsh harmony inspect target-package --patch my-provider/optional-patch --summary --profile web
+dsh harmony reload my-provider --profile web
 ```
 
-The TUI keeps the selected provider visible when a profile is larger than the terminal. `patch-order show` exits with status `1` when order constraints are violated; `patch-order auto` minimizes violations while preserving the current order where possible.
+Press `Tab` in the TUI to switch between Provider and Patch views. The Patch view supports individual and Provider-wide enablement, Patch ordering, automatic sorting, runtime details, and concise inspection. Both views keep the selection visible when a profile is larger than the terminal.
+
+`status`, `patch-order show`, and `provider-order show` exit with status `1` when their health or order constraints fail. `patch-order auto` and `provider-order auto` minimize violations while preserving the current order where possible. `inspect --summary` omits transformed source, while `--patch <key>` limits inspection to targets touched by one Patch. `reload` requires a running Host.
 
 ## Patch model
 

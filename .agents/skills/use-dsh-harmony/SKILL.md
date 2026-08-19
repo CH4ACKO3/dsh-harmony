@@ -179,9 +179,12 @@ dsh harmony enable-provider my-harmony-provider --profile web
 dsh harmony patch-order show --profile web
 dsh harmony patch-order move my-harmony-provider/optional-patch --after another-provider/base --profile web
 dsh harmony patch-order auto --profile web
+dsh harmony provider-order move my-harmony-provider --after another-provider --profile web
+dsh harmony inspect some-dsh-plugin --patch my-harmony-provider/optional-patch --summary --profile web
+dsh harmony reload my-harmony-provider --profile web
 ```
 
-Require all intended Patches to reach `bound`. Treat `status` exit code `1` as failure. `patch-order show` also exits `1` when constraints are violated. Use `inspect` to compare the original source, every ordered intermediate result, and the final source. Confirm hot reload or restart behavior through the target feature.
+Require all intended Patches to reach `bound`. Treat `status` exit code `1` as a Patch, reload, or ordering failure. `patch-order show` and `provider-order show` also exit `1` when constraints are violated. Use `inspect` to compare the original source, every ordered intermediate result, and the final source; add `--summary` to omit source or `--patch <key>` to select one Patch. `reload` requires a live Host. Confirm hot reload or restart behavior through the target feature.
 
 Use Settings or `dsh harmony` to reorder and enable or disable Patches. Do not edit `$DSH_HOME/profiles/<name>/harmony.json` while the profile is running; UI and CLI changes are preflighted and committed transactionally.
 

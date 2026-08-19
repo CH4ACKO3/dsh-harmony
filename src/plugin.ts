@@ -432,6 +432,21 @@ export async function apply(ctx: Context): Promise<void> {
           enabled?: unknown
         }>(request)))
       }
+      if (path === '/dsh-harmony/reload' && request.method === 'POST') {
+        const { provider } = await readJson<{ provider?: unknown }>(request)
+        if (provider !== undefined && typeof provider !== 'string') {
+          throw new TypeError('dsh-harmony: reload provider must be a string')
+        }
+        if (provider !== undefined && !loaderInventory(ctx).packages.includes(provider)) {
+          throw new Error(`dsh-harmony: unknown plugin ${JSON.stringify(provider)}`)
+        }
+        await refreshPatches(true, provider)
+        return sendJson(response, {
+          profile: profileView(),
+          patches: getPatchStatuses(),
+          reload: { ...reloadStatus },
+        })
+      }
       if (path === '/dsh-harmony/inspect' && request.method === 'GET') {
         return sendJson(response, inspect(request.url))
       }

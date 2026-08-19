@@ -98,9 +98,14 @@ dsh harmony enable-provider my-provider --profile web
 dsh harmony patch-order show --profile web
 dsh harmony patch-order move my-provider/optional-patch --before other-provider/base --profile web
 dsh harmony patch-order auto --profile web
+dsh harmony provider-order move my-provider --after base-provider --profile web
+dsh harmony inspect target-package --patch my-provider/optional-patch --summary --profile web
+dsh harmony reload my-provider --profile web
 ```
 
-当 profile 大于终端窗口时，TUI 会始终保持选中 Provider 可见。Patch 顺序违反约束时，`patch-order show` 以状态码 `1` 退出；`patch-order auto` 会尽量保留当前相对顺序，同时把约束冲突降到最少。
+在 TUI 中按 `Tab` 可切换 Provider 和 Patch 视图。Patch 视图支持单项及整组启停、Patch 排序、自动排序、运行状态和简要检查；profile 大于终端窗口时，两个视图都会保持选中项可见。
+
+健康状态或顺序约束失败时，`status`、`patch-order show` 和 `provider-order show` 都以状态码 `1` 退出。`patch-order auto` 与 `provider-order auto` 会尽量保留当前相对顺序，同时把约束冲突降到最少。`inspect --summary` 不输出变换源码，`--patch <key>` 只保留指定 Patch 触及的目标。`reload` 只能用于正在运行的 Host。
 
 ## Patch 模型
 

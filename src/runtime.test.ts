@@ -8,7 +8,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { pathToFileURL } from 'node:url'
 import { afterAll, beforeAll, expect, test } from 'vitest'
 import type { HarmonyService } from './index.js'
-import { readHarmonyRuntime, updateHarmonyProfile } from './control.js'
+import { readHarmonyRuntime, reloadHarmonyRuntime, updateHarmonyProfile } from './control.js'
 import {
   beginProfileUpdate,
   beginPluginUpdate,
@@ -2236,6 +2236,12 @@ module.exports = {
   })
   expect(JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8')).disabled)
     .toEqual(['non-web-provider/non-web'])
+  expect(await reloadHarmonyRuntime(profile, 'non-web-target')).toMatchObject({
+    profile: { dir: profile },
+    reload: { state: 'succeeded' },
+  })
+  await expect(reloadHarmonyRuntime(profile, 'missing-plugin')).rejects.toThrow('unknown plugin')
 
   for (const dispose of disposers.reverse()) await dispose()
+  expect(await reloadHarmonyRuntime(profile)).toBeUndefined()
 })

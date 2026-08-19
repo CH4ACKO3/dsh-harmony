@@ -30,6 +30,8 @@ export interface HarmonyPatchUpdateResult {
   patches: HarmonyInspection['patches']
 }
 
+export type HarmonyRuntimeReloadResult = HarmonyRuntimeStatus
+
 function addressFile(profileDir: string): string {
   return join(profileDir, RUNTIME_FILE)
 }
@@ -115,6 +117,18 @@ export async function updateRuntimePatch(
     body: JSON.stringify(input),
   })
   return response === undefined ? undefined : responseJson<HarmonyPatchUpdateResult>(response)
+}
+
+export async function reloadHarmonyRuntime(
+  profileDir: string,
+  provider?: string,
+): Promise<HarmonyRuntimeReloadResult | undefined> {
+  const response = await runtimeRequest(profileDir, '/dsh-harmony/reload', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(provider === undefined ? {} : { provider }),
+  })
+  return response === undefined ? undefined : responseJson<HarmonyRuntimeReloadResult>(response)
 }
 
 function sameOrder(left: string[] | undefined, right: string[]): boolean {

@@ -128,6 +128,26 @@ module.exports = [{
   assert.match(inspection.stdout, /--- final ---/)
   assert.match(inspection.stdout, /export const answer = 2/)
 
+  const inspectionSummary = spawnSync(process.execPath, [
+    join(embeddedHarmony, 'lib/bin.js'),
+    'harmony', 'inspect', 'large-target', '--patch', 'large-provider/large-output',
+    '--summary', '--profile', 'web',
+  ], { encoding: 'utf8', env: cliEnv })
+  assert.equal(inspectionSummary.status, 0, inspectionSummary.stderr)
+  assert.match(inspectionSummary.stdout, /large-provider\/large-output\(1\)/)
+  assert.doesNotMatch(inspectionSummary.stdout, /--- original ---/)
+
+  const inspectionSummaryJson = spawnSync(process.execPath, [
+    join(embeddedHarmony, 'lib/bin.js'),
+    'harmony', 'inspect', 'large-target', '--patch', 'large-provider/large-output',
+    '--summary', '--json', '--profile', 'web',
+  ], { encoding: 'utf8', env: cliEnv })
+  assert.equal(inspectionSummaryJson.status, 0, inspectionSummaryJson.stderr)
+  assert.equal(JSON.parse(inspectionSummaryJson.stdout).targets[0].original, undefined)
+  assert.deepEqual(JSON.parse(inspectionSummaryJson.stdout).targets[0].steps[0], {
+    key: 'large-provider/large-output', matches: 1,
+  })
+
   const status = spawnSync(process.execPath, [
     join(embeddedHarmony, 'lib/bin.js'),
     'harmony', 'status', '--json', '--profile', 'web',
@@ -140,6 +160,28 @@ module.exports = [{
   assert.equal(statusBody.targets, undefined)
   assert.equal(statusBody.patches[0].key, 'large-provider/large-output')
   assert.equal(statusBody.patches[0].matches, 1)
+
+  const shownProviders = spawnSync(process.execPath, [
+    join(embeddedHarmony, 'lib/bin.js'),
+    'harmony', 'provider-order', 'show', '--json', '--profile', 'web',
+  ], { encoding: 'utf8', env: cliEnv })
+  assert.equal(shownProviders.status, 0, shownProviders.stderr)
+  assert.deepEqual(JSON.parse(shownProviders.stdout).order, ['large-provider', 'large-target'])
+
+  const movedProviders = spawnSync(process.execPath, [
+    join(embeddedHarmony, 'lib/bin.js'),
+    'harmony', 'provider-order', 'move', 'large-target',
+    '--before', 'large-provider', '--json', '--profile', 'web',
+  ], { encoding: 'utf8', env: cliEnv })
+  assert.equal(movedProviders.status, 0, movedProviders.stderr)
+  assert.deepEqual(JSON.parse(movedProviders.stdout).order, ['large-target', 'large-provider'])
+
+  const sortedProviders = spawnSync(process.execPath, [
+    join(embeddedHarmony, 'lib/bin.js'),
+    'harmony', 'provider-order', 'auto', '--json', '--profile', 'web',
+  ], { encoding: 'utf8', env: cliEnv })
+  assert.equal(sortedProviders.status, 0, sortedProviders.stderr)
+  assert.deepEqual(JSON.parse(sortedProviders.stdout).order, ['large-target', 'large-provider'])
 
   const shownOrder = spawnSync(process.execPath, [
     join(embeddedHarmony, 'lib/bin.js'),
@@ -171,6 +213,13 @@ module.exports = [{
   assert.notEqual(invalidOrder.status, 0)
   assert.match(invalidOrder.stdout, /1 order violation/)
 
+  const unhealthyStatus = spawnSync(process.execPath, [
+    join(embeddedHarmony, 'lib/bin.js'),
+    'harmony', 'status', '--profile', 'web',
+  ], { encoding: 'utf8', env: cliEnv })
+  assert.notEqual(unhealthyStatus.status, 0)
+  assert.match(unhealthyStatus.stdout, /warning  Patch large-provider\/large-output must precede large-provider\/stable-export/)
+
   const sortedOrder = spawnSync(process.execPath, [
     join(embeddedHarmony, 'lib/bin.js'),
     'harmony', 'patch-order', 'auto', '--json', '--profile', 'web',
@@ -192,6 +241,13 @@ module.exports = [{
   assert.deepEqual(JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8')).disabled, [
     'large-provider/large-output',
   ])
+
+  const offlineReload = spawnSync(process.execPath, [
+    join(embeddedHarmony, 'lib/bin.js'),
+    'harmony', 'reload', '--profile', 'web',
+  ], { encoding: 'utf8', env: cliEnv })
+  assert.notEqual(offlineReload.status, 0)
+  assert.match(offlineReload.stderr, /reload requires a live Host/)
 
   const unknown = spawnSync(process.execPath, [
     join(embeddedHarmony, 'lib/bin.js'),

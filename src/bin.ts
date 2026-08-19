@@ -17,11 +17,18 @@ import {
 import {
   inspectHarmonyRuntime,
   readHarmonyRuntime,
+  reloadHarmonyRuntime,
   updateHarmonyProfile,
   updateRuntimePatch,
 } from './control.js'
-import { createHarmonyProfileView } from './profile.js'
-import { autoSortPatchOrder, patchOrderViolations, type HarmonyPatchOrderItem } from './order.js'
+import { createHarmonyProfileView, HARMONY_PLUGIN, pinHarmonyOrder } from './profile.js'
+import {
+  autoSortOrder,
+  autoSortPatchOrder,
+  orderViolations,
+  patchOrderViolations,
+  type HarmonyPatchOrderItem,
+} from './order.js'
 import { runHarmonyTui } from './tui.js'
 import type { HarmonyInspection, HarmonyProfileUpdateResult } from './index.js'
 
@@ -32,7 +39,7 @@ const writeStdout = (output: string) => new Promise<void>((resolve, reject) => {
 const HARMONY_HELP = `Usage:
   dsh harmony [--profile <name>]
   dsh harmony status [--json] [--profile <name>]
-  dsh harmony inspect [package] [--file <file>] [--json] [--profile <name>]
+  dsh harmony inspect [package] [--file <file>] [--patch <key>] [--summary] [--json] [--profile <name>]
   dsh harmony enable <provider/id> [--json] [--profile <name>]
   dsh harmony disable <provider/id> [--json] [--profile <name>]
   dsh harmony enable-provider <provider> [--json] [--profile <name>]
@@ -40,6 +47,10 @@ const HARMONY_HELP = `Usage:
   dsh harmony patch-order show [--json] [--profile <name>]
   dsh harmony patch-order move <patch> (--before|--after) <patch> [--json] [--profile <name>]
   dsh harmony patch-order auto [--json] [--profile <name>]
+  dsh harmony provider-order show [--json] [--profile <name>]
+  dsh harmony provider-order move <provider> (--before|--after) <provider> [--json] [--profile <name>]
+  dsh harmony provider-order auto [--json] [--profile <name>]
+  dsh harmony reload [provider] [--json] [--profile <name>]
 `
 
 function fail(message: string): never {
@@ -140,24 +151,44 @@ if (isHarmonyCommand) {
       for (const conflict of status.profile.pluginConflicts) {
         await writeStdout(`warning  ${conflict.left.package}@${conflict.left.version} conflicts with ${conflict.right.package}@${conflict.right.version}\n`)
       }
+      for (const violation of status.profile.orderViolations) {
+        await writeStdout(`warning  ${violation.before} must precede ${violation.after} (declared by ${violation.declaredBy})\n`)
+      }
+      for (const violation of status.profile.patchOrderViolations) {
+        await writeStdout(`warning  Patch ${violation.before} must precede ${violation.after} (declared by ${violation.declaredBy})\n`)
+      }
+      if (status.mode === 'live' && status.reload.state === 'failed') {
+        await writeStdout(`failed   reload sequence ${status.reload.sequence}: ${status.reload.error ?? 'unknown error'}\n`)
+      }
       for (const patch of status.patches) {
         const targets = patch.targets.map(target => `${target.package}/${target.files.join('|')}`).join(', ')
         await writeStdout(`${patch.state.padEnd(8)} ${patch.key} [${patch.kind}] -> ${patch.file ?? targets}\n`)
         await writeStdout(`  loaded=${patch.loaded} matches=${patch.matches} generation=${patch.generation}${patch.error === undefined ? '' : `\n  ${patch.error}`}\n`)
       }
     }
-    process.exit(status.patches.some(patch => patch.state === 'failed') ? 1 : 0)
+    const unhealthy = status.patches.some(patch => patch.state === 'failed')
+      || status.profile.orderViolations.length > 0
+      || status.profile.patchOrderViolations.length > 0
+      || status.mode === 'live' && status.reload.state === 'failed'
+    process.exit(unhealthy ? 1 : 0)
   }
 
   if (command === 'inspect') {
     let packageName: string | undefined
     let file: string | undefined
+    let patchKey: string | undefined
+    const summary = harmonyArgs.includes('--summary')
     for (let index = 1; index < harmonyArgs.length; index += 1) {
       const argument = harmonyArgs[index]!
-      if (argument === '--json') continue
+      if (argument === '--json' || argument === '--summary') continue
       if (argument === '--file') {
         file = harmonyArgs[++index]
         if (file === undefined || file.startsWith('-')) fail('--file requires a value')
+        continue
+      }
+      if (argument === '--patch') {
+        patchKey = harmonyArgs[++index]
+        if (patchKey === undefined || patchKey.startsWith('-')) fail('--patch requires a value')
         continue
       }
       if (argument.startsWith('-')) fail(`unknown option ${JSON.stringify(argument)}`)
@@ -165,16 +196,36 @@ if (isHarmonyCommand) {
       packageName = argument
     }
     const live = await inspectHarmonyRuntime(profileDir!, packageName, file)
-    const inspection = live ?? (() => {
+    const inspected = live ?? (() => {
       const offline = offlineInspection()
       return {
         patches: offline.patches,
         targets: getPatchInspections(packageName, file),
       }
     })()
+    if (patchKey !== undefined && !inspected.patches.some(patch => patch.key === patchKey)) {
+      fail(`unknown Patch ${JSON.stringify(patchKey)}`)
+    }
+    const inspection = patchKey === undefined ? inspected : {
+      patches: inspected.patches.filter(patch => patch.key === patchKey),
+      targets: inspected.targets.filter(target => target.steps.some(step => step.key === patchKey)),
+    }
     if (inspection.targets.length === 0) fail('no matching Patch target was found')
     if (json) {
-      await writeStdout(`${JSON.stringify(inspection, null, 2)}\n`)
+      const output = summary ? {
+        patches: inspection.patches,
+        targets: inspection.targets.map(target => ({
+          package: target.package,
+          file: target.file,
+          steps: target.steps.map(step => ({ key: step.key, matches: step.matches })),
+        })),
+      } : inspection
+      await writeStdout(`${JSON.stringify(output, null, 2)}\n`)
+    } else if (summary) {
+      for (const target of inspection.targets) {
+        await writeStdout(`${target.package}/${target.file}\n`)
+        await writeStdout(`  ${target.steps.map(step => `${step.key}(${step.matches})`).join(' -> ')}\n`)
+      }
     } else {
       for (const target of inspection.targets) {
         await writeStdout(`=== ${target.package}/${target.file} ===\n`)
@@ -184,6 +235,19 @@ if (isHarmonyCommand) {
       }
     }
     process.exit(0)
+  }
+
+  if (command === 'reload') {
+    const positional = harmonyArgs.slice(1).filter(argument => argument !== '--json')
+    if (positional.length > 1 || positional[0]?.startsWith('-')) fail('reload accepts at most one provider')
+    if (harmonyArgs.slice(1).some(argument => argument.startsWith('-') && argument !== '--json')) {
+      fail('reload accepts only --json')
+    }
+    const result = await reloadHarmonyRuntime(profileDir!, positional[0])
+    if (result === undefined) fail('profile is not running; reload requires a live Host')
+    if (json) await writeStdout(`${JSON.stringify(result, null, 2)}\n`)
+    else await writeStdout(`Harmony reload ${result.reload.state} (sequence ${result.reload.sequence})\n`)
+    process.exit(result.reload.state === 'failed' || result.patches.some(patch => patch.state === 'failed') ? 1 : 0)
   }
 
   if (['enable', 'disable', 'enable-provider', 'disable-provider'].includes(command ?? '')) {
@@ -288,6 +352,67 @@ if (isHarmonyCommand) {
     } else {
       await writeStdout(`Patch order ${action === 'auto' ? 'auto-sorted' : 'updated'} (${result.mode}); ${violations.length} violation${violations.length === 1 ? '' : 's'} remain\n`)
     }
+    process.exit(0)
+  }
+
+  if (command === 'provider-order') {
+    const action = harmonyArgs[1]
+    if (!['show', 'move', 'auto'].includes(action ?? '')) {
+      fail('provider-order requires one of show, move, or auto')
+    }
+    const live = await readHarmonyRuntime(profileDir!)
+    const status = live ?? offlineInspection()
+    const violationsOf = (order: string[]) => orderViolations(order, status.profile.plugins)
+
+    if (action === 'show') {
+      if (harmonyArgs.some((argument, index) => index > 1 && argument !== '--json')) {
+        fail('provider-order show accepts only --json')
+      }
+      const violations = violationsOf(status.profile.order)
+      if (json) {
+        await writeStdout(`${JSON.stringify({
+          mode: live === undefined ? 'offline' : 'live',
+          order: status.profile.order,
+          violations,
+        }, null, 2)}\n`)
+      } else {
+        for (const [index, name] of status.profile.order.entries()) {
+          await writeStdout(`${String(index + 1).padStart(3)}  ${name}${name === HARMONY_PLUGIN ? ' [pinned]' : ''}\n`)
+        }
+        await writeStdout(`\n${violations.length} order violation${violations.length === 1 ? '' : 's'} (${live === undefined ? 'offline' : 'live'})\n`)
+      }
+      process.exit(violations.length > 0 ? 1 : 0)
+    }
+
+    let next: string[]
+    if (action === 'auto') {
+      if (harmonyArgs.some((argument, index) => index > 1 && argument !== '--json')) {
+        fail('provider-order auto accepts only --json')
+      }
+      next = pinHarmonyOrder(autoSortOrder(status.profile.order, status.profile.plugins))
+    } else {
+      const moveArgs = harmonyArgs.slice(2).filter(argument => argument !== '--json')
+      const [name, relation, reference] = moveArgs
+      if (moveArgs.length !== 3 || !['--before', '--after'].includes(relation ?? '')
+        || name === undefined || name.startsWith('-') || reference === undefined || reference.startsWith('-')) {
+        fail('provider-order move requires <provider> and exactly one of --before <provider> or --after <provider>')
+      }
+      if (name === reference) fail('a Provider cannot be moved relative to itself')
+      if (name === HARMONY_PLUGIN) fail(`${HARMONY_PLUGIN} is pinned first`)
+      if (reference === HARMONY_PLUGIN && relation === '--before') fail(`${HARMONY_PLUGIN} is pinned first`)
+      const known = new Set(status.profile.order)
+      if (!known.has(name)) fail(`unknown Provider ${JSON.stringify(name)}`)
+      if (!known.has(reference)) fail(`unknown Provider ${JSON.stringify(reference)}`)
+      next = status.profile.order.filter(item => item !== name)
+      const referenceIndex = next.indexOf(reference)
+      next.splice(referenceIndex + (relation === '--before' ? 0 : 1), 0, name)
+      next = pinHarmonyOrder(next)
+    }
+
+    const result = await updateHarmonyProfile(profileDir!, { order: next })
+    const violations = violationsOf(next)
+    if (json) await writeStdout(`${JSON.stringify({ result, order: next, violations }, null, 2)}\n`)
+    else await writeStdout(`Provider order ${action === 'auto' ? 'auto-sorted' : 'updated'} (${result.mode}); ${violations.length} violation${violations.length === 1 ? '' : 's'} remain\n`)
     process.exit(0)
   }
 

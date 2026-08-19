@@ -1,12 +1,19 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
+import { EventEmitter } from 'node:events'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from 'vitest'
 import { publishRuntimeAddress, updateHarmonyProfile, updateRuntimeProfile } from './control.js'
 import { synchronizeProfile } from './runtime.js'
-import { renderHarmonyTui, saveHarmonyTuiOrder } from './tui.js'
+import {
+  renderHarmonyPatchTui,
+  renderHarmonyTui,
+  runHarmonyTui,
+  saveHarmonyTuiOrder,
+  saveHarmonyTuiPatchOrder,
+} from './tui.js'
 
 test('TUI shows provider order, declarations, and the conflicting pair', () => {
   const output = renderHarmonyTui({
@@ -64,6 +71,43 @@ test('TUI keeps the selected provider visible within the terminal height', () =>
   expect(output).toContain('项在下方')
 })
 
+test('TUI Patch view shows runtime state and keeps the selected Patch visible', () => {
+  const patchOrder = Array.from({ length: 20 }, (_, index) => `provider/patch-${index}`)
+  const output = renderHarmonyPatchTui({
+    dir: '/profiles/tui',
+    order: ['provider'],
+    patchOrder,
+    disabled: ['provider/patch-2'],
+    plugins: [{
+      name: 'provider', version: '1.0.0', description: '', harmony: true, patches: ['patch.cjs'],
+      patchCount: 20, before: [], after: [], conflicts: {}, author: '', contributors: [], homepage: '', bugs: '', license: '',
+    }],
+    orderViolations: [],
+    patchOrderViolations: [],
+    pluginConflicts: [],
+  }, patchOrder.map((key, index) => ({
+    key,
+    id: `patch-${index}`,
+    owner: 'provider',
+    index,
+    targets: [{ package: 'target', files: ['lib/index.js'] }],
+    kind: 'source',
+    state: index === 2 ? 'disabled' : index === 12 ? 'failed' : 'bound',
+    status: index === 2 ? 'disabled' : index === 12 ? 'error' : 'normal',
+    loaded: true,
+    matches: 1,
+    generation: 4,
+    declaration: '/provider/patch.cjs',
+    ...(index === 12 ? { error: 'selector mismatch' } : {}),
+  })), 12, '', 13)
+
+  expect(output.split('\n')).toHaveLength(13)
+  expect(output).toContain('provider/patch-12')
+  expect(output).toContain('selector mismatch')
+  expect(output).toContain('项在上方')
+  expect(output).toContain('项在下方')
+})
+
 test('TUI saves an order even when one Patch will be skipped', async () => {
   const profile = mkdtempSync(join(tmpdir(), 'dsh-harmony-tui-'))
   const reader = join(profile, 'node_modules', 'reader')
@@ -101,6 +145,29 @@ module.exports = {
   expect(JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8')).order).toEqual(['remover', 'reader', 'tui-target'])
   await saveHarmonyTuiOrder(profile, ['reader', 'remover', 'tui-target'])
   expect(JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8')).order).toEqual(['reader', 'remover', 'tui-target'])
+  await saveHarmonyTuiPatchOrder(profile, ['remover/remove', 'reader/read'])
+  expect(JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8')).patchOrder).toEqual(['remover/remove', 'reader/read'])
+
+  const input = Object.assign(new EventEmitter(), {
+    isTTY: true,
+    setRawMode() {},
+    resume() {},
+  })
+  let screen = ''
+  const output = Object.assign(new EventEmitter(), {
+    isTTY: true,
+    rows: 18,
+    columns: 100,
+    write(value: string) { screen += value; return true },
+  })
+  const running = runHarmonyTui(profile, input as any, output as any)
+  await new Promise<void>(resolve => setImmediate(resolve))
+  input.emit('keypress', '\t', { name: 'tab' })
+  input.emit('keypress', ' ', { name: 'space' })
+  await expect.poll(() => screen).toContain('remover/remove 已停用')
+  input.emit('keypress', 'q', { name: 'q' })
+  await running
+  expect(JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8')).disabled).toEqual(['remover/remove'])
   rmSync(profile, { recursive: true })
 })
 
