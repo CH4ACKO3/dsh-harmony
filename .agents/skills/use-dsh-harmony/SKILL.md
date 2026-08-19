@@ -176,9 +176,12 @@ dsh harmony status --json --profile web
 dsh harmony inspect some-dsh-plugin --file lib/index.js --profile web
 dsh harmony disable my-harmony-provider/optional-patch --profile web
 dsh harmony enable-provider my-harmony-provider --profile web
+dsh harmony patch-order show --profile web
+dsh harmony patch-order move my-harmony-provider/optional-patch --after another-provider/base --profile web
+dsh harmony patch-order auto --profile web
 ```
 
-Require all intended Patches to reach `bound`. Treat `status` exit code `1` as failure. Use `inspect` to compare the original source, every ordered intermediate result, and the final source. Confirm hot reload or restart behavior through the target feature.
+Require all intended Patches to reach `bound`. Treat `status` exit code `1` as failure. `patch-order show` also exits `1` when constraints are violated. Use `inspect` to compare the original source, every ordered intermediate result, and the final source. Confirm hot reload or restart behavior through the target feature.
 
 Use Settings or `dsh harmony` to reorder and enable or disable Patches. Do not edit `$DSH_HOME/profiles/<name>/harmony.json` while the profile is running; UI and CLI changes are preflighted and committed transactionally.
 

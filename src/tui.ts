@@ -16,45 +16,96 @@ function relation(provider: HarmonyProfileView['plugins'][number]): string {
   return parts.join('；')
 }
 
-export function renderHarmonyTui(profile: HarmonyProfileView, selected: number, message: string): string {
+export function renderHarmonyTui(
+  profile: HarmonyProfileView,
+  selected: number,
+  message: string,
+  height = Number.POSITIVE_INFINITY,
+): string {
   const byName = new Map(profile.plugins.map(plugin => [plugin.name, plugin]))
   const violations = orderViolations(profile.order, profile.plugins)
   const conflicting = new Set(violations.flatMap(item => [item.before, item.after]))
   const incompatible = new Set(profile.pluginConflicts.flatMap(item => [item.left.package, item.right.package]))
-  const lines = [
+  const header = [
     `${ESC}1mDSH Harmony${ESC}0m  profile: ${profile.dir.split('/').at(-1)}`,
     '',
     '↑/↓ 选择   u/d 移动   a 自动排序   r 同步插件   q 退出',
     '',
   ]
-  if (profile.order.length === 0) lines.push('  没有已安装的 Harmony patch 插件。')
-  profile.order.forEach((name, index) => {
+  const providerBlocks = profile.order.map((name, index) => {
     const provider = byName.get(name)!
     const cursor = index === selected ? `${ESC}36m▶${ESC}0m` : ' '
     const warning = conflicting.has(name)
       ? `${ESC}31m!${ESC}0m`
       : incompatible.has(name) ? `${ESC}33m!${ESC}0m` : ' '
-    lines.push(`${cursor} ${String(index + 1).padStart(2)} ${warning} ${name}${name === HARMONY_PLUGIN ? '  [固定]' : ''}`)
+    const block = [`${cursor} ${String(index + 1).padStart(2)} ${warning} ${name}${name === HARMONY_PLUGIN ? '  [固定]' : ''}`]
     const detail = relation(provider)
-    if (detail.length > 0) lines.push(`       ${ESC}2m${detail}${ESC}0m`)
+    if (detail.length > 0) block.push(`       ${ESC}2m${detail}${ESC}0m`)
+    return block
   })
-  lines.push('')
+  const footer = ['']
   if (violations.length === 0) {
-    lines.push(`${ESC}32m顺序约束已全部满足。${ESC}0m`)
+    footer.push(`${ESC}32m顺序约束已全部满足。${ESC}0m`)
   } else {
-    lines.push(`${ESC}31m${violations.length} 条顺序约束无法由当前列表满足：${ESC}0m`)
+    footer.push(`${ESC}31m${violations.length} 条顺序约束无法由当前列表满足：${ESC}0m`)
     for (const violation of violations) {
-      lines.push(`  - ${violation.before} 必须在 ${violation.after} 前（由 ${violation.declaredBy} 声明）`)
+      footer.push(`  - ${violation.before} 必须在 ${violation.after} 前（由 ${violation.declaredBy} 声明）`)
     }
   }
   if (profile.pluginConflicts.length > 0) {
-    lines.push('', `${ESC}33m${profile.pluginConflicts.length} 条插件冲突（仅警告，插件仍保持启用）：${ESC}0m`)
+    footer.push('', `${ESC}33m${profile.pluginConflicts.length} 条插件冲突（仅警告，插件仍保持启用）：${ESC}0m`)
     for (const item of profile.pluginConflicts) {
-      lines.push(`  - ${item.left.package}@${item.left.version} 与 ${item.right.package}@${item.right.version} 不兼容（由 ${item.declaredBy.join(', ')} 声明）`)
+      footer.push(`  - ${item.left.package}@${item.left.version} 与 ${item.right.package}@${item.right.version} 不兼容（由 ${item.declaredBy.join(', ')} 声明）`)
     }
   }
-  if (message.length > 0) lines.push('', `${ESC}33m${message}${ESC}0m`)
-  return lines.join('\n')
+  if (message.length > 0) footer.push('', `${ESC}33m${message}${ESC}0m`)
+
+  if (!Number.isFinite(height)) {
+    return [...header, ...(providerBlocks.length === 0 ? ['  没有已安装的 Harmony patch 插件。'] : providerBlocks.flat()), ...footer].join('\n')
+  }
+
+  const compactFooter = [
+    '',
+    violations.length === 0
+      ? `${ESC}32m顺序约束已全部满足。${ESC}0m`
+      : `${ESC}31m${violations.length} 条顺序约束未满足。${ESC}0m`,
+    ...(profile.pluginConflicts.length === 0
+      ? [] : [`${ESC}33m${profile.pluginConflicts.length} 条插件冲突（仅警告）。${ESC}0m`]),
+    ...(message.length === 0 ? [] : [`${ESC}33m${message}${ESC}0m`]),
+  ]
+  const available = Math.max(1, Math.floor(height) - header.length - compactFooter.length)
+  if (providerBlocks.length === 0) {
+    return [...header, '  没有已安装的 Harmony patch 插件。', ...compactFooter]
+      .slice(0, Math.max(1, Math.floor(height))).join('\n')
+  }
+  selected = Math.max(0, Math.min(selected, providerBlocks.length - 1))
+  let best: { start: number; end: number; count: number; balance: number } | undefined
+  for (let start = 0; start <= selected; start += 1) {
+    let blockLines = 0
+    for (let end = start + 1; end <= providerBlocks.length; end += 1) {
+      blockLines += providerBlocks[end - 1]!.length
+      if (end <= selected) continue
+      const total = blockLines + (start > 0 ? 1 : 0) + (end < providerBlocks.length ? 1 : 0)
+      if (total > available) continue
+      const candidate = {
+        start,
+        end,
+        count: end - start,
+        balance: Math.abs(selected - start - (end - selected - 1)),
+      }
+      if (best === undefined || candidate.count > best.count
+        || candidate.count === best.count && candidate.balance < best.balance) best = candidate
+    }
+  }
+  const visible = best === undefined
+    ? [providerBlocks[selected]![0]!]
+    : [
+        ...(best.start > 0 ? [`  … ${best.start} 项在上方`] : []),
+        ...providerBlocks.slice(best.start, best.end).flat(),
+        ...(best.end < providerBlocks.length ? [`  … ${providerBlocks.length - best.end} 项在下方`] : []),
+      ]
+  return [...header, ...visible, ...compactFooter]
+    .slice(0, Math.max(1, Math.floor(height))).join('\n')
 }
 
 export async function saveHarmonyTuiOrder(profileDir: string, order: string[]): Promise<HarmonyProfileUpdateResult> {
@@ -80,7 +131,7 @@ export async function runHarmonyTui(
   let message = ''
   let saving = false
   const draw = (): void => {
-    output.write(`${ESC}?25l${ESC}2J${ESC}H${renderHarmonyTui(profile, selected, message)}`)
+    output.write(`${ESC}?25l${ESC}2J${ESC}H${renderHarmonyTui(profile, selected, message, output.rows)}`)
   }
   const persist = async (order: string[], action: string): Promise<boolean> => {
     saving = true
@@ -116,6 +167,7 @@ export async function runHarmonyTui(
   await new Promise<void>((resolve) => {
     const finish = (): void => {
       input.off('keypress', onKey)
+      output.off('resize', draw)
       input.setRawMode(false)
       output.write(`${ESC}?25h${ESC}2J${ESC}H`)
       resolve()
@@ -137,5 +189,6 @@ export async function runHarmonyTui(
       draw()
     }
     input.on('keypress', onKey)
+    output.on('resize', draw)
   })
 }

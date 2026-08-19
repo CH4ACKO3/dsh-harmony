@@ -21,6 +21,7 @@ import {
   updateRuntimePatch,
 } from './control.js'
 import { createHarmonyProfileView } from './profile.js'
+import { autoSortPatchOrder, patchOrderViolations, type HarmonyPatchOrderItem } from './order.js'
 import { runHarmonyTui } from './tui.js'
 import type { HarmonyInspection, HarmonyProfileUpdateResult } from './index.js'
 
@@ -36,6 +37,9 @@ const HARMONY_HELP = `Usage:
   dsh harmony disable <provider/id> [--json] [--profile <name>]
   dsh harmony enable-provider <provider> [--json] [--profile <name>]
   dsh harmony disable-provider <provider> [--json] [--profile <name>]
+  dsh harmony patch-order show [--json] [--profile <name>]
+  dsh harmony patch-order move <patch> (--before|--after) <patch> [--json] [--profile <name>]
+  dsh harmony patch-order auto [--json] [--profile <name>]
 `
 
 function fail(message: string): never {
@@ -106,6 +110,13 @@ if (isHarmonyCommand) {
       targets: getPatchInspections(),
     }
   }
+  const patchOrderItems = (patches: HarmonyInspection['patches']): HarmonyPatchOrderItem[] => patches.map(patch => ({
+    key: patch.key,
+    owner: patch.owner,
+    index: patch.index,
+    ...(patch.before === undefined ? {} : { before: patch.before }),
+    ...(patch.after === undefined ? {} : { after: patch.after }),
+  }))
 
   if (command === '--help' || command === '-h' || command === 'help') {
     if (harmonyArgs.length !== 1) fail('help takes no arguments')
@@ -215,6 +226,68 @@ if (isHarmonyCommand) {
     }
     if (json) await writeStdout(`${JSON.stringify({ result, patches }, null, 2)}\n`)
     else await writeStdout(`${provider ? 'Provider' : 'Patch'} ${target} ${enabled ? 'enabled' : 'disabled'} (${result.mode})\n`)
+    process.exit(0)
+  }
+
+  if (command === 'patch-order') {
+    const action = harmonyArgs[1]
+    if (!['show', 'move', 'auto'].includes(action ?? '')) {
+      fail('patch-order requires one of show, move, or auto')
+    }
+    const live = await readHarmonyRuntime(profileDir!)
+    const status = live ?? offlineInspection()
+    const items = patchOrderItems(status.patches)
+    const violationsOf = (order: string[]) => patchOrderViolations(order, items, status.profile.plugins)
+
+    if (action === 'show') {
+      if (harmonyArgs.some((argument, index) => index > 1 && argument !== '--json')) {
+        fail('patch-order show accepts only --json')
+      }
+      const violations = violationsOf(status.profile.patchOrder)
+      if (json) {
+        await writeStdout(`${JSON.stringify({
+          mode: live === undefined ? 'offline' : 'live',
+          patchOrder: status.profile.patchOrder,
+          violations,
+        }, null, 2)}\n`)
+      } else {
+        for (const [index, key] of status.profile.patchOrder.entries()) {
+          await writeStdout(`${String(index + 1).padStart(3)}  ${key}\n`)
+        }
+        await writeStdout(`\n${violations.length} order violation${violations.length === 1 ? '' : 's'} (${live === undefined ? 'offline' : 'live'})\n`)
+      }
+      process.exit(violations.length > 0 ? 1 : 0)
+    }
+
+    let next: string[]
+    if (action === 'auto') {
+      if (harmonyArgs.some((argument, index) => index > 1 && argument !== '--json')) {
+        fail('patch-order auto accepts only --json')
+      }
+      next = autoSortPatchOrder(status.profile.patchOrder, items, status.profile.plugins)
+    } else {
+      const moveArgs = harmonyArgs.slice(2).filter(argument => argument !== '--json')
+      const [key, relation, reference] = moveArgs
+      if (moveArgs.length !== 3 || !['--before', '--after'].includes(relation ?? '')
+        || key === undefined || key.startsWith('-') || reference === undefined || reference.startsWith('-')) {
+        fail('patch-order move requires <patch> and exactly one of --before <patch> or --after <patch>')
+      }
+      if (key === reference) fail('a Patch cannot be moved relative to itself')
+      const known = new Set(status.profile.patchOrder)
+      if (!known.has(key)) fail(`unknown Patch ${JSON.stringify(key)}`)
+      if (!known.has(reference)) fail(`unknown Patch ${JSON.stringify(reference)}`)
+      next = status.profile.patchOrder.filter(item => item !== key)
+      const referenceIndex = next.indexOf(reference)
+      next.splice(referenceIndex + (relation === '--before' ? 0 : 1), 0, key)
+    }
+
+    const result = await updateHarmonyProfile(profileDir!, { patchOrder: next })
+    const violations = violationsOf(next)
+    if (json) {
+      await writeStdout(`${JSON.stringify({ result, patchOrder: next, violations }, null, 2)}\n`)
+    } else {
+      await writeStdout(`Patch order ${action === 'auto' ? 'auto-sorted' : 'updated'} (${result.mode}); ${violations.length} violation${violations.length === 1 ? '' : 's'} remain\n`)
+    }
     process.exit(0)
   }
 

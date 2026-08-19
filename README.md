@@ -91,7 +91,12 @@ dsh harmony --profile web
 dsh harmony status --json --profile web
 dsh harmony disable my-provider/optional-patch --profile web
 dsh harmony enable-provider my-provider --profile web
+dsh harmony patch-order show --profile web
+dsh harmony patch-order move my-provider/optional-patch --before other-provider/base --profile web
+dsh harmony patch-order auto --profile web
 ```
+
+The TUI keeps the selected provider visible when a profile is larger than the terminal. `patch-order show` exits with status `1` when order constraints are violated; `patch-order auto` minimizes violations while preserving the current order where possible.
 
 ## Patch model
 

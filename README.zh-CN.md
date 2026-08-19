@@ -95,7 +95,12 @@ dsh harmony --profile web
 dsh harmony status --json --profile web
 dsh harmony disable my-provider/optional-patch --profile web
 dsh harmony enable-provider my-provider --profile web
+dsh harmony patch-order show --profile web
+dsh harmony patch-order move my-provider/optional-patch --before other-provider/base --profile web
+dsh harmony patch-order auto --profile web
 ```
+
+当 profile 大于终端窗口时，TUI 会始终保持选中 Provider 可见。Patch 顺序违反约束时，`patch-order show` 以状态码 `1` 退出；`patch-order auto` 会尽量保留当前相对顺序，同时把约束冲突降到最少。
 
 ## Patch 模型
 

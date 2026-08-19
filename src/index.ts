@@ -136,6 +136,8 @@ export interface HarmonyPatchStatus {
   id: string
   owner: string
   index: number
+  before?: string[]
+  after?: string[]
   targets: HarmonyPatchTarget[]
   kind: 'source' | 'semantic' | 'loader' | 'composite'
   operation?: HarmonySemanticOperation

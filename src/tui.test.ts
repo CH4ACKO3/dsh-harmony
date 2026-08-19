@@ -31,6 +31,39 @@ test('TUI shows provider order, declarations, and the conflicting pair', () => {
   expect(output).toContain('仅警告，插件仍保持启用')
 })
 
+test('TUI keeps the selected provider visible within the terminal height', () => {
+  const order = Array.from({ length: 30 }, (_, index) => `provider-${index}`)
+  const output = renderHarmonyTui({
+    dir: '/profiles/tui',
+    order,
+    patchOrder: [],
+    disabled: [],
+    plugins: order.map(name => ({
+      name,
+      version: '1.0.0',
+      description: '',
+      harmony: true,
+      patches: ['patch.cjs'],
+      before: [],
+      after: [],
+      conflicts: {},
+      author: '',
+      contributors: [],
+      homepage: '',
+      bugs: '',
+      license: '',
+    })),
+    orderViolations: [],
+    patchOrderViolations: [],
+    pluginConflicts: [],
+  }, 17, '', 12)
+
+  expect(output.split('\n')).toHaveLength(12)
+  expect(output).toContain('provider-17')
+  expect(output).toContain('项在上方')
+  expect(output).toContain('项在下方')
+})
+
 test('TUI saves an order even when one Patch will be skipped', async () => {
   const profile = mkdtempSync(join(tmpdir(), 'dsh-harmony-tui-'))
   const reader = join(profile, 'node_modules', 'reader')

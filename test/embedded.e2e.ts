@@ -95,13 +95,20 @@ try {
     dsh: { harmony: { patches: ['./patch.cjs'] } },
   }))
   writeFileSync(join(provider, 'patch.cjs'), `
-module.exports = {
+module.exports = [{
   id: 'large-output',
+  before: ['large-provider'],
   target: { package: 'large-target', version: '1.0.0', files: ['lib/client.js'] },
   select: 'NumericLiteral[text="1"]',
   expect: 1,
   apply({ node, sourceFile, edit }) { edit.overwrite(node.getStart(sourceFile), node.getEnd(), '2') },
-}
+}, {
+  id: 'stable-export',
+  target: { package: 'large-target', version: '1.0.0', files: ['lib/client.js'] },
+  select: 'VariableDeclaration',
+  expect: 1,
+  apply() {},
+}]
 `)
   const cliEnv = {
     ...process.env,
@@ -129,10 +136,51 @@ module.exports = {
   const statusBody = JSON.parse(status.stdout)
   assert.equal(statusBody.mode, 'offline')
   assert.equal(statusBody.profile.dir, profile)
-  assert.equal(statusBody.patches.length, 1)
+  assert.equal(statusBody.patches.length, 2)
   assert.equal(statusBody.targets, undefined)
   assert.equal(statusBody.patches[0].key, 'large-provider/large-output')
   assert.equal(statusBody.patches[0].matches, 1)
+
+  const shownOrder = spawnSync(process.execPath, [
+    join(embeddedHarmony, 'lib/bin.js'),
+    'harmony', 'patch-order', 'show', '--json', '--profile', 'web',
+  ], { encoding: 'utf8', env: cliEnv })
+  assert.equal(shownOrder.status, 0, shownOrder.stderr)
+  assert.deepEqual(JSON.parse(shownOrder.stdout).patchOrder, [
+    'large-provider/large-output',
+    'large-provider/stable-export',
+  ])
+
+  const movedOrder = spawnSync(process.execPath, [
+    join(embeddedHarmony, 'lib/bin.js'),
+    'harmony', 'patch-order', 'move', 'large-provider/stable-export',
+    '--before', 'large-provider/large-output', '--json', '--profile', 'web',
+  ], { encoding: 'utf8', env: cliEnv })
+  assert.equal(movedOrder.status, 0, movedOrder.stderr)
+  assert.equal(JSON.parse(movedOrder.stdout).result.mode, 'offline')
+  assert.deepEqual(JSON.parse(movedOrder.stdout).patchOrder, [
+    'large-provider/stable-export',
+    'large-provider/large-output',
+  ])
+  assert.equal(JSON.parse(movedOrder.stdout).violations.length, 1)
+
+  const invalidOrder = spawnSync(process.execPath, [
+    join(embeddedHarmony, 'lib/bin.js'),
+    'harmony', 'patch-order', 'show', '--profile', 'web',
+  ], { encoding: 'utf8', env: cliEnv })
+  assert.notEqual(invalidOrder.status, 0)
+  assert.match(invalidOrder.stdout, /1 order violation/)
+
+  const sortedOrder = spawnSync(process.execPath, [
+    join(embeddedHarmony, 'lib/bin.js'),
+    'harmony', 'patch-order', 'auto', '--json', '--profile', 'web',
+  ], { encoding: 'utf8', env: cliEnv })
+  assert.equal(sortedOrder.status, 0, sortedOrder.stderr)
+  assert.deepEqual(JSON.parse(sortedOrder.stdout).patchOrder, [
+    'large-provider/large-output',
+    'large-provider/stable-export',
+  ])
+  assert.deepEqual(JSON.parse(sortedOrder.stdout).violations, [])
 
   const disabled = spawnSync(process.execPath, [
     join(embeddedHarmony, 'lib/bin.js'),

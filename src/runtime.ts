@@ -282,6 +282,10 @@ function freshStatus(registered: RegisteredPatch): HarmonyPatchStatus {
     id: registered.declarationPatch.id,
     owner: registered.owner,
     index: registered.index,
+    ...(registered.declarationPatch.before === undefined
+      ? {} : { before: [...registered.declarationPatch.before] }),
+    ...(registered.declarationPatch.after === undefined
+      ? {} : { after: [...registered.declarationPatch.after] }),
     targets: registered.members.map(patch => patch.target),
     kind: simple === undefined ? 'composite' : patchKind(simple),
     operation: semantic?.operation,
