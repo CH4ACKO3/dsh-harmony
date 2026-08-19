@@ -138,6 +138,7 @@ assert.equal(dictionaries.zh.intro, '拖动插件封面移动整堆；展开后�
 assert.equal(dictionaries.zh.patchPage, 'Patch 状态')
 assert.equal(dictionaries.zh.runtimeDesktopTitle, 'Desktop 尚未通过 Harmony 启动')
 assert.match(dictionaries.zh.runtimeDesktopBody, /安装全局启动器不会修改 Desktop 内置 Host/)
+assert.equal(dictionaries.zh.ignoreOnce, '本次忽略')
 assert.equal(dictionaries.en.runtimeDesktopTitle, 'Desktop is not running through Harmony')
 assert.equal(dictionaries.zh.reloadStarting, 'Harmony 正在重载')
 assert.equal(dictionaries.zh.reloadSucceeded, 'Harmony 重载成功')
@@ -185,6 +186,10 @@ assert.doesNotMatch(clientSource, /orderConflict/)
 assert.doesNotMatch(clientSource, /dshHarmonyBadge/)
 assert.match(clientSource, /dshHarmonySettingsPanel:has\(\.dshHarmonyPage\)\{width:1200px\}/)
 assert.match(clientSource, /dshHarmonySettingsPanel\{transition:width \.28s/)
+const primaryButtonHeight = clientSource.match(/\n\.dshHarmonyButton\{[^}]*height:(\d+)px/)?.[1]
+const secondaryButtonHeight = clientSource.match(/\n\.dshHarmonySecondary\{[^}]*height:(\d+)px/)?.[1]
+assert.equal(primaryButtonHeight, '30')
+assert.equal(secondaryButtonHeight, primaryButtonHeight)
 assert.match(clientSource, /grid-template-columns:minmax\(250px,450px\) minmax\(0,1fr\)/)
 assert.match(clientSource, /grid-template-columns:minmax\(260px,450px\) minmax\(0,1fr\)/)
 assert.match(clientSource, /coverRefs\.current\.get\(node\.id\) \?\? event\.currentTarget/)

@@ -106,13 +106,12 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
 .dshHarmonyPatchChain span{padding:3px 7px;border-radius:6px;background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-secondary);font-size:10px;line-height:16px}
 .dshHarmonyFooter{flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:30px}
 .dshHarmonyFooterActions{display:flex;align-items:center;gap:8px}
-.dshHarmonyFooterActions .dshHarmonySecondary{height:30px}
 .dshHarmonyHint{margin:0;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:18px}
 .dshHarmonyButton{min-width:68px;height:30px;padding:0 12px;border:0;border-radius:8px;background:var(--dsw-alias-state-business-primary);color:#fff;font:inherit;font-size:13px;cursor:pointer}
 .dshHarmonyButton:hover:not(:disabled){filter:brightness(.96)}
 .dshHarmonyButton:focus-visible,.dshHarmonySecondary:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px}
 .dshHarmonyButton:disabled{cursor:default;background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-tertiary)}
-.dshHarmonySecondary{height:34px;padding:0 12px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;cursor:pointer}
+.dshHarmonySecondary{height:30px;padding:0 12px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;cursor:pointer}
 .dshHarmonySecondary:disabled{cursor:default;color:var(--dsw-alias-label-tertiary);opacity:.62}
 .dshHarmonyStatus{margin:auto;color:var(--dsw-alias-label-tertiary);font-size:13px}
 .dshHarmonyError{color:var(--dsw-alias-state-error-primary)}
@@ -225,7 +224,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         install: '安装',
         installRestart: '安装并重启',
         removePlugin: '移除插件',
-        ignoreOnce: '忽略（一次）',
+        ignoreOnce: '本次忽略',
         done: '完成',
       },
       en: {
