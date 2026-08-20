@@ -182,13 +182,13 @@ The palette is inherited from DeepSeek Harness theme aliases so light and dark t
 
 ## Layout
 
-The Harmony surface fills the available Settings content area as a vertical workspace: tabs and title are fixed-height context, the list/detail workspace absorbs remaining height, and Save stays at the footer. Desktop uses a compact ordering list beside a more generous read-only detail region; the list takes two parts of the width and detail takes three.
+The Harmony surface fills the available Settings content area as a vertical workspace: tabs and title are fixed-height context, the list/detail workspace absorbs remaining height, and Save stays at the footer. Desktop uses a compact ordering list beside a more generous detail region; the list takes two parts of the width and detail takes three.
 
 List containers use compact vertical rhythm and internal scrolling. Each Patch occupies a single ordinary list position. Expansion lays every Patch card directly into that same sequence at full width and spacing; there is no nested indentation, branch line, or persistent plugin header.
 
-At the compact breakpoint (680px and below), switch to ordering-first mode. Reduce the Settings navigation to a 52px accessible icon rail while retaining programmatic labels, hide introductory copy and the read-only detail region, compact the list, and make Save full-width. Do not squeeze desktop inspection content below the ordering list.
+At the compact breakpoint (680px and below), switch to ordering-first mode. Reduce the Settings navigation to a 52px accessible icon rail while retaining programmatic labels, hide introductory copy and the detail region, compact the list, and make Save full-width. Do not squeeze desktop inspection content below the ordering list.
 
-**The Ordering-First Rule.** When horizontal space is constrained, preserve the complete ordering workflow and remove read-only detail from the visible composition first.
+**The Ordering-First Rule.** When horizontal space is constrained, preserve the ordering list and its direct manipulation before the desktop detail region.
 
 **The One-Dimensional Rule.** Regardless of viewport or grouping, present Patch order as one vertical sequence with ordinary list semantics.
 
@@ -225,9 +225,10 @@ Collapsed stack geometry is defined by card bottom corners, not by a shared card
 
 - **Shape:** Compact controls with gently curved corners.
 - **Primary:** The Save action uses the business accent with white text and becomes a neutral disabled control when there is no unsaved order.
-- **Undo:** Place a secondary Undo action immediately beside Save. Enable both only while the draft order differs from the last saved order; Undo restores that saved flat order, removes transient merge barriers, and returns cards to their default collapsed grouping with the same layout motion used by reordering.
+- **Undo:** Place a secondary Undo action immediately beside Save. Enable both while the draft order or Patch enablement differs from the last saved profile; Undo restores both, removes transient merge barriers, and returns cards to their default collapsed grouping with the same layout motion used by reordering.
 - **Hover / Focus:** Hover is a slight brightness change; keyboard focus uses a visible business-accent outline. Keep movement out of button feedback.
 - **Secondary:** Border-and-surface buttons carry cancellation, retry, and non-primary dialog actions. Destructive text uses the error role.
+- **Enablement:** Plugin details expose one plugin-wide Patch enable/disable action; Patch details expose one individual action. These actions update the same draft as ordering and take effect only through Save; Undo restores their saved values. The plugin-wide action changes only its independent `plugin/*` flag and preserves every individual Patch flag. The Patch Status tab exposes no mutation controls.
 
 ### Cards / Containers
 
@@ -237,23 +238,34 @@ Collapsed stack geometry is defined by card bottom corners, not by a shared card
 - **Border:** A subtle host border defines list wells, stack headers, and Patch cards.
 - **Internal Padding:** Dense but breathable; Patch rows maintain a 48px minimum height and stack headers a 56px minimum height on desktop.
 
+### Patch Status Monitor
+
+- **Runtime Language:** Present a successfully bound Patch as enabled; binding remains an implementation fact, not the user-facing state name.
+- **Patch List:** Keep the monitor list compact and narrower than the ordering list. Each row shows the Patch name and state on the first line, its provider plugin on the second, and its target on the third.
+- **Source Disclosure:** Original and final source are collapsed by default. Each intermediate Patch result is independently collapsible and opens by default.
+- **Source Sections:** Present original source, intermediate results, and final source as one continuous document separated by horizontal rules. Expanded content uses the same fine divider below its heading instead of placing every section in a separate card; sticky handoffs overlap that shared divider on one pixel rather than stacking two rules.
+- **Source Navigation:** Expanded section headings show the target language and file, keep their lower divider while pinned directly against the detail viewport's inner top border, and remain visible while that section is in view. The detail pane owns vertical scrolling; source bodies scroll only horizontally, with an always-visible synchronized horizontal rail pinned directly against the inner bottom border while its section is in view. The rail supports both track clicks and direct thumb dragging.
+- **Intermediate Diff:** Compare every intermediate result with the immediately preceding source. Show added and removed lines with paired old/new line numbers, retain three context lines around changes, and compress unchanged spans without hiding the step identity or match count.
+
 ### Patch Ordering List
 
-The persisted and draft ordering model is a single flat `patchOrder`. Rendering may reconcile that sequence into standalone Patch rows, contiguous same-owner stacks, and a transient drag placeholder, but only the flat sequence is authoritative.
+The persisted and draft ordering model is a single flat `patchOrder`. Rendering reconciles that sequence into contiguous same-owner stacks and a transient drag placeholder, but only the flat sequence is authoritative. A one-Patch run is the smallest stack, not a separate node type.
 
-- **Standalone Patch:** A Patch whose adjacent neighbors have different owners remains a normal list item and a direct placement target.
+- **One-Patch Stack:** Any contiguous run containing one Patch first renders as a plugin card showing its package, version, `1 Patch`, Patch name, and state. Activating it reveals the Patch card in place without changing order; activating that Patch then selects its Patch details and keeps the Patch face visible while selected. `Escape` may explicitly return it to the plugin face. It never renders a redundant stacked underlay.
 - **Collapsed Stack:** Two or more contiguous Patches with the same owner render as N real stacked Patch cards plus one plugin cover by default. The cover displays owner, Patch count, and inclusive global range.
 - **Expanded Stack:** Releasing a cover without crossing the eight-pixel drag threshold directly expands the stack, even when pointer jitter prevents the browser from synthesizing a click. Suppress only the duplicate click from that same pointer cycle; keyboard click remains available. Expansion rapidly fades the cover and slides the same Patch cards into full-width, ordinary list positions. There is no nested visual level or remaining plugin header, and expansion never changes order.
 - **Collapsed Hit Area:** The entire visible stack silhouette, from the plugin cover through the bottom edge of the deepest Patch card, acts as the cover's pointer target. The semantic button remains the plugin cover itself.
-- **Selection:** Plugin covers and individual Patch cards select independently for detail content. While a selection exists, every card and stack from its plugin remains full width and visually unchanged, while cards and stacks from other plugins contract to 75% width from the left edge. Only the exact selected cover or Patch keeps the same one-pixel inset edge used by hover; sibling cards from the selected plugin receive no additional edge. Selecting a Patch replaces the right-hand plugin summary with that Patch's identity, declaration, target, state, and runtime facts.
+- **Selection:** Plugin covers and individual Patch cards select independently for detail content. While a selection exists, every card and stack from its plugin remains full width and visually unchanged, while cards and stacks from other plugins contract to 75% width from the left edge. Only the exact selected cover or Patch keeps the same one-pixel inset edge used by hover; sibling cards from the selected plugin receive no additional edge. Selecting a Patch replaces the right-hand plugin summary with that Patch's declared description, identity, declaration, target, state, and runtime facts.
 - **Detail Attribution:** Plugin and Patch details both show the provider package's author using the same package-scope-aware formatting.
-- **Recall Gesture:** Holding either a plugin cover or a Patch for 620ms without crossing the drag threshold gathers every global Patch owned by that plugin at the held card's position, restores declaration order within the plugin, removes internal merge barriers, and leaves one collapsed stack. Crossing the drag threshold cancels recall immediately; an ordinary click is never delayed.
-- **Dynamic Reconciliation:** After any move, regroup only the contiguous runs produced by the current flat order. A Patch moved across plugin boundaries may become standalone, join another same-owner run, or split its former run.
-- **Drag Scope:** Drag one expanded or standalone Patch, or drag a collapsed plugin cover to move every Patch in that contiguous stack as one ordered group. Both operations mutate the same flat `patchOrder`; the cover does not create a separate plugin-order model.
-- **Top-Card Targets:** Hit testing includes only cards visually on top: standalone and expanded Patch cards plus collapsed plugin covers. The real Patch cards underneath a collapsed cover never become hidden drop targets.
+- **Status Link:** Place a `View details` secondary action immediately after the Patch enable/disable action in ordering details. It opens the same Patch in the read-only status monitor.
+- **Detail Scroll Edge:** Keep one compact spacing step between detail content and its vertical scrollbar so previews and text never sit under the browser-owned scroll surface.
+- **Recall Gesture:** Holding either a plugin cover or a Patch for 620ms without crossing the drag threshold gathers every global Patch owned by that plugin at the held card's position, restores declaration order within the plugin, removes internal merge barriers, and continues the same press as a drag of the collapsed stack. Releasing without moving leaves the stack at its recalled position. Crossing the drag threshold before recall cancels it immediately; an ordinary click is never delayed.
+- **Dynamic Reconciliation:** After any move, regroup only the contiguous runs produced by the current flat order. A Patch moved across plugin boundaries may become a one-Patch stack, join another same-owner run, or split its former run.
+- **Drag Scope:** Drag one expanded Patch, or drag a collapsed plugin cover to move every Patch in that contiguous stack as one ordered group. Both operations mutate the same flat `patchOrder`; the cover does not create a separate plugin-order model.
+- **Top-Card Targets:** Hit testing includes only cards visually on top: expanded Patch cards and collapsed plugin covers. The real Patch cards underneath a collapsed cover never become hidden drop targets.
 - **Drop Intent:** When the pointer is not over a top card, project to the nearest global gap, separate the adjacent rendered items, and show one fluorescent-blue insertion line. When the pointer is over a top card, suppress the line and resolve to that card's nearest edge on release. Drag preview and placeholder state are transient view data and are never persisted.
 - **Collapsed Drop Target:** Hovering a collapsed destination stack while dragging expands it after 460ms so the user can choose an exact position inside the run.
-- **Automatic Collapse:** Compute one vertical band over the entire contiguous same-owner run, including expanded sub-runs, standalone cards, and already-collapsed sub-stacks. While the pointer Y remains between that run's minimum top and maximum bottom, keep every expanded key open regardless of horizontal position. Once outside, collapse after 520ms unless the pointer returns.
+- **Automatic Collapse:** Compute one vertical band over the entire contiguous same-owner run, including expanded and already-collapsed sub-stacks. Keep every expanded key open while the pointer Y remains between that run's minimum top and maximum bottom, or while the run contains the selected Patch. Once neither condition holds, collapse after 520ms unless the pointer returns. `Escape` remains an explicit collapse action.
 - **Merge Barrier:** When adjacent same-owner cards could reconcile into a stack, evaluate all transient boundaries in the contiguous run as one unit. Keep every boundary while the pointer Y remains inside the run's combined vertical band, and remove all of them only after it leaves. Any collapsed stack already present stays collapsed rather than opening as a side effect.
 - **Release Safety:** Finalize drag from a window-level captured release event. Resolve the destination while the active drag context still exists, then clear preview, placeholder, and dragging state, so a fast release outside the list behaves identically to a long drag.
 - **Scrolling:** Keep native wheel scrolling inside the list during drag. When the pointer is outside the list, route wheel deltas to the list so long-distance placement remains possible without ending the drag.
@@ -279,7 +291,7 @@ The persisted and draft ordering model is a single flat `patchOrder`. Rendering 
 ### Navigation
 
 - **Desktop:** Preserve the official Settings navigation, labels, spacing, and selected-item treatment.
-- **Panel Width:** Preserve the host Settings panel's original 800px width for every non-Harmony destination. While Harmony content is active, expand the same panel to 1200px, capped by the host viewport maximum, and smoothly return to 800px when another destination is selected. Use a 450px left list column at full desktop width, allowed to contract to its 250px ordering or 260px status minimum when space is constrained; the detail column consumes the remainder.
+- **Panel Width:** Preserve the host Settings panel's original 800px width for every non-Harmony destination. While Harmony content is active, expand the same panel to 1200px, capped by the host viewport maximum, and smoothly return to 800px when another destination is selected. The ordering list may grow to 450px; keep the status list narrower at no more than 320px and let either list contract to its 250px ordering or 220px status minimum when space is constrained. The detail column consumes the remainder.
 - **Mobile:** Use an accessible icon rail rather than a new navigation pattern. Hide visible labels with a screen-reader-preserving technique and keep each target large enough to operate.
 - **Harmony Mark:** Render as a monochrome mask inheriting the current text color, so it responds naturally to host theme and state.
 

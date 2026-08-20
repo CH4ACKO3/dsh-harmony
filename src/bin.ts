@@ -1,9 +1,7 @@
 #!/usr/bin/env node
 
-import { existsSync, readFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   discoverProfile,
   currentProfile,
@@ -11,7 +9,6 @@ import {
   getPatchOrderViolations,
   getPatchStatuses,
   inspectPatchTargets,
-  installFileTransforms,
   installModuleHooks,
 } from './runtime.js'
 import {
@@ -32,8 +29,9 @@ import {
 import { runHarmonyTui } from './tui.js'
 import { terminalLocale, terminalText } from './locale.js'
 import type { HarmonyInspection, HarmonyProfileUpdateResult } from './index.js'
+import { initProfile, PROFILE_TEMPLATES, resolveProfileDir } from './dsh.js'
+import { launchDsh } from './launcher.js'
 
-const require = createRequire(import.meta.url)
 const locale = terminalLocale()
 const text = (english: string, chinese: string): string => terminalText(locale, english, chinese)
 const label = (value: string, chinese: Record<string, string>): string => locale === 'zh' ? chinese[value] ?? value : value
@@ -71,20 +69,8 @@ function fail(message: string): never {
   process.stderr.write(`${text('error', '错误')}: ${message}\n`)
   process.exit(1)
 }
-const configuredDshEntry = process.env.DSH_HARMONY_DSH_ENTRY
-const dshEntry = configuredDshEntry === undefined
-  ? require.resolve('@deepseek-ai/dsh/lib/bin.js')
-  : resolve(configuredDshEntry)
-const dshRequire = createRequire(dshEntry)
-process.env.DSH_HARMONY_ACTIVE = '1'
-const { initProfile, PROFILE_TEMPLATES, resolveProfileDir } = await import(
-  pathToFileURL(dshRequire.resolve('@deepseek-ai/dsh-app-boot')).href
-)
-
 const args = process.argv.slice(2)
-const isPluginCommand = args[0] === 'plugin'
 const isHarmonyCommand = args[0] === 'harmony'
-const isDefaultDump = args.includes('--dump-default-config')
 const profileOption = args.findIndex(argument => argument === '--profile' || argument.startsWith('--profile='))
 if (isHarmonyCommand && profileOption !== -1 && args[profileOption] === '--profile'
   && (args[profileOption + 1] === undefined || args[profileOption + 1]!.startsWith('-'))) {
@@ -101,11 +87,6 @@ const profile = args[0] === 'web' || isHarmonyCommand && declaredProfile === und
   ? 'web'
   : declaredProfile
 const profileDir = profile === undefined ? undefined : resolveProfileDir(profile)
-const overlay = join(dirname(dirname(fileURLToPath(import.meta.url))), 'harmony.patch.yml')
-const hasHarmonyBundle = profileDir !== undefined && existsSync(join(profileDir, 'package.json'))
-  && (JSON.parse(readFileSync(join(profileDir, 'package.json'), 'utf8')) as {
-    dsh?: { profile?: { bundles?: string[] } }
-  }).dsh?.profile?.bundles?.includes('dsh-harmony') === true
 
 if (isHarmonyCommand) {
   if (!existsSync(join(profileDir!, 'package.json')) && PROFILE_TEMPLATES[profile!] !== undefined) {
@@ -170,11 +151,23 @@ if (isHarmonyCommand) {
       await writeStdout(`${JSON.stringify(status, null, 2)}\n`)
     } else {
       await writeStdout(`${text('profile', '配置')}  ${status.profile.dir.split('/').at(-1)} (${modeLabel(status.mode)})\n`)
-      for (const conflict of status.profile.pluginConflicts) {
-        await writeStdout(text(
-          `warning  ${conflict.left.package}@${conflict.left.version} conflicts with ${conflict.right.package}@${conflict.right.version}\n`,
-          `警告  ${conflict.left.package}@${conflict.left.version} 与 ${conflict.right.package}@${conflict.right.version} 冲突\n`,
-        ))
+      for (const finding of status.profile.compatibility) {
+        if (finding.kind === 'conflict') {
+          await writeStdout(text(
+            `warning  ${finding.left.package}@${finding.left.version} conflicts with ${finding.right.package}@${finding.right.version}\n`,
+            `警告  ${finding.left.package}@${finding.left.version} 与 ${finding.right.package}@${finding.right.version} 冲突\n`,
+          ))
+        } else if (finding.kind === 'requirement') {
+          await writeStdout(text(
+            `warning  ${finding.owner.package}@${finding.owner.version} requires ${finding.target.package}@${finding.target.range} (${finding.reason})\n`,
+            `警告  ${finding.owner.package}@${finding.owner.version} 需要 ${finding.target.package}@${finding.target.range}（${finding.reason}）\n`,
+          ))
+        } else {
+          await writeStdout(text(
+            `linked   ${finding.owner.package}@${finding.owner.version} integrates with ${finding.target.package}@${finding.target.version}\n`,
+            `联动  ${finding.owner.package}@${finding.owner.version} 与 ${finding.target.package}@${finding.target.version}\n`,
+          ))
+        }
       }
       for (const violation of status.profile.orderViolations) {
         await writeStdout(text(
@@ -330,17 +323,9 @@ if (isHarmonyCommand) {
       ))
       const disabled = new Set(offline.profile.disabled)
       if (provider) {
-        for (const patch of matches) disabled.delete(patch.key)
         if (enabled) disabled.delete(`${target}/*`)
         else disabled.add(`${target}/*`)
       } else {
-        const patch = matches[0]!
-        if (disabled.has(`${patch.owner}/*`)) {
-          fail(text(
-            `Provider ${JSON.stringify(patch.owner)} is disabled; enable it first`,
-            `Provider ${JSON.stringify(patch.owner)} 已停用；请先启用它`,
-          ))
-        }
         if (enabled) disabled.delete(target)
         else disabled.add(target)
       }
@@ -511,21 +496,4 @@ if (isHarmonyCommand) {
   process.exit(0)
 }
 
-installModuleHooks()
-installFileTransforms()
-
-if (!isPluginCommand && profileDir !== undefined && !existsSync(join(profileDir, 'package.json'))
-  && profile !== undefined && PROFILE_TEMPLATES[profile] !== undefined) {
-  initProfile(profileDir, PROFILE_TEMPLATES[profile])
-}
-
-if (!isPluginCommand && profileDir !== undefined && existsSync(join(profileDir, 'package.json'))) {
-  discoverProfile(profileDir)
-}
-
-if (!isPluginCommand && !isDefaultDump && profile !== undefined && !hasHarmonyBundle) {
-  if (args[0] === 'web') process.argv.splice(3, 0, '--patch', overlay)
-  else process.argv.splice(2, 0, '--patch', overlay)
-}
-
-await import(pathToFileURL(dshEntry).href)
+await launchDsh(args, profile, profileDir)

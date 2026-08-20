@@ -13,7 +13,7 @@ const require = createRequire(import.meta.url)
 
 const target = {
   package: '@deepseek-ai/dsh-client-ui-example',
-  version: '0.1.0-rc.7',
+  version: '0.1.0-rc.8',
   file: 'lib/client.js',
 }
 
@@ -46,6 +46,7 @@ describe('React source patches', () => {
     const source = '(0, react_jsx_runtime.jsx)(primitives.BrandWordmark, { compact: true }, "brand")'
     const patch = element({
       id: 'brand',
+      description: 'Replaces the built-in brand mark.',
       target,
       select: { component: 'BrandWordmark' },
       expect: 1,
@@ -57,6 +58,7 @@ describe('React source patches', () => {
     })
 
     expect(patch.target).toEqual(target)
+    expect(patch.description).toBe('Replaces the built-in brand mark.')
     expect(patch.before).toEqual(['late-provider'])
     expect(applyPatch(source, patch)).toBe(
       '(0, react_jsx_runtime.jsx)(require("example-plugin")["CustomBrand"], { compact: true }, "brand")',

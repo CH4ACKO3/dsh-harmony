@@ -183,6 +183,7 @@ function sourcePatch(
   const rangesByEdit = new WeakMap<object, Array<{ start: number; end: number }>>()
   return {
     id: options.id,
+    ...(options.description === undefined ? {} : { description: options.description }),
     target: {
       package: options.target.package,
       version: options.target.version,

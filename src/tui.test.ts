@@ -21,10 +21,11 @@ test('TUI shows provider order, declarations, and the conflicting pair', () => {
     order: ['late', 'early'],
     disabled: [],
     plugins: [
-      { name: 'early', dir: '/early', version: '1.0.0', patches: ['patch.cjs'], before: ['late'], after: [], conflicts: { late: '*' } },
-      { name: 'late', dir: '/late', version: '2.0.0', patches: ['patch.cjs'], before: [], after: [], conflicts: {} },
+      { name: 'early', dir: '/early', version: '1.0.0', patches: ['patch.cjs'], before: ['late'], after: [], compatibility: { requires: {}, conflicts: { late: '*' }, integrates: {} } },
+      { name: 'late', dir: '/late', version: '2.0.0', patches: ['patch.cjs'], before: [], after: [], compatibility: { requires: {}, conflicts: {}, integrates: {} } },
     ],
-    pluginConflicts: [{
+    compatibility: [{
+      kind: 'conflict',
       left: { package: 'early', version: '1.0.0', entryIds: ['early'] },
       right: { package: 'late', version: '2.0.0', entryIds: ['late'] },
       declaredBy: ['early'],
@@ -34,8 +35,8 @@ test('TUI shows provider order, declarations, and the conflicting pair', () => {
   expect(output).toContain('配置: web')
   expect(output).toContain('early 必须在 late 前')
   expect(output).toContain('前于 late')
-  expect(output).toContain('early@1.0.0 与 late@2.0.0 不兼容（由 early 声明）')
-  expect(output).toContain('仅警告，插件仍保持启用')
+  expect(output).toContain('early@1.0.0 与 late@2.0.0 冲突（由 early 声明）')
+  expect(output).toContain('兼容性警告（Harmony 不改变插件状态）')
 })
 
 test('TUI keeps the selected provider visible within the terminal height', () => {
@@ -53,7 +54,7 @@ test('TUI keeps the selected provider visible within the terminal height', () =>
       patches: ['patch.cjs'],
       before: [],
       after: [],
-      conflicts: {},
+      compatibility: { requires: {}, conflicts: {}, integrates: {} },
       author: '',
       contributors: [],
       homepage: '',
@@ -62,7 +63,7 @@ test('TUI keeps the selected provider visible within the terminal height', () =>
     })),
     orderViolations: [],
     patchOrderViolations: [],
-    pluginConflicts: [],
+    compatibility: [],
   }, 17, '', 12, 'en')
 
   expect(output.split('\n')).toHaveLength(12)
@@ -80,11 +81,11 @@ test('TUI Patch view shows runtime state and keeps the selected Patch visible', 
     disabled: ['provider/patch-2'],
     plugins: [{
       name: 'provider', version: '1.0.0', description: '', harmony: true, patches: ['patch.cjs'],
-      patchCount: 20, before: [], after: [], conflicts: {}, author: '', contributors: [], homepage: '', bugs: '', license: '',
+      patchCount: 20, before: [], after: [], compatibility: { requires: {}, conflicts: {}, integrates: {} }, author: '', contributors: [], homepage: '', bugs: '', license: '',
     }],
     orderViolations: [],
     patchOrderViolations: [],
-    pluginConflicts: [],
+    compatibility: [],
   }, patchOrder.map((key, index) => ({
     key,
     id: `patch-${index}`,
@@ -192,7 +193,7 @@ test('the unified profile API sends live updates through the published runtime a
         order: mismatch ? ['unexpected'] : input.order ?? ['a'],
         patchOrder: input.patchOrder ?? [],
         disabled: [...new Set(input.disabled ?? [])],
-        plugins: [], orderViolations: [], patchOrderViolations: [], pluginConflicts: [],
+        plugins: [], orderViolations: [], patchOrderViolations: [], compatibility: [],
       },
     }))
   })

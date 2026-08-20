@@ -66,7 +66,7 @@ window.__ModuleLoader__.load({
 .dshHarmonyPatchCard[data-status=error] .dshHarmonyOrderState{background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 78%,transparent)}
 .dshHarmonyPatchCard[data-status=disabled] .dshHarmonyOrderState{background:color-mix(in srgb,var(--dsw-alias-label-tertiary) 72%,transparent)}
 .dshHarmonyStackState{box-sizing:border-box;border:1px solid color-mix(in srgb,var(--dsw-alias-label-primary) 20%,transparent)}
-.dshHarmonyDetail{min-width:0;min-height:0;display:flex;flex-direction:column;gap:12px;overflow-y:auto}
+.dshHarmonyDetail{min-width:0;min-height:0;display:flex;flex-direction:column;gap:12px;overflow-y:auto;padding-inline-end:10px}
 .dshHarmonyPreview{position:relative;flex:none;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:12px;background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-tertiary)}
 .dshHarmonyPreviewImage{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .dshHarmonyPreviewImageDark{display:none}
@@ -86,27 +86,63 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
 .dshHarmonyFacts a{color:var(--dsw-alias-state-business-primary);text-decoration:none}
 .dshHarmonyFacts a:hover{text-decoration:underline}
 .dshHarmonyFacts a:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px}
+.dshHarmonyDetailActions{display:flex;flex-wrap:wrap;gap:8px;padding-top:2px}
 .dshHarmonyPatchPage{flex:1;min-height:0;display:flex;flex-direction:column;gap:14px}
-.dshHarmonyPatchWorkspace{flex:1;min-height:0;display:grid;grid-template-columns:minmax(260px,450px) minmax(0,1fr);gap:14px}
+.dshHarmonyPatchWorkspace{flex:1;min-height:0;display:grid;grid-template-columns:minmax(220px,320px) minmax(0,1fr);gap:14px}
 .dshHarmonyPatchList{min-height:0;overflow:auto;display:flex;flex-direction:column;gap:5px;margin:0;padding:6px;list-style:none;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-layer-1)}
-.dshHarmonyPatchRow{width:100%;display:grid;grid-template-columns:8px minmax(0,1fr);gap:9px;padding:9px;border:0;border-radius:9px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.dshHarmonyPatchRow{width:100%;display:grid;grid-template-columns:8px minmax(0,1fr);align-items:start;gap:9px;padding:9px;border:0;border-radius:9px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .dshHarmonyPatchRow:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.dshHarmonyPatchRow[aria-selected=true]{background:var(--dsw-specific-sidebar-nav-item-active)}
+.dshHarmonyPatchRow[aria-current=true]{background:var(--dsw-specific-sidebar-nav-item-active)}
 .dshHarmonyPatchRow:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}
 .dshHarmonyPatchState{width:8px;height:8px;margin-top:6px;border-radius:50%;background:var(--dsw-alias-label-tertiary)}
 .dshHarmonyPatchState[data-state=bound]{background:var(--dsw-alias-state-business-primary)}
 .dshHarmonyPatchState[data-state=failed]{background:var(--dsw-alias-state-error-primary)}
 .dshHarmonyPatchState[data-state=disabled]{background:var(--dsw-alias-label-tertiary)}
-.dshHarmonyPatchKey{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;line-height:19px;font-weight:600}
-.dshHarmonyPatchTarget{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:17px}
+.dshHarmonyPatchRowText{min-width:0;display:flex;flex-direction:column;gap:1px}
+.dshHarmonyPatchRowTitle{min-width:0;display:flex;align-items:baseline;gap:7px}
+.dshHarmonyPatchKey{min-width:0;flex:1;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;line-height:19px;font-weight:600}
+.dshHarmonyPatchRowStatus{flex:none;color:var(--dsw-alias-label-secondary);font-size:10px;line-height:17px}
+.dshHarmonyPatchProvider,.dshHarmonyPatchTarget{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:17px}
+.dshHarmonyPatchTarget{font-size:10px}
 .dshHarmonyPatchDetail{min-width:0;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:12px;padding:14px;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-layer-1)}
 .dshHarmonyPatchHeader{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
-.dshHarmonyPatchCode{min-height:160px;overflow:auto;margin:0;padding:12px;border-radius:9px;background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-secondary);font:11px/18px ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre}
+.dshHarmonySourceSections{--dsh-harmony-source-divider:color-mix(in srgb,var(--dsw-alias-label-primary) 10%,var(--dsw-alias-bg-layer-1));min-width:0;display:flex;flex-direction:column}
+.dshHarmonySourceSection{flex:none;border-top:1px solid var(--dsh-harmony-source-divider)}
+.dshHarmonySourceSection:last-child{border-bottom:1px solid var(--dsh-harmony-source-divider)}
+.dshHarmonySourceSummary{position:sticky;top:-14px;z-index:4;width:100%;display:grid;grid-template-columns:6px minmax(0,1fr);column-gap:8px;padding:9px 4px;border:0;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;font-weight:600;line-height:18px;text-align:left;cursor:pointer}
+.dshHarmonySourceSummary::before{content:'';grid-row:1;align-self:center;width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);transition:transform .16s ease-out}
+.dshHarmonySourceSection[data-open=true]>.dshHarmonySourceSummary{box-shadow:0 1px 0 var(--dsh-harmony-source-divider)}
+.dshHarmonySourceSection[data-open=true]>.dshHarmonySourceSummary::before{transform:rotate(45deg)}
+.dshHarmonySourceSummary:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}
+.dshHarmonySourceTitle{grid-column:2;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshHarmonySourceMeta{grid-column:2;display:none;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary);font-size:10px;font-weight:400;line-height:16px}
+.dshHarmonySourceSection[data-open=true] .dshHarmonySourceMeta{display:block}
+.dshHarmonyHorizontalViewport{overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+.dshHarmonyHorizontalViewport::-webkit-scrollbar{height:0}
+.dshHarmonyPatchCode{margin:0;padding:12px 6px;color:var(--dsw-alias-label-secondary);font:11px/18px ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre}
+.dshHarmonyDiff{display:grid;font:11px/18px ui-monospace,SFMono-Regular,Menlo,monospace}
+.dshHarmonyHorizontalRail{position:sticky;bottom:-14px;z-index:3;height:12px;overflow-x:scroll;overflow-y:hidden;background:var(--dsw-alias-bg-layer-1);scrollbar-width:none;cursor:pointer;touch-action:none}
+.dshHarmonyHorizontalRail::-webkit-scrollbar{height:0}
+.dshHarmonyHorizontalSpacer{display:block;height:1px}
+.dshHarmonyHorizontalThumb{position:absolute;top:2px;left:0;height:8px;border-radius:8px;background:color-mix(in srgb,var(--dsw-alias-label-tertiary) 32%,transparent);cursor:grab;transition:background .14s ease-out}
+.dshHarmonyHorizontalThumb:hover{background:color-mix(in srgb,var(--dsw-alias-label-tertiary) 48%,transparent)}
+.dshHarmonyHorizontalRail:active .dshHarmonyHorizontalThumb{background:color-mix(in srgb,var(--dsw-alias-label-tertiary) 62%,transparent);cursor:grabbing}
+.dshHarmonyDiffRow{min-width:max-content;display:grid;grid-template-columns:42px 42px 18px minmax(0,1fr)}
+.dshHarmonyDiffRow[data-kind=added]{background:color-mix(in srgb,var(--dsw-alias-state-success-primary) 10%,transparent)}
+.dshHarmonyDiffRow[data-kind=removed]{background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 9%,transparent)}
+.dshHarmonyDiffLine{padding-inline:7px;color:var(--dsw-alias-label-tertiary);background:color-mix(in srgb,var(--dsw-alias-bg-module-platform) 72%,transparent);text-align:right;user-select:none}
+.dshHarmonyDiffMark{text-align:center;color:var(--dsw-alias-label-tertiary);user-select:none}
+.dshHarmonyDiffRow[data-kind=added] .dshHarmonyDiffMark{color:var(--dsw-alias-state-success-primary)}
+.dshHarmonyDiffRow[data-kind=removed] .dshHarmonyDiffMark{color:var(--dsw-alias-state-error-primary)}
+.dshHarmonyDiffCode{padding-inline:6px 12px;color:var(--dsw-alias-label-secondary);white-space:pre}
+.dshHarmonyDiffGap .dshHarmonyDiffCode{color:var(--dsw-alias-label-tertiary);font-style:italic}
+.dshHarmonyDiffEmpty{margin:0;padding:11px 12px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:18px}
 .dshHarmonyPatchChain{display:flex;flex-wrap:wrap;gap:6px}
 .dshHarmonyPatchChain span{padding:3px 7px;border-radius:6px;background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-secondary);font-size:10px;line-height:16px}
 .dshHarmonyFooter{flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:30px}
 .dshHarmonyFooterActions{display:flex;align-items:center;gap:8px}
 .dshHarmonyHint{margin:0;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:18px}
+.dshHarmonySrOnly{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
 .dshHarmonyButton{min-width:68px;height:30px;padding:0 12px;border:0;border-radius:8px;background:var(--dsw-alias-state-business-primary);color:#fff;font:inherit;font-size:13px;cursor:pointer}
 .dshHarmonyButton:hover:not(:disabled){filter:brightness(.96)}
 .dshHarmonyButton:focus-visible,.dshHarmonySecondary:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px}
@@ -138,13 +174,14 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
 @keyframes dshHarmonyDropIn{from{height:0;opacity:0}to{height:10px;opacity:1}}
 `
     const styleId = 'dsh-harmony/client.css'
-    if (!document.querySelector(`style[data-plugin-css="${styleId}"]`)) {
+    const existingStyle = document.querySelector<HTMLStyleElement>(`style[data-plugin-css="${styleId}"]`)
+    if (existingStyle === null) {
       const style = document.createElement('style')
       style.dataset.plugin = 'dsh-harmony'
       style.dataset.pluginCss = styleId
       style.textContent = css
       document.head.appendChild(style)
-    }
+    } else existingStyle.textContent = css
 
     const dictionaries = {
       zh: {
@@ -152,9 +189,11 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         orderPage: '应用顺序',
         patchPage: 'Patch 状态',
         patchTitle: '运行时 Patch',
-        patchIntro: '查看 Patch 的绑定、冲突和当前变换结果，或单独启用与停用 Patch。',
+        patchIntro: '只读监视 Patch 的绑定、兼容性和当前变换结果。',
         patchEmpty: '当前没有 Harmony Patch。安装或启用一个声明了 Patch 的插件后，它会显示在这里。',
         patchSelect: '选择一个 Patch 查看详情。',
+        noPatchDescription: '这个 Patch 没有提供作用说明。',
+        viewPatchDetails: '查看详情',
         patchTarget: '目标',
         patchVersion: '版本范围',
         patchMatches: '匹配数',
@@ -166,8 +205,12 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         patchOriginal: '原始源码',
         patchIntermediate: '中间结果',
         patchFinal: '最终源码',
+        patchNoChanges: '这一步没有产生源码变化。',
+        patchDiffLimited: '变更过大，已跳过 Diff 计算；仍可查看原始源码和最终源码。',
+        diffAdded: '新增行',
+        diffRemoved: '删除行',
         patchPending: '等待目标加载',
-        patchBound: '已绑定',
+        patchBound: '已启用',
         patchHealthy: '健康',
         patchWarning: '警告',
         patchDisabled: '已停用',
@@ -180,16 +223,18 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         patchOperationAfter: '之后执行',
         patchOperationAround: '环绕执行',
         patchOperationReplace: '替换',
-        enable: '启用',
-        disable: '停用',
-        enableProvider: '启用 Provider',
-        disableProvider: '停用 Provider',
+        enablePatch: '启用此 Patch',
+        disablePatch: '停用此 Patch',
+        enablePluginPatches: '启用此插件 Patch',
+        disablePluginPatches: '停用此插件 Patch',
         author: '作者',
         contributors: '贡献者',
         homepage: '主页',
         bugs: '问题反馈',
         license: '许可证',
         patchCount: 'Patch',
+        patchCountOne: 'Patch',
+        showPatch: '显示 Patch 卡片',
         title: 'Patch 应用顺序',
         intro: '拖动插件封面移动整堆；展开后可将单个 Patch 拖到任意位置。',
         expandStack: '展开 Patch 卡片堆',
@@ -200,10 +245,18 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         noDescription: '这个插件没有提供介绍。',
         before: '需要位于这些插件之前',
         after: '需要位于这些插件之后',
-        conflicts: '声明不兼容',
-        incompatibilityWarning: '检测到插件冲突；所有插件仍保持启用：',
-        noConstraints: '没有声明 Harmony 顺序约束。',
+        requires: '需要这些插件',
+        conflicts: '与这些插件冲突',
+        integrates: '可与这些插件联动',
+        compatibilityWarning: '检测到兼容性问题；Harmony 不会自动改变插件状态：',
+        requirementMissing: '缺失',
+        requirementInactive: '未启用',
+        requirementVersion: '版本不符',
+        noConstraints: '没有声明 Harmony 顺序或兼容性关系。',
         keyboard: '长按卡片召回同插件 Patch · 拖动封面或单个 Patch · 滚轮仍可滚动',
+        movedTo: '已移至第',
+        positionOf: '位，共',
+        positionUnit: ' 位',
         save: '保存',
         undo: '撤回',
         saving: '保存中…',
@@ -236,9 +289,11 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         orderPage: 'Apply order',
         patchPage: 'Patch status',
         patchTitle: 'Runtime patches',
-        patchIntro: 'Inspect patch bindings, conflicts and transformed source, or enable and disable individual patches.',
+        patchIntro: 'Read-only monitoring for patch bindings, compatibility and transformed source.',
         patchEmpty: 'No Harmony patches are registered. Install or enable a plugin that declares patches to see it here.',
         patchSelect: 'Select a patch to inspect it.',
+        noPatchDescription: 'This Patch does not provide a description.',
+        viewPatchDetails: 'View details',
         patchTarget: 'Target',
         patchVersion: 'Version range',
         patchMatches: 'Matches',
@@ -250,8 +305,12 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         patchOriginal: 'Original source',
         patchIntermediate: 'Intermediate result',
         patchFinal: 'Final source',
+        patchNoChanges: 'This step produced no source changes.',
+        patchDiffLimited: 'This change is too large to diff safely. Original and final source remain available.',
+        diffAdded: 'Added line',
+        diffRemoved: 'Removed line',
         patchPending: 'Waiting for target',
-        patchBound: 'Bound',
+        patchBound: 'Enabled',
         patchHealthy: 'Healthy',
         patchWarning: 'Warning',
         patchDisabled: 'Disabled',
@@ -264,16 +323,18 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         patchOperationAfter: 'After',
         patchOperationAround: 'Around',
         patchOperationReplace: 'Replace',
-        enable: 'Enable',
-        disable: 'Disable',
-        enableProvider: 'Enable provider',
-        disableProvider: 'Disable provider',
+        enablePatch: 'Enable this Patch',
+        disablePatch: 'Disable this Patch',
+        enablePluginPatches: "Enable this plugin's Patches",
+        disablePluginPatches: "Disable this plugin's Patches",
         author: 'Author',
         contributors: 'Contributors',
         homepage: 'Homepage',
         bugs: 'Issues',
         license: 'License',
         patchCount: 'Patches',
+        patchCountOne: 'Patch',
+        showPatch: 'Show Patch card',
         title: 'Patch application order',
         intro: 'Drag a plugin cover to move its stack, or expand it to place an individual Patch.',
         expandStack: 'Expand patch stack',
@@ -284,10 +345,18 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         noDescription: 'This plugin does not provide a description.',
         before: 'Must load before',
         after: 'Must load after',
-        conflicts: 'Declares incompatible',
-        incompatibilityWarning: 'Plugin conflicts detected; all plugins remain enabled:',
-        noConstraints: 'No Harmony order constraints declared.',
+        requires: 'Requires plugins',
+        conflicts: 'Conflicts with plugins',
+        integrates: 'Integrates with plugins',
+        compatibilityWarning: 'Compatibility issues detected; Harmony will not change plugin state:',
+        requirementMissing: 'missing',
+        requirementInactive: 'inactive',
+        requirementVersion: 'version mismatch',
+        noConstraints: 'No Harmony order or compatibility relationships declared.',
         keyboard: 'Hold a card to recall its plugin Patches · Drag a cover or one Patch · Wheel scrolling stays available',
+        movedTo: 'moved to position',
+        positionOf: 'of',
+        positionUnit: '',
         save: 'Save',
         undo: 'Undo',
         saving: 'Saving…',
@@ -339,6 +408,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
     interface PatchStatus {
       key: string
       id: string
+      description?: string
       owner: string
       index: number
       targets: Array<{ package: string; version?: string; file: string }>
@@ -350,7 +420,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       generation: number
       declaration: string
       error?: string
-      members?: Array<{ id: string; kind: 'source' | 'semantic' | 'loader' }>
+      members?: Array<{ id: string; description?: string; kind: 'source' | 'semantic' | 'loader' }>
     }
 
     const patchKindLabel = (t: Translate, kind: PatchStatus['kind']) => t({
@@ -375,6 +445,284 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       steps: Array<{ key: string; matches: number; source: string }>
     }
 
+    type SourceDiffEdit = { kind: 'unchanged' | 'added' | 'removed'; text: string }
+    type SourceDiffRow = SourceDiffEdit & { oldLine?: number; newLine?: number } | { kind: 'gap' }
+
+    const sourceLines = (source: string) => {
+      if (source === '') return []
+      const lines = source.replaceAll('\r\n', '\n').replaceAll('\r', '\n').split('\n')
+      if (lines.at(-1) === '') lines.pop()
+      return lines
+    }
+
+    const sourceDiffEdits = (before: string, after: string): SourceDiffEdit[] | undefined => {
+      const left = sourceLines(before)
+      const right = sourceLines(after)
+      const frontier = new Map<number, number>([[1, 0]])
+      const trace: Array<Map<number, number>> = []
+      const maximum = Math.min(left.length + right.length, 200)
+      const deadline = Date.now() + 40
+      let distance = 0
+      let complete = false
+
+      search: for (; distance <= maximum; distance += 1) {
+        if (Date.now() > deadline) break
+        trace.push(new Map(frontier))
+        for (let diagonal = -distance; diagonal <= distance; diagonal += 2) {
+          const previousLeft = frontier.get(diagonal - 1) ?? Number.NEGATIVE_INFINITY
+          const previousRight = frontier.get(diagonal + 1) ?? Number.NEGATIVE_INFINITY
+          let x = diagonal === -distance || diagonal !== distance && previousLeft < previousRight
+            ? previousRight
+            : previousLeft + 1
+          if (!Number.isFinite(x)) x = 0
+          let y = x - diagonal
+          while (x < left.length && y < right.length && left[x] === right[y]) {
+            x += 1
+            y += 1
+          }
+          frontier.set(diagonal, x)
+          if (x >= left.length && y >= right.length) {
+            complete = true
+            break search
+          }
+        }
+      }
+      if (!complete) return undefined
+
+      let x = left.length
+      let y = right.length
+      const edits: SourceDiffEdit[] = []
+      for (let current = distance; current >= 0; current -= 1) {
+        const frontierAtDistance = trace[current]!
+        const diagonal = x - y
+        const previousLeft = frontierAtDistance.get(diagonal - 1) ?? Number.NEGATIVE_INFINITY
+        const previousRight = frontierAtDistance.get(diagonal + 1) ?? Number.NEGATIVE_INFINITY
+        const previousDiagonal = diagonal === -current || diagonal !== current && previousLeft < previousRight
+          ? diagonal + 1
+          : diagonal - 1
+        const previousX = frontierAtDistance.get(previousDiagonal) ?? 0
+        const previousY = previousX - previousDiagonal
+        while (x > previousX && y > previousY) {
+          edits.push({ kind: 'unchanged', text: left[x - 1]! })
+          x -= 1
+          y -= 1
+        }
+        if (current === 0) break
+        if (x === previousX) {
+          edits.push({ kind: 'added', text: right[y - 1]! })
+          y -= 1
+        } else {
+          edits.push({ kind: 'removed', text: left[x - 1]! })
+          x -= 1
+        }
+      }
+      return edits.reverse()
+    }
+
+    const sourceDiff = (before: string, after: string): SourceDiffRow[] | undefined => {
+      let oldLine = 1
+      let newLine = 1
+      const edits = sourceDiffEdits(before, after)
+      if (edits === undefined) return undefined
+      const rows = edits.map((edit): SourceDiffRow => {
+        const row = {
+          ...edit,
+          ...(edit.kind === 'added' ? {} : { oldLine }),
+          ...(edit.kind === 'removed' ? {} : { newLine }),
+        }
+        if (edit.kind !== 'added') oldLine += 1
+        if (edit.kind !== 'removed') newLine += 1
+        return row
+      })
+      if (rows.every(row => row.kind === 'unchanged')) return []
+      const visible = new Set<number>()
+      rows.forEach((row, index) => {
+        if (row.kind === 'unchanged') return
+        for (let context = Math.max(0, index - 3); context <= Math.min(rows.length - 1, index + 3); context += 1) {
+          visible.add(context)
+        }
+      })
+      const compact: SourceDiffRow[] = []
+      rows.forEach((row, index) => {
+        if (visible.has(index)) compact.push(row)
+        else if (compact.at(-1)?.kind !== 'gap') compact.push({ kind: 'gap' })
+      })
+      return compact
+    }
+
+    const sourceLanguage = (file: string): string => {
+      const extension = file.split('.').at(-1)?.toLowerCase()
+      if (extension === 'js' || extension === 'jsx' || extension === 'mjs' || extension === 'cjs') return 'JavaScript'
+      if (extension === 'ts' || extension === 'tsx' || extension === 'mts' || extension === 'cts') return 'TypeScript'
+      return extension?.toUpperCase() || 'Source'
+    }
+
+    interface HighlightToken {
+      content: string
+      color: string
+      style?: {
+        italic?: true
+        bold?: true
+        underline?: true
+        strikethrough?: true
+      }
+    }
+
+    interface SyntaxHighlighterService {
+      highlight(request: { code: string; language?: string }): {
+        lines: HighlightToken[][]
+      }
+    }
+
+    const highlightLanguage = (file: string): string | undefined => {
+      const extension = file.split('.').at(-1)?.toLowerCase()
+      if (extension === 'mjs' || extension === 'cjs') return 'js'
+      if (extension === 'mts' || extension === 'cts') return 'ts'
+      return extension
+    }
+
+    const renderTokens = (tokens: HighlightToken[]) => tokens.map((token, index) => {
+      const decorations = [
+        token.style?.underline ? 'underline' : '',
+        token.style?.strikethrough ? 'line-through' : '',
+      ].filter(Boolean).join(' ')
+      return h('span', {
+        key: index,
+        style: {
+          color: token.color,
+          fontStyle: token.style?.italic ? 'italic' : undefined,
+          fontWeight: token.style?.bold ? 'bold' : undefined,
+          textDecoration: decorations || undefined,
+        },
+      }, token.content)
+    })
+
+    const renderHighlightedSource = (lines: HighlightToken[][]) => lines.map((line, index) => h(React.Fragment, { key: index },
+      renderTokens(line),
+      index < lines.length - 1 ? '\n' : null))
+
+    function HorizontalSource({ as, className, children }: {
+      as: 'pre' | 'div'
+      className: string
+      children: unknown
+    }) {
+      const viewport = useRef<HTMLElement | null>(null)
+      const rail = useRef<HTMLDivElement | null>(null)
+
+      useLayoutEffect(() => {
+        const content = viewport.current
+        const scrollbar = rail.current
+        const spacer = scrollbar?.firstElementChild as HTMLElement | null
+        const thumb = scrollbar?.querySelector('.dshHarmonyHorizontalThumb') as HTMLElement | null
+        if (content === null || scrollbar === null || spacer === null || thumb === null) return
+
+        const paintThumb = () => {
+          const maximum = content.scrollWidth - content.clientWidth
+          const width = maximum <= 0
+            ? scrollbar.clientWidth
+            : Math.max(32, scrollbar.clientWidth * content.clientWidth / content.scrollWidth)
+          const left = maximum <= 0 ? 0 : content.scrollLeft / maximum * (scrollbar.clientWidth - width)
+          thumb.style.width = `${width}px`
+          thumb.style.transform = `translateX(${scrollbar.scrollLeft + left}px)`
+        }
+        const measure = () => {
+          spacer.style.width = `${content.scrollWidth}px`
+          scrollbar.hidden = false
+          paintThumb()
+        }
+        const fromContent = () => {
+          if (scrollbar.scrollLeft !== content.scrollLeft) scrollbar.scrollLeft = content.scrollLeft
+          paintThumb()
+        }
+        const fromScrollbar = () => {
+          if (content.scrollLeft !== scrollbar.scrollLeft) content.scrollLeft = scrollbar.scrollLeft
+          paintThumb()
+        }
+        let drag: { pointerId: number; x: number; scrollLeft: number } | null = null
+        const pointerDown = (event: PointerEvent) => {
+          const maximum = content.scrollWidth - content.clientWidth
+          if (event.button !== 0 || maximum <= 0) return
+          const railBounds = scrollbar.getBoundingClientRect()
+          const thumbBounds = thumb.getBoundingClientRect()
+          if (event.clientX < thumbBounds.left || event.clientX > thumbBounds.right) {
+            const travel = scrollbar.clientWidth - thumbBounds.width
+            content.scrollLeft = Math.max(0, Math.min(maximum,
+              (event.clientX - railBounds.left - thumbBounds.width / 2) / travel * maximum))
+            scrollbar.scrollLeft = content.scrollLeft
+            paintThumb()
+          }
+          drag = { pointerId: event.pointerId, x: event.clientX, scrollLeft: content.scrollLeft }
+          scrollbar.setPointerCapture(event.pointerId)
+          event.preventDefault()
+        }
+        const pointerMove = (event: PointerEvent) => {
+          if (drag?.pointerId !== event.pointerId) return
+          const maximum = content.scrollWidth - content.clientWidth
+          const travel = scrollbar.clientWidth - thumb.getBoundingClientRect().width
+          if (maximum <= 0 || travel <= 0) return
+          content.scrollLeft = Math.max(0, Math.min(maximum,
+            drag.scrollLeft + (event.clientX - drag.x) / travel * maximum))
+          scrollbar.scrollLeft = content.scrollLeft
+          paintThumb()
+        }
+        const pointerUp = (event: PointerEvent) => {
+          if (drag?.pointerId !== event.pointerId) return
+          drag = null
+          if (scrollbar.hasPointerCapture(event.pointerId)) scrollbar.releasePointerCapture(event.pointerId)
+        }
+        const observer = new ResizeObserver(measure)
+        observer.observe(content)
+        content.addEventListener('scroll', fromContent, { passive: true })
+        scrollbar.addEventListener('scroll', fromScrollbar, { passive: true })
+        scrollbar.addEventListener('pointerdown', pointerDown)
+        scrollbar.addEventListener('pointermove', pointerMove)
+        scrollbar.addEventListener('pointerup', pointerUp)
+        scrollbar.addEventListener('pointercancel', pointerUp)
+        measure()
+        return () => {
+          observer.disconnect()
+          content.removeEventListener('scroll', fromContent)
+          scrollbar.removeEventListener('scroll', fromScrollbar)
+          scrollbar.removeEventListener('pointerdown', pointerDown)
+          scrollbar.removeEventListener('pointermove', pointerMove)
+          scrollbar.removeEventListener('pointerup', pointerUp)
+          scrollbar.removeEventListener('pointercancel', pointerUp)
+        }
+      })
+
+      return h(React.Fragment, null,
+        h(as, { className: `${className} dshHarmonyHorizontalViewport`, ref: viewport, tabIndex: 0 }, children),
+        h('div', { className: 'dshHarmonyHorizontalRail', ref: rail, 'aria-hidden': 'true' },
+          h('span', { className: 'dshHarmonyHorizontalSpacer' }),
+          h('span', { className: 'dshHarmonyHorizontalThumb' })))
+    }
+
+    function SourceSection({ label, meta, metaTitle, defaultOpen = false, children }: {
+      label: string
+      meta?: string
+      metaTitle?: string
+      defaultOpen?: boolean
+      children: unknown
+    }) {
+      const [open, setOpen] = useState(defaultOpen)
+      return h('section', {
+        className: 'dshHarmonySourceSection',
+        'data-open': open ? 'true' : undefined,
+      },
+      h('button', {
+        className: 'dshHarmonySourceSummary',
+        type: 'button',
+        'aria-expanded': open,
+        onClick: () => setOpen(value => !value),
+      },
+      h('span', { className: 'dshHarmonySourceTitle' }, label),
+      meta === undefined ? null : h('span', {
+        className: 'dshHarmonySourceMeta',
+        title: metaTitle,
+      }, meta)),
+      open ? children : null)
+    }
+
     interface PluginView {
       name: string
       version: string
@@ -383,7 +731,11 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       patchCount: number
       before: string[]
       after: string[]
-      conflicts: Record<string, string>
+      compatibility: {
+        requires: Record<string, string>
+        conflicts: Record<string, string>
+        integrates: Record<string, string>
+      }
       author: string
       contributors: string[]
       homepage: string
@@ -398,11 +750,26 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       plugins: PluginView[]
       orderViolations: Array<{ before: string; after: string; declaredBy: string }>
       patchOrderViolations: Array<{ before: string; after: string; declaredBy: string }>
-      pluginConflicts: Array<{
-        left: { package: string; version: string; entryIds: string[] }
-        right: { package: string; version: string; entryIds: string[] }
-        declaredBy: string[]
-      }>
+      compatibility: Array<
+        | {
+            kind: 'conflict'
+            left: { package: string; version: string; entryIds: string[] }
+            right: { package: string; version: string; entryIds: string[] }
+            declaredBy: string[]
+          }
+        | {
+            kind: 'requirement'
+            owner: { package: string; version: string; entryIds: string[] }
+            target: { package: string; range: string; version: string | null; entryIds: string[] }
+            reason: 'missing' | 'inactive' | 'version'
+          }
+        | {
+            kind: 'integration'
+            owner: { package: string; version: string; entryIds: string[] }
+            target: { package: string; version: string; entryIds: string[] }
+            range: string
+          }
+      >
     }
 
     interface PatchRun {
@@ -412,11 +779,16 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       end: number
     }
 
-    type PatchViewNode =
-      | { type: 'patch'; key: string; owner: string; index: number }
-      | { type: 'stack'; id: string; owner: string; keys: string[]; start: number; end: number; expanded: boolean }
-      | { type: 'placeholder'; index: number }
-    type PatchStackNode = Extract<PatchViewNode, { type: 'stack' }>
+    interface PatchStackNode {
+      type: 'stack'
+      id: string
+      owner: string
+      keys: string[]
+      start: number
+      end: number
+      expanded: boolean
+    }
+    type PatchViewNode = PatchStackNode | { type: 'placeholder'; index: number }
     type PatchCardStatus = 'normal' | 'warning' | 'error' | 'disabled'
     type OrderSelection = { kind: 'plugin'; key: string } | { kind: 'patch'; key: string }
 
@@ -503,6 +875,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
 
     interface HarmonyClientContext {
       effect(register: () => unknown, label?: string): void
+      get(name: string): unknown
       locale: {
         register(namespace: string, values: typeof dictionaries): unknown
         bind(namespace: string): Translate
@@ -515,9 +888,10 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
 
     const localeNamespace = 'dsh-harmony'
     const sameOrder = (left: string[], right: string[]) => left.length === right.length && left.every((name, index) => name === right[index])
+    const sameItems = (left: string[], right: string[]) => left.length === right.length && left.every(item => right.includes(item))
     const harmonyPlugin = 'dsh-harmony'
     const displayName = (name: string) => name.replace(/^@[^/]+\//, '')
-    const listName = (name: string) => displayName(name).replace(/^dsh-/, '')
+    const listName = (name: string) => name === harmonyPlugin ? 'Harmony' : displayName(name)
     const packageScope = (name: string) => name.match(/^(@[^/]+)\//)?.[1] ?? ''
     const detailAuthor = (plugin: PluginView) => [packageScope(plugin.name), plugin.author].filter(Boolean).join(' · ')
     const patchTargetLabel = (patch: PatchStatus | undefined) => patch?.targets
@@ -570,8 +944,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       let run: PatchRun | null = null
       const flush = () => {
         if (run === null) return
-        if (run.keys.length === 1) nodes.push({ type: 'patch', key: run.keys[0]!, owner: run.owner, index: run.start })
-        else nodes.push({
+        nodes.push({
           type: 'stack',
           id: stackId(run.owner, run.keys),
           owner: run.owner,
@@ -605,10 +978,69 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       return nodes
     }
 
+    const modalFocusable = 'button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+    function useModalFocus(
+      active: boolean,
+      layer: { current: HTMLElement | null },
+      dialog: { current: HTMLElement | null },
+      initial: { current: HTMLElement | null },
+      onEscape: () => void,
+    ) {
+      const escape = useRef(onEscape)
+      escape.current = onEscape
+      useEffect(() => {
+        if (!active || layer.current === null || dialog.current === null) return
+        const overlay = layer.current
+        const modal = dialog.current
+        const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+        const siblings = overlay.parentElement === null
+          ? []
+          : [...overlay.parentElement.children].filter((element): element is HTMLElement => element instanceof HTMLElement && element !== overlay)
+        const previousInert = siblings.map(element => [element, element.hasAttribute('inert')] as const)
+        for (const element of siblings) element.setAttribute('inert', '')
+        const focusable = () => [...modal.querySelectorAll<HTMLElement>(modalFocusable)]
+        ;(initial.current ?? focusable()[0] ?? modal).focus()
+        const keydown = (event: KeyboardEvent) => {
+          if (event.key === 'Escape') {
+            event.preventDefault()
+            event.stopImmediatePropagation()
+            escape.current()
+            return
+          }
+          if (event.key !== 'Tab') return
+          const items = focusable()
+          if (items.length === 0) {
+            event.preventDefault()
+            modal.focus()
+            return
+          }
+          const first = items[0]!
+          const last = items.at(-1)!
+          if (event.shiftKey && (document.activeElement === first || !modal.contains(document.activeElement))) {
+            event.preventDefault()
+            last.focus()
+          } else if (!event.shiftKey && (document.activeElement === last || !modal.contains(document.activeElement))) {
+            event.preventDefault()
+            first.focus()
+          }
+        }
+        document.addEventListener('keydown', keydown, true)
+        return () => {
+          document.removeEventListener('keydown', keydown, true)
+          for (const [element, inert] of previousInert) {
+            if (!inert) element.removeAttribute('inert')
+          }
+          if (previousFocus?.isConnected) previousFocus.focus()
+        }
+      }, [active])
+    }
+
     function RuntimePrompt({ t }: { t: Translate }) {
       const [status, setStatus] = useState<RuntimeStatus | null>(null)
       const [busy, setBusy] = useState(false)
       const [dismissed, setDismissed] = useState(false)
+      const layer = useRef<HTMLDivElement | null>(null)
+      const dialog = useRef<HTMLElement | null>(null)
       const primary = useRef<HTMLButtonElement | null>(null)
 
       useEffect(() => {
@@ -617,8 +1049,6 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
           .then(setStatus)
           .catch(() => {})
       }, [])
-      useEffect(() => { if (status?.state === 'missing' || status?.state === 'desktop-inactive') primary.current?.focus() }, [status?.state])
-
       const choose = async (action: RuntimeAction) => {
         if (status === null) return
         setBusy(true)
@@ -654,17 +1084,25 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         }
       }
 
-      if (dismissed || status === null || status.state === 'active' || status.state === 'ignored' || status.state === 'removed') return null
+      const visible = !dismissed && status !== null && status.state !== 'active' && status.state !== 'ignored' && status.state !== 'removed'
+      useModalFocus(visible, layer, dialog, primary, () => {
+        if (busy || status === null) return
+        if (status.state === 'installed') setDismissed(true)
+        else void choose('ignore')
+      })
+      useEffect(() => { if (visible) primary.current?.focus() }, [status?.state])
+
+      if (!visible || status === null) return null
       const installed = status.state === 'installed'
       const desktopInactive = status.state === 'desktop-inactive'
-      return h('div', { className: 'dshHarmonyRuntimeLayer', role: 'presentation' },
-        h('section', { className: 'dshHarmonyRuntimeDialog', role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'dsh-harmony-runtime-title' },
+      return h('div', { className: 'dshHarmonyRuntimeLayer', role: 'presentation', ref: layer },
+        h('section', { className: 'dshHarmonyRuntimeDialog', role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'dsh-harmony-runtime-title', ref: dialog, tabIndex: -1 },
           h('h2', { id: 'dsh-harmony-runtime-title' }, t(desktopInactive ? 'runtimeDesktopTitle' : 'runtimeTitle')),
           h('p', null, t(desktopInactive ? 'runtimeDesktopBody' : installed ? 'runtimeInstalled' : status.state === 'working' ? 'runtimeWorking' : 'runtimeBody')),
           status.error ? h('p', { className: 'dshHarmonyRuntimeError', role: 'alert' }, `${t('runtimeError')}: ${status.error}`) : null,
           h('div', { className: 'dshHarmonyRuntimeActions' },
             installed
-              ? h('button', { className: 'dshHarmonySecondary', type: 'button', onClick: () => setDismissed(true) }, t('done'))
+              ? h('button', { ref: primary, className: 'dshHarmonySecondary', type: 'button', onClick: () => setDismissed(true) }, t('done'))
               : desktopInactive
                 ? h(React.Fragment, null,
                   h('button', { className: 'dshHarmonySecondary dshHarmonyDanger', type: 'button', disabled: busy, onClick: () => { void choose('remove') } }, t('removePlugin')),
@@ -730,15 +1168,88 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       }, h('span', { className: 'dshHarmonyToastDot', 'aria-hidden': 'true' }), notice.text)
     }
 
-    function PatchStatusPage({ t }: { t: Translate }) {
+    function PatchStatusPage({ t, selected, onSelect, syntaxHighlighter }: {
+      t: Translate
+      selected: string | null
+      onSelect: (key: string | null) => void
+      syntaxHighlighter?: SyntaxHighlighterService
+    }) {
       const [patches, setPatches] = useState<PatchStatus[]>([])
-      const [selected, setSelected] = useState<string | null>(null)
       const [inspection, setInspection] = useState<PatchInspection | null>(null)
       const [loading, setLoading] = useState(true)
-      const [busy, setBusy] = useState<string | null>(null)
       const [error, setError] = useState('')
+      const selectedRow = useRef<HTMLButtonElement | null>(null)
       const patch = patches.find(item => item.key === selected) ?? patches[0]
       const stateLabel = (state: PatchStatus['state']) => t({ pending: 'patchPending', bound: 'patchBound', disabled: 'patchDisabled', failed: 'patchFailed' }[state] as TranslationKey)
+      const diffSteps = useMemo(() => {
+        if (inspection === null) return []
+        let previous = inspection.original
+        return inspection.steps.map(step => {
+          const diff = sourceDiff(previous, step.source)
+          previous = step.source
+          return { ...step, diff }
+        })
+      }, [inspection])
+
+      const sourceTarget = patch?.targets.length === 1 ? patch.targets[0] : undefined
+      const sourceMeta = sourceTarget === undefined ? undefined : `${sourceLanguage(sourceTarget.file)} · ${sourceTarget.file}`
+      const sourceMetaTitle = sourceTarget === undefined ? undefined : `${sourceTarget.package}/${sourceTarget.file}`
+      const highlightedSources = useMemo(() => {
+        if (inspection === null || sourceTarget === undefined || syntaxHighlighter === undefined) return null
+        try {
+          const cache = new Map<string, HighlightToken[][]>()
+          const highlight = (source: string) => {
+            let lines = cache.get(source)
+            if (lines === undefined) {
+              lines = syntaxHighlighter.highlight({ code: source, language: highlightLanguage(sourceTarget.file) }).lines
+              cache.set(source, lines)
+            }
+            return lines
+          }
+          return {
+            original: highlight(inspection.original),
+            steps: inspection.steps.map(step => highlight(step.source)),
+            final: highlight(inspection.final),
+          }
+        } catch {
+          return null
+        }
+      }, [inspection, sourceTarget?.file, syntaxHighlighter])
+      const sourceSection = (label: string, source: string, highlighted?: HighlightToken[][]) => h(SourceSection, {
+        label, meta: sourceMeta, metaTitle: sourceMetaTitle,
+      }, h(HorizontalSource, { as: 'pre', className: 'dshHarmonyPatchCode' },
+        highlighted === undefined ? source : renderHighlightedSource(highlighted)))
+
+      const diffSection = (step: typeof diffSteps[number], stepIndex: number) => h(SourceSection, {
+        key: step.key,
+        label: `${t('patchIntermediate')}: ${step.key} · ${step.matches}`,
+        meta: sourceMeta,
+        metaTitle: sourceMetaTitle,
+        defaultOpen: true,
+      },
+      step.diff === undefined
+        ? h('p', { className: 'dshHarmonyDiffEmpty' }, t('patchDiffLimited'))
+        : step.diff.length === 0
+        ? h('p', { className: 'dshHarmonyDiffEmpty' }, t('patchNoChanges'))
+        : h(HorizontalSource, { as: 'div', className: 'dshHarmonyDiff' }, step.diff.map((row, index) => row.kind === 'gap'
+          ? h('div', { className: 'dshHarmonyDiffRow dshHarmonyDiffGap', key: index },
+            h('span', { className: 'dshHarmonyDiffLine' }),
+            h('span', { className: 'dshHarmonyDiffLine' }),
+            h('span', { className: 'dshHarmonyDiffMark' }),
+            h('code', { className: 'dshHarmonyDiffCode' }, '…'))
+          : h('div', { className: 'dshHarmonyDiffRow', 'data-kind': row.kind, key: index },
+            h('span', { className: 'dshHarmonyDiffLine' }, row.oldLine ?? ''),
+            h('span', { className: 'dshHarmonyDiffLine' }, row.newLine ?? ''),
+            h('span', { className: 'dshHarmonyDiffMark', 'aria-hidden': 'true' }, row.kind === 'added' ? '+' : row.kind === 'removed' ? '−' : ''),
+            h('code', { className: 'dshHarmonyDiffCode' },
+              row.kind === 'unchanged' ? null : h('span', { className: 'dshHarmonySrOnly' }, `${t(row.kind === 'added' ? 'diffAdded' : 'diffRemoved')}: `),
+              (() => {
+              if (highlightedSources === null) return row.text || ' '
+              const line = row.kind === 'removed'
+                ? (stepIndex === 0 ? highlightedSources.original : highlightedSources.steps[stepIndex - 1])?.[(row.oldLine ?? 1) - 1]
+                : highlightedSources.steps[stepIndex]?.[(row.newLine ?? 1) - 1]
+              return line === undefined || line.length === 0 ? ' ' : renderTokens(line)
+            })())))))
 
       const load = async () => {
         setLoading(true)
@@ -748,7 +1259,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
           if (!response.ok) throw new Error(`${response.status}`)
           const next = await response.json() as { patches: PatchStatus[] }
           setPatches(next.patches)
-          setSelected(current => next.patches.some(item => item.key === current) ? current : next.patches[0]?.key ?? null)
+          onSelect(next.patches.some(item => item.key === selected) ? selected : next.patches[0]?.key ?? null)
         } catch (reason) {
           setError(reason instanceof Error ? reason.message : String(reason))
         } finally {
@@ -757,6 +1268,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       }
 
       useEffect(() => { void load() }, [])
+      useEffect(() => { if (!loading) selectedRow.current?.focus() }, [loading, patch?.key])
       useEffect(() => {
         if (patch === undefined || patch.targets.length !== 1) return setInspection(null)
         let current = true
@@ -770,28 +1282,6 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         return () => { current = false }
       }, [patch?.key])
 
-      const toggle = async (provider: boolean) => {
-        if (patch === undefined) return
-        setBusy(patch.key)
-        setError('')
-        try {
-          const response = await fetch('/dsh-harmony/patches', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify(provider
-              ? { owner: patch.owner, enabled: patches.filter(item => item.owner === patch.owner).every(item => item.state === 'disabled') }
-              : { key: patch.key, enabled: patch.state === 'disabled' }),
-          })
-          const next = await response.json() as { patches: PatchStatus[]; error?: string }
-          if (!response.ok) throw new Error(next.error ?? `${response.status}`)
-          setPatches(next.patches)
-        } catch (reason) {
-          setError(reason instanceof Error ? reason.message : String(reason))
-        } finally {
-          setBusy(null)
-        }
-      }
-
       return h('section', { className: 'dshHarmonyPatchPage' },
         h('header', null,
           h('h2', { className: 'dshHarmonyHeading' }, t('patchTitle')),
@@ -799,32 +1289,29 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         loading ? h('div', { className: 'dshHarmonySkeleton', 'aria-label': t('loading') }, h('div'), h('div')) :
           patches.length === 0 ? h('p', { className: 'dshHarmonyStatus' }, t('patchEmpty')) :
             h('div', { className: 'dshHarmonyPatchWorkspace' },
-              h('ul', { className: 'dshHarmonyPatchList', role: 'listbox', 'aria-label': t('patchTitle') },
+              h('ul', { className: 'dshHarmonyPatchList', 'aria-label': t('patchTitle') },
                 patches.map(item => h('li', { key: item.key },
                   h('button', {
-                    className: 'dshHarmonyPatchRow', type: 'button', role: 'option',
-                    'aria-selected': patch?.key === item.key,
-                    onClick: () => setSelected(item.key),
+                    className: 'dshHarmonyPatchRow', type: 'button',
+                    ref: patch?.key === item.key ? selectedRow : undefined,
+                    'aria-current': patch?.key === item.key ? 'true' : undefined,
+                    'data-patch-key': item.key,
+                    onClick: () => onSelect(item.key),
                   },
                   h('span', { className: 'dshHarmonyPatchState', 'data-state': item.state, title: stateLabel(item.state) }),
-                  h('span', null,
-                    h('span', { className: 'dshHarmonyPatchKey', title: item.key }, item.key),
-                    h('span', { className: 'dshHarmonyPatchTarget' }, `${patchTargetLabel(item)} · ${stateLabel(item.state)}`)))))),
+                  h('span', { className: 'dshHarmonyPatchRowText' },
+                    h('span', { className: 'dshHarmonyPatchRowTitle' },
+                      h('span', { className: 'dshHarmonyPatchKey', title: item.key }, item.id),
+                      h('span', { className: 'dshHarmonyPatchRowStatus' }, stateLabel(item.state))),
+                    h('span', { className: 'dshHarmonyPatchProvider', title: item.owner }, displayName(item.owner)),
+                    h('span', { className: 'dshHarmonyPatchTarget', title: patchTargetLabel(item) }, patchTargetLabel(item))))))),
               patch === undefined ? h('p', { className: 'dshHarmonyStatus' }, t('patchSelect')) :
                 h('article', { className: 'dshHarmonyPatchDetail' },
                   h('div', { className: 'dshHarmonyPatchHeader' },
                     h('div', null,
                       h('h3', { className: 'dshHarmonyTitle' }, patch.key),
-                      h('p', { className: 'dshHarmonyScope' }, `${stateLabel(patch.state)} · ${patchTypeLabel(t, patch)}`)),
-                    h('div', { className: 'dshHarmonyPatchChain' },
-                      h('button', {
-                        className: 'dshHarmonySecondary', type: 'button', disabled: busy === patch.key,
-                        onClick: () => { void toggle(true) },
-                      }, t(patches.filter(item => item.owner === patch.owner).every(item => item.state === 'disabled') ? 'enableProvider' : 'disableProvider')),
-                      h('button', {
-                        className: 'dshHarmonySecondary', type: 'button', disabled: busy === patch.key || patches.filter(item => item.owner === patch.owner).every(item => item.state === 'disabled'),
-                        onClick: () => { void toggle(false) },
-                      }, t(patch.state === 'disabled' ? 'enable' : 'disable')))),
+                      h('p', { className: 'dshHarmonyScope' }, `${stateLabel(patch.state)} · ${patchTypeLabel(t, patch)}`))),
+                  h('p', { className: 'dshHarmonyDescription' }, patch.description || t('noPatchDescription')),
                   h('div', { className: 'dshHarmonyFacts' },
                     h('span', null, `${t('patchTarget')}: ${patchTargetLabel(patch)}`),
                     patch.targets.length === 1 && patch.targets[0]!.version
@@ -837,22 +1324,22 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
                   inspection ? h(React.Fragment, null,
                     h('h4', { className: 'dshHarmonyScope' }, t('patchChain')),
                     h('div', { className: 'dshHarmonyPatchChain' }, inspection.steps.map(step => h('span', { key: step.key }, `${step.key} · ${step.matches}`))),
-                    h('h4', { className: 'dshHarmonyScope' }, t('patchOriginal')),
-                    h('pre', { className: 'dshHarmonyPatchCode' }, inspection.original),
-                    inspection.steps.map(step => h(React.Fragment, { key: step.key },
-                      h('h4', { className: 'dshHarmonyScope' }, `${t('patchIntermediate')}: ${step.key}`),
-                      h('pre', { className: 'dshHarmonyPatchCode' }, step.source))),
-                    h('h4', { className: 'dshHarmonyScope' }, t('patchFinal')),
-                    h('pre', { className: 'dshHarmonyPatchCode' }, inspection.final)) : null)),
+                    h('div', { className: 'dshHarmonySourceSections' },
+                      sourceSection(t('patchOriginal'), inspection.original, highlightedSources?.original),
+                      diffSteps.map(diffSection),
+                      sourceSection(t('patchFinal'), inspection.final, highlightedSources?.final))) : null)),
         error ? h('p', { className: 'dshHarmonyHint dshHarmonyError', role: 'alert' }, `${t('runtimeError')}: ${error}`) : null)
     }
 
-    function HarmonySettings({ t }: { t: Translate }) {
+    function HarmonySettings({ t, syntaxHighlighter }: { t: Translate; syntaxHighlighter?: SyntaxHighlighterService }) {
       const [page, setPage] = useState<'order' | 'patches'>('order')
+      const [statusPatch, setStatusPatch] = useState<string | null>(null)
       const [view, setView] = useState<ProfileView | null>(null)
       const [patches, setPatches] = useState<PatchStatus[]>([])
       const [savedPatchOrder, setSavedPatchOrder] = useState<string[]>([])
       const [draftPatchOrder, setDraftPatchOrder] = useState<string[]>([])
+      const [savedDisabled, setSavedDisabled] = useState<string[]>([])
+      const [draftDisabled, setDraftDisabled] = useState<string[]>([])
       const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set<string>())
       const [stackBreaks, setStackBreaks] = useState<Set<string>>(new Set<string>())
       const [draggingKeys, setDraggingKeys] = useState<string[]>([])
@@ -863,6 +1350,8 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       const [error, setError] = useState('')
       const [saving, setSaving] = useState(false)
       const [closePrompt, setClosePrompt] = useState<boolean | null>(null)
+      const [announcement, setAnnouncement] = useState('')
+      const selectedRef = useRef<OrderSelection | null>(selected)
       const listRef = useRef<HTMLDivElement | null>(null)
       const patchRefs = useRef(new Map<string, HTMLButtonElement>())
       const coverRefs = useRef(new Map<string, HTMLDivElement>())
@@ -876,22 +1365,33 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       const longPress = useRef<number | null>(null)
       const suppressCardClick = useRef(false)
       const draftPatchOrderRef = useRef(draftPatchOrder)
+      const draftDisabledRef = useRef(draftDisabled)
       const viewNodesRef = useRef<PatchViewNode[]>([])
       const stackBreaksRef = useRef(stackBreaks)
       const dirtyRef = useRef(false)
       const saveRef = useRef<(() => Promise<void>) | null>(null)
+      const closeLayer = useRef<HTMLDivElement | null>(null)
+      const closeDialog = useRef<HTMLDivElement | null>(null)
 
-      const dirty = !sameOrder(savedPatchOrder, draftPatchOrder)
+      const dirty = !sameOrder(savedPatchOrder, draftPatchOrder) || !sameItems(savedDisabled, draftDisabled)
       draftPatchOrderRef.current = draftPatchOrder
+      draftDisabledRef.current = draftDisabled
       stackBreaksRef.current = stackBreaks
+      selectedRef.current = selected
       dirtyRef.current = dirty
       const plugins = useMemo(() => new Map((view?.plugins ?? []).map(plugin => [plugin.name, plugin])), [view])
       const patchMap = useMemo(() => new Map(patches.map(patch => [patch.key, patch])), [patches])
       const warningPatchKeys = useMemo(() => new Set((view?.patchOrderViolations ?? [])
         .flatMap(violation => [violation.before, violation.after])), [view])
+      const patchDisabled = (patch: PatchStatus | undefined) => patch !== undefined
+        && (draftDisabled.includes(patch.key) || draftDisabled.includes(`${patch.owner}/*`))
+      const patchOrderState = (patch: PatchStatus): PatchStatus['state'] => {
+        if (patchDisabled(patch)) return 'disabled'
+        return patch.state === 'disabled' ? 'bound' : patch.state
+      }
       const cardStatus = (key: string): PatchCardStatus => {
         const patch = patchMap.get(key)
-        if (patch?.state === 'disabled') return 'disabled'
+        if (patchDisabled(patch)) return 'disabled'
         if (patch?.state === 'failed') return 'error'
         if (warningPatchKeys.has(key)) return 'warning'
         return 'normal'
@@ -949,10 +1449,11 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       const selectedOwner = selectedPatch?.owner ?? (selected?.kind === 'plugin' ? selected.key : undefined)
       const selectedPlugin = selectedPatch === undefined
         ? (selected?.kind === 'plugin' ? plugins.get(selected.key) : undefined)
-          ?? plugins.get(viewNodes.find((node): node is Extract<PatchViewNode, { owner: string }> => node.type !== 'placeholder')?.owner ?? '')
+          ?? plugins.get(viewNodes.find((node): node is PatchStackNode => node.type === 'stack')?.owner ?? '')
         : plugins.get(selectedPatch.owner)
       const selectedAuthor = selectedPlugin === undefined ? '' : detailAuthor(selectedPlugin)
       const orderStateLabel = (state: PatchStatus['state']) => t({ pending: 'patchPending', bound: 'patchBound', disabled: 'patchDisabled', failed: 'patchFailed' }[state] as TranslationKey)
+      const patchCountLabel = (count: number) => t(count === 1 ? 'patchCountOne' : 'patchCount')
 
       const load = async () => {
         setLoading(true)
@@ -970,6 +1471,8 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
           setPatches(patchResult.patches)
           setSavedPatchOrder(next.patchOrder)
           setDraftPatchOrder(next.patchOrder)
+          setSavedDisabled(next.disabled)
+          setDraftDisabled(next.disabled)
           setExpandedKeys(new Set())
           setStackBreaks(new Set())
           const owners = new Set(patchResult.patches.map(patch => patch.owner))
@@ -991,10 +1494,11 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         setError('')
         try {
           const patchOrder = draftPatchOrderRef.current
+          const disabled = draftDisabledRef.current
           const response = await fetch('/dsh-harmony/profile', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ patchOrder }),
+            body: JSON.stringify({ patchOrder, disabled }),
           })
           const next = await response.json() as ProfileView & { error?: string }
           if (!response.ok) throw new Error(next.error ?? `${response.status}`)
@@ -1002,6 +1506,8 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
           setView(next)
           setSavedPatchOrder(next.patchOrder)
           setDraftPatchOrder(next.patchOrder)
+          setSavedDisabled(next.disabled)
+          setDraftDisabled(next.disabled)
           const patchResponse = await fetch('/dsh-harmony/patches', { cache: 'no-store' })
           if (patchResponse.ok) setPatches((await patchResponse.json() as { patches: PatchStatus[] }).patches)
         } catch (reason) {
@@ -1013,8 +1519,11 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       }
       saveRef.current = save
 
+      const toggleDisabled = (key: string) => setDraftDisabled(current => current.includes(key)
+        ? current.filter(item => item !== key)
+        : [...current, key])
+
       useEffect(() => { void load() }, [])
-      useEffect(() => { if (closePrompt !== null) promptButton.current?.focus() }, [closePrompt])
       useEffect(() => () => {
         for (const item of collapseTimers.current.values()) window.clearTimeout(item.timer)
         if (hoverExpand.current !== null) window.clearTimeout(hoverExpand.current.timer)
@@ -1082,11 +1591,14 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         }, 320)
       }
       const scheduleCollapse = (owner: string, keys: readonly string[]) => {
+        const containsSelectedPatch = () => selectedRef.current?.kind === 'patch' && keys.includes(selectedRef.current.key)
+        if (containsSelectedPatch()) return
         const id = stackId(owner, [...keys])
         if (collapseTimers.current.has(id)) return
         const pendingKeys = [...keys]
         const timer = window.setTimeout(() => {
           collapseTimers.current.delete(id)
+          if (containsSelectedPatch()) return
           setExpandedWithMotion(current => {
             const next = new Set(current)
             for (const key of pendingKeys) next.delete(key)
@@ -1103,13 +1615,12 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         const groups: Array<{
           owner: string
           expandedKeys: string[]
-          nodes: Array<Exclude<PatchViewNode, { type: 'placeholder' }>>
+          nodes: PatchStackNode[]
         }> = []
         let activeOwner: string | null = null
         for (const node of viewNodesRef.current) {
           if (node.type === 'placeholder') continue
-          const keys = node.type === 'patch' ? [node.key] : node.keys
-          const openKeys = keys.filter(key => expandedKeys.has(key))
+          const openKeys = node.keys.filter(key => expandedKeys.has(key))
           if (activeOwner === node.owner) {
             const group = groups.at(-1)!
             group.nodes.push(node)
@@ -1132,9 +1643,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
           else scheduleCollapse(group.owner, group.expandedKeys)
         }
       }
-      const nodeKeys = (node: Exclude<PatchViewNode, { type: 'placeholder' }>) => node.type === 'patch' ? [node.key] : node.keys
-      const nodeBounds = (node: Exclude<PatchViewNode, { type: 'placeholder' }>): DOMRect | undefined => {
-        if (node.type === 'patch') return patchBounds(node.key)
+      const nodeBounds = (node: PatchStackNode): DOMRect | undefined => {
         if (!node.expanded) return coverRefs.current.get(node.id)?.getBoundingClientRect()
         const bounds = node.keys.map(patchBounds).filter((value): value is DOMRect => value !== undefined)
         if (bounds.length === 0) return undefined
@@ -1151,7 +1660,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       }
       const reconcileMerges = (clientY: number) => {
         const remove: string[] = []
-        const runs: Array<Array<Exclude<PatchViewNode, { type: 'placeholder' }>>> = []
+        const runs: PatchStackNode[][] = []
         for (const node of viewNodesRef.current) {
           if (node.type === 'placeholder') continue
           const active = runs.at(-1)
@@ -1160,7 +1669,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         }
         for (const run of runs) {
           if (run.length > 1) {
-            const boundaries = run.slice(1).map((right, index) => stackBoundary(nodeKeys(run[index]!).at(-1)!, nodeKeys(right)[0]!))
+            const boundaries = run.slice(1).map((right, index) => stackBoundary(run[index]!.keys.at(-1)!, right.keys[0]!))
               .filter(boundary => stackBreaksRef.current.has(boundary))
             const bounds = run.map(nodeBounds).filter((value): value is DOMRect => value !== undefined)
             if (boundaries.length > 0 && bounds.length === run.length) {
@@ -1192,7 +1701,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       const updateHoverExpand = (clientX: number, clientY: number, active: ActivePatchDrag) => {
         const moving = new Set(active.keys)
         const target = currentStacks().find(stack => {
-          if (stack.expanded || stack.keys.some(key => moving.has(key))) return false
+          if (stack.expanded || stack.keys.length === 1 || stack.keys.some(key => moving.has(key))) return false
           const element = coverRefs.current.get(stack.id)
           if (element === undefined) return false
           const bounds = element.getBoundingClientRect()
@@ -1222,29 +1731,46 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         draftPatchOrderRef.current = next
         setDraftPatchOrder(next)
       }
-      const undoPatchOrder = () => {
+      const undoDraft = () => {
         if (!dirty || saving) return
         captureLayout(320)
         const next = [...savedPatchOrder]
         const breaks = new Set<string>()
         draftPatchOrderRef.current = next
+        draftDisabledRef.current = [...savedDisabled]
         stackBreaksRef.current = breaks
+        setDraftDisabled(savedDisabled)
         setExpandedKeys(new Set())
         setStackBreaks(breaks)
         setDraftPatchOrder(next)
       }
-      const moveByKeyboard = (key: string, offset: -1 | 1) => {
+      const moveByKeyboard = (key: string, offset: -1 | 1, restoreFocus?: () => void) => {
         if (saving) return
         const index = draftPatchOrderRef.current.indexOf(key)
         if (index < 0) return
         const target = offset < 0 ? Math.max(0, index - 1) : Math.min(draftPatchOrderRef.current.length - 1, index + 1)
+        if (target === index) return
         applyPatchOrder(insertPatches(draftPatchOrderRef.current, [key], target))
-        requestAnimationFrame(() => patchRefs.current.get(key)?.focus())
+        setAnnouncement(`${key} ${t('movedTo')} ${target + 1} ${t('positionOf')} ${draftPatchOrderRef.current.length}${t('positionUnit')}`)
+        requestAnimationFrame(() => {
+          if (restoreFocus === undefined) patchRefs.current.get(key)?.focus()
+          else restoreFocus()
+        })
       }
       const cancelLongPress = () => {
         if (longPress.current === null) return
         window.clearTimeout(longPress.current)
         longPress.current = null
+      }
+      const startDragging = (active: ActivePatchDrag) => {
+        active.moved = true
+        active.x = active.lastX
+        active.y = active.lastY
+        active.markerVisible = false
+        setDraggingKeys(active.keys)
+        setDragPreview({ ...active })
+        captureLayout(180)
+        setDragProjection({ keys: active.keys, target: active.target, visible: false })
       }
       const recallPluginPatches = (active: ActivePatchDrag) => {
         const order = draftPatchOrderRef.current
@@ -1273,6 +1799,11 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
           ? { kind: 'patch', key: active.keys[0]! }
           : { kind: 'plugin', key: active.owner })
         applyPatchOrder(insertPatches(order, keys, target))
+        active.keys = keys
+        active.kind = 'stack'
+        active.target = target
+        startDragging(active)
+        updateHoverExpand(active.lastX, active.lastY, active)
       }
       const beginDrag = (event: PointerEvent, keys: string[], owner: string, kind: 'patch' | 'stack', element: HTMLElement) => {
         if (event.button !== 0 || saving) return
@@ -1301,13 +1832,6 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         let position = 0
         for (const node of viewNodesRef.current) {
           if (node.type === 'placeholder') continue
-          if (node.type === 'patch') {
-            if (moving.has(node.key)) continue
-            const element = patchRefs.current.get(node.key)
-            if (element !== undefined) cards.push({ start: position, end: position + 1, bounds: element.getBoundingClientRect() })
-            position += 1
-            continue
-          }
           const keys = node.keys.filter(key => !moving.has(key))
           if (keys.length === 0) continue
           if (!node.expanded) {
@@ -1360,21 +1884,15 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         if (active?.pointerId !== event.pointerId || saving) return
         active.lastX = event.clientX
         active.lastY = event.clientY
-        if (active.recalled) return
         if (!active.moved && Math.hypot(event.clientX - active.originX, event.clientY - active.originY) < dragStartDistance) return
         let started = false
         if (!active.moved) {
           cancelLongPress()
-          active.moved = true
           started = true
-          setDraggingKeys(active.keys)
           setSelected(active.kind === 'patch'
             ? { kind: 'patch', key: active.keys[0]! }
             : { kind: 'plugin', key: active.owner })
-          setDragPreview({ ...active })
-          active.markerVisible = false
-          captureLayout(180)
-          setDragProjection({ keys: active.keys, target: active.target, visible: false })
+          startDragging(active)
         }
         const bounds = event.currentTarget.getBoundingClientRect()
         if (event.clientY < bounds.top + 32) event.currentTarget.scrollTop -= 10
@@ -1430,9 +1948,11 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
           const top = active.lastY - active.offsetY
           const statuses = stackStatuses(active.keys)
           const previewBounds = new Map(active.keys.map((key, depth) => {
-            const layer = active.kind === 'stack' ? stackLayer(statuses, depth) : { bottom: 0, left: 0, right: 0 }
+            const layer = active.kind === 'stack' && active.keys.length > 1
+              ? stackLayer(statuses, depth)
+              : { bottom: 0, left: 0, right: 0 }
             const height = patchRefs.current.get(key)?.getBoundingClientRect().height ?? active.height
-            const y = active.kind === 'stack' ? top + active.height + layer.bottom - height : top
+            const y = active.kind === 'stack' && active.keys.length > 1 ? top + active.height + layer.bottom - height : top
             return [key, new DOMRect(left + layer.left, y, active.width - layer.left - layer.right, height)] as const
           }))
           applyPatchOrder(nextOrder, previewBounds)
@@ -1459,6 +1979,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         setClosePrompt(null)
         prompt.resolve(allow)
       }
+      useModalFocus(closePrompt !== null, closeLayer, closeDialog, promptButton, () => finishPrompt(false))
 
       if (loading) return h('div', { className: 'dshHarmonyPage' },
         h('h2', { className: 'dshHarmonyHeading' }, t('title')),
@@ -1469,27 +1990,39 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         h('p', { className: 'dshHarmonyStatus dshHarmonyError', role: 'alert' }, `${t('loadError')} ${error}`),
         h('button', { className: 'dshHarmonySecondary', type: 'button', onClick: () => { void load() } }, t('retry')))
 
+      const compatibilityDeclaration = (field: keyof PluginView['compatibility'], label: TranslationKey): string => {
+        if (selectedPlugin === undefined) return ''
+        const declarations = Object.entries(selectedPlugin.compatibility[field])
+        return declarations.length === 0 ? '' : `${t(label)}: ${declarations
+          .map(([name, range]) => range === '*' ? name : `${name}@${range}`).join(', ')}`
+      }
+      const compatibilityWarnings = view.compatibility.filter(item => item.kind !== 'integration')
+      const compatibilityWarning = (item: typeof compatibilityWarnings[number]): string => item.kind === 'conflict'
+        ? `${item.left.package}@${item.left.version} ↔ ${item.right.package}@${item.right.version}`
+        : `${item.owner.package}@${item.owner.version} → ${item.target.package}@${item.target.range} (${t({
+            missing: 'requirementMissing', inactive: 'requirementInactive', version: 'requirementVersion',
+          }[item.reason] as TranslationKey)})`
       const constraints = selectedPlugin === undefined ? [] : [
         selectedPlugin.before.length > 0 ? `${t('before')}: ${selectedPlugin.before.join(', ')}` : '',
         selectedPlugin.after.length > 0 ? `${t('after')}: ${selectedPlugin.after.join(', ')}` : '',
-        Object.keys(selectedPlugin.conflicts).length > 0
-          ? `${t('conflicts')}: ${Object.entries(selectedPlugin.conflicts).map(([name, range]) => range === '*' ? name : `${name}@${range}`).join(', ')}`
-          : '',
+        compatibilityDeclaration('requires', 'requires'),
+        compatibilityDeclaration('conflicts', 'conflicts'),
+        compatibilityDeclaration('integrates', 'integrates'),
       ].filter(Boolean)
-      const renderPatch = (key: string, stack?: PatchStackNode, depth = 0) => {
+      const renderPatch = (key: string, stack: PatchStackNode, depth = 0) => {
         const patch = patchMap.get(key)
         const index = draftPatchOrder.indexOf(key)
         const owner = patch?.owner ?? key.slice(0, Math.max(0, key.lastIndexOf('/')))
-        const stacked = stack !== undefined && !stack.expanded
+        const stacked = !stack.expanded
         const status = cardStatus(key)
-        const geometry = stack === undefined ? null : stackGeometry(stackStatuses(stack.keys))
-        const layer = stack === undefined ? { bottom: 0, left: 0, right: 0 } : stackLayer(stackStatuses(stack.keys), depth)
+        const geometry = stackGeometry(stackStatuses(stack.keys))
+        const layer = stackLayer(stackStatuses(stack.keys), depth)
         return h('div', {
           className: 'dshHarmonyPatchItem',
           key,
           role: 'listitem',
           style: stacked ? {
-            bottom: `${geometry!.height - layer.bottom}px`,
+            bottom: `${geometry.height - layer.bottom}px`,
             right: `${layer.right}px`,
             left: `${layer.left}px`,
             zIndex: stack.keys.length - depth,
@@ -1505,7 +2038,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
             'data-owner-selected': selectedOwner === owner ? 'true' : undefined,
             'data-dragging': draggingKeys.includes(key) ? 'true' : undefined,
             'aria-hidden': stacked ? 'true' : undefined,
-            'aria-label': key,
+            'aria-label': `${key} · ${stackHealthTitle([key])} · ${index + 1}/${draftPatchOrder.length}`,
             tabIndex: stacked ? -1 : undefined,
             onClick: () => {
               if (suppressCardClick.current) {
@@ -1516,9 +2049,11 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
             },
             onPointerDown: (event: PointerEvent & { currentTarget: HTMLButtonElement }) => beginDrag(event, [key], owner, 'patch', event.currentTarget),
             onKeyDown: (event: KeyboardEvent) => {
-              if (event.key === 'Escape' && stack?.expanded) {
+              if (event.key === 'Escape' && stack.expanded) {
                 event.preventDefault()
+                event.stopPropagation()
                 collapseStack(stack)
+                requestAnimationFrame(() => coverRefs.current.get(stack.id)?.querySelector<HTMLButtonElement>('button')?.focus())
                 return
               }
               if (!event.altKey || event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
@@ -1544,11 +2079,11 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
             className: 'dshHarmonyTab', type: 'button', role: 'tab', 'aria-selected': page === 'patches',
             onClick: () => setPage('patches'),
           }, t('patchPage'))),
-        view.pluginConflicts.length > 0
+        compatibilityWarnings.length > 0
           ? h('p', { className: 'dshHarmonyWarning', role: 'status' },
-            `${t('incompatibilityWarning')} ${view.pluginConflicts.map(item => `${item.left.package}@${item.left.version} ↔ ${item.right.package}@${item.right.version}`).join(' · ')}`)
+            `${t('compatibilityWarning')} ${compatibilityWarnings.map(compatibilityWarning).join(' · ')}`)
           : null,
-        page === 'patches' ? h(PatchStatusPage, { t }) : h(React.Fragment, null,
+        page === 'patches' ? h(PatchStatusPage, { t, selected: statusPatch, onSelect: setStatusPatch, syntaxHighlighter }) : h(React.Fragment, null,
         h('header', null,
           h('h2', { className: 'dshHarmonyHeading' }, t('title')),
           h('p', { className: 'dshHarmonyIntro' }, t('intro'))),
@@ -1569,19 +2104,21 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
               onPointerUp: finishDrag,
               onPointerCancel: finishDrag,
             }, viewNodes.map(node => {
-              if (node.type === 'patch') return renderPatch(node.key)
               if (node.type === 'placeholder') return h('div', { className: 'dshHarmonyPatchItem', key: 'drag-placeholder', role: 'listitem' },
                 h('div', { className: 'dshHarmonyDropSlot', role: 'status', 'aria-label': `${t('dropAt')} ${node.index + 1}` }))
+              const singleton = node.keys.length === 1
+              const plugin = plugins.get(node.owner)
               return h('div', {
                 key: node.id,
                 className: 'dshHarmonyStack',
                 role: 'presentation',
                 'data-collapsed': node.expanded ? undefined : 'true',
                 'data-expanded': node.expanded ? 'true' : undefined,
+                'data-singleton': singleton ? 'true' : undefined,
                 'data-selected': selected?.kind === 'plugin' && selected.key === node.owner ? 'true' : undefined,
                 'data-owner-selected': selectedOwner === node.owner ? 'true' : undefined,
                 'data-dragging': node.keys.every(key => draggingKeys.includes(key)) ? 'true' : undefined,
-                style: node.expanded ? undefined : { paddingBottom: `${stackGeometry(stackStatuses(node.keys)).height}px` },
+                style: node.expanded || singleton ? undefined : { paddingBottom: `${stackGeometry(stackStatuses(node.keys)).height}px` },
                 onPointerDown: (event: PointerEvent & { currentTarget: HTMLDivElement }) => {
                   if (node.expanded) return
                   beginDrag(event, node.keys, node.owner, 'stack', coverRefs.current.get(node.id) ?? event.currentTarget)
@@ -1594,6 +2131,9 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
                   }
                   setSelected({ kind: 'plugin', key: node.owner })
                   expandStack(node, event.detail === 0 ? undefined : event.clientY)
+                  if (singleton && event.detail === 0) {
+                    requestAnimationFrame(() => patchRefs.current.get(node.keys[0]!)?.focus())
+                  }
                 },
               },
               h('div', {
@@ -1606,30 +2146,40 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
                 h('button', {
                   className: 'dshHarmonyStackSummary', type: 'button',
                   'aria-expanded': node.expanded,
-                  'aria-label': `${t(node.expanded ? 'collapseStack' : 'expandStack')}: ${node.owner}`,
+                  'aria-label': singleton ? `${t('showPatch')}: ${node.owner}` : `${t(node.expanded ? 'collapseStack' : 'expandStack')}: ${node.owner}`,
                   tabIndex: node.expanded ? -1 : undefined,
+                  onKeyDown: singleton ? (event: KeyboardEvent) => {
+                    if (!event.altKey || event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+                    event.preventDefault()
+                    moveByKeyboard(node.keys[0]!, event.key === 'ArrowUp' ? -1 : 1, () => {
+                      coverRefs.current.get(node.id)?.querySelector<HTMLButtonElement>('button')?.focus()
+                    })
+                  } : undefined,
                 },
-                h('span', { className: 'dshHarmonyStackGlyph', 'aria-hidden': 'true' }, displayName(node.owner).charAt(0).toUpperCase()),
+                h('span', { className: 'dshHarmonyStackGlyph', 'aria-hidden': 'true' }, listName(node.owner).charAt(0).toUpperCase()),
                   h('span', { className: 'dshHarmonyStackText' },
-                  h('span', { className: 'dshHarmonyName', title: node.owner }, displayName(node.owner)),
-                  h('span', { className: 'dshHarmonyStackMeta' }, `${node.keys.length} ${t('patchCount')} · ${node.start + 1}–${node.end}`)),
+                  h('span', { className: 'dshHarmonyName', title: node.owner }, listName(node.owner)),
+                  h('span', { className: 'dshHarmonyStackMeta' }, singleton
+                    ? [plugin?.version ? `v${plugin.version}` : '', `1 ${patchCountLabel(1)}`, patchMap.get(node.keys[0]!)?.id ?? node.keys[0]].filter(Boolean).join(' · ')
+                    : `${node.keys.length} ${patchCountLabel(node.keys.length)} · ${node.start + 1}–${node.end}`)),
                 h('span', {
                   className: 'dshHarmonyOrderState dshHarmonyStackState',
                   style: { background: stackHealthColor(node.keys) },
                   title: stackHealthTitle(node.keys),
                   'aria-label': stackHealthTitle(node.keys),
                 }))),
-              h('div', { className: 'dshHarmonyStackPatches', inert: node.expanded ? undefined : true }, node.keys.map((key, depth) => renderPatch(key, node, depth))))
+              singleton && !node.expanded ? null : h('div', { className: 'dshHarmonyStackPatches', inert: node.expanded ? undefined : true }, node.keys.map((key, depth) => renderPatch(key, node, depth))))
             })),
           selectedPatch !== undefined
             ? h('section', { className: 'dshHarmonyDetail', 'aria-live': 'polite' },
               h('div', { className: 'dshHarmonyIdentity' },
                 h('div', { className: 'dshHarmonyMeta' },
                   h('h3', { className: 'dshHarmonyTitle' }, selectedPatch.id),
-                  h('span', { className: 'dshHarmonyVersion' }, orderStateLabel(selectedPatch.state))),
+                  h('span', { className: 'dshHarmonyVersion' }, orderStateLabel(patchOrderState(selectedPatch)))),
                 h('p', { className: 'dshHarmonyScope' }, selectedPatch.key)),
-              h('p', { className: 'dshHarmonyDescription' }, patchTypeLabel(t, selectedPatch)),
+              h('p', { className: 'dshHarmonyDescription' }, selectedPatch.description || t('noPatchDescription')),
               h('div', { className: 'dshHarmonyFacts' },
+                h('span', null, patchTypeLabel(t, selectedPatch)),
                 h('span', null, `${t('patchProvider')}: ${displayName(selectedPatch.owner)}`),
                 selectedAuthor ? h('span', null, `${t('author')}: ${selectedAuthor}`) : null,
                 h('span', null, `${t('patchTarget')}: ${patchTargetLabel(selectedPatch)}`),
@@ -1637,7 +2187,16 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
                 h('span', null, `${t('patchMatches')}: ${selectedPatch.matches}`),
                 h('span', null, `${t('patchGeneration')}: ${selectedPatch.generation}`)),
               selectedPatch.members === undefined ? null : h('p', { className: 'dshHarmonyConstraint' }, selectedPatch.members.map(member => `${member.id} · ${patchKindLabel(t, member.kind)}`).join(' · ')),
-              selectedPatch.error ? h('p', { className: 'dshHarmonyConstraint dshHarmonyError', role: 'alert' }, selectedPatch.error) : null)
+              selectedPatch.error ? h('p', { className: 'dshHarmonyConstraint dshHarmonyError', role: 'alert' }, selectedPatch.error) : null,
+              h('div', { className: 'dshHarmonyDetailActions' },
+                h('button', {
+                  className: 'dshHarmonySecondary', type: 'button', disabled: saving,
+                  onClick: () => toggleDisabled(selectedPatch.key),
+                }, t(draftDisabled.includes(selectedPatch.key) ? 'enablePatch' : 'disablePatch')),
+                h('button', {
+                  className: 'dshHarmonySecondary', type: 'button',
+                  onClick: () => { setStatusPatch(selectedPatch.key); setPage('patches') },
+                }, t('viewPatchDetails'))))
             : selectedPlugin === undefined ? h('p', { className: 'dshHarmonyStatus' }, t('noDescription')) :
               h('section', { className: 'dshHarmonyDetail', 'aria-live': 'polite' },
               h('div', { className: 'dshHarmonyPreview' },
@@ -1662,6 +2221,13 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
                 selectedPlugin.bugs ? h('a', { href: selectedPlugin.bugs, target: '_blank', rel: 'noreferrer' }, t('bugs')) : null),
               selectedPlugin.harmony
                 ? h('p', { className: 'dshHarmonyConstraint' }, constraints.length > 0 ? constraints.join(' · ') : t('noConstraints'))
+                : null,
+              selectedPlugin.harmony
+                ? h('div', { className: 'dshHarmonyDetailActions' },
+                  h('button', {
+                    className: 'dshHarmonySecondary', type: 'button', disabled: saving,
+                    onClick: () => toggleDisabled(`${selectedPlugin.name}/*`),
+                  }, t(draftDisabled.includes(`${selectedPlugin.name}/*`) ? 'enablePluginPatches' : 'disablePluginPatches')))
                 : null)),
         dragPreview === null ? null : h('div', {
           className: 'dshHarmonyDragPreview',
@@ -1676,8 +2242,8 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
             h('span', { className: 'dshHarmonyPatchGrip' }),
             h('span', { className: 'dshHarmonyDragTitle' }, patchMap.get(dragPreview.keys[0]!)?.id ?? dragPreview.keys[0]),
             h('span', { className: 'dshHarmonyDragMeta' }, displayName(dragPreview.owner)))
-          : h('div', { className: 'dshHarmonyDragStack', style: { height: `${dragPreview.height + stackGeometry(stackStatuses(dragPreview.keys)).height}px` } },
-            dragPreview.keys.map((key, depth) => {
+          : h('div', { className: 'dshHarmonyDragStack', style: { height: `${dragPreview.height + (dragPreview.keys.length === 1 ? 0 : stackGeometry(stackStatuses(dragPreview.keys)).height)}px` } },
+            dragPreview.keys.length === 1 ? null : dragPreview.keys.map((key, depth) => {
               const statuses = stackStatuses(dragPreview.keys)
               const geometry = stackGeometry(statuses)
               const layer = stackLayer(statuses, depth)
@@ -1691,18 +2257,19 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
               })
             }),
             h('div', { className: 'dshHarmonyDragCover', style: { height: `${dragPreview.height}px`, background: stackCoverColor(dragPreview.keys) } },
-              h('span', { className: 'dshHarmonyStackGlyph' }, displayName(dragPreview.owner).charAt(0).toUpperCase()),
-              h('span', { className: 'dshHarmonyDragTitle' }, displayName(dragPreview.owner)),
-              h('span', { className: 'dshHarmonyDragMeta' }, `${dragPreview.keys.length} ${t('patchCount')}`),
+              h('span', { className: 'dshHarmonyStackGlyph' }, listName(dragPreview.owner).charAt(0).toUpperCase()),
+              h('span', { className: 'dshHarmonyDragTitle' }, listName(dragPreview.owner)),
+              h('span', { className: 'dshHarmonyDragMeta' }, `${dragPreview.keys.length} ${patchCountLabel(dragPreview.keys.length)}`),
               h('span', { className: 'dshHarmonyOrderState dshHarmonyStackState', style: { background: stackHealthColor(dragPreview.keys) } })))),
         h('footer', { className: 'dshHarmonyFooter' },
+          h('p', { className: 'dshHarmonySrOnly', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' }, announcement),
           h('p', { className: 'dshHarmonyHint' }, t('keyboard')),
           h('div', { className: 'dshHarmonyFooterActions' },
-            h('button', { className: 'dshHarmonySecondary', type: 'button', disabled: !dirty || saving, onClick: undoPatchOrder }, t('undo')),
+            h('button', { className: 'dshHarmonySecondary', type: 'button', disabled: !dirty || saving, onClick: undoDraft }, t('undo')),
             h('button', { className: 'dshHarmonyButton', type: 'button', disabled: !dirty || saving, onClick: () => { void save().catch(() => {}) } }, saving ? t('saving') : t('save')))),
         error ? h('p', { className: 'dshHarmonyHint dshHarmonyError', role: 'alert' }, `${t('loadError')} ${error}`) : null,
-        closePrompt ? h('div', { className: 'dshHarmonyConfirmLayer', role: 'presentation' },
-          h('div', { className: 'dshHarmonyConfirm', role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'dsh-harmony-confirm-title' },
+        closePrompt ? h('div', { className: 'dshHarmonyConfirmLayer', role: 'presentation', ref: closeLayer },
+          h('div', { className: 'dshHarmonyConfirm', role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'dsh-harmony-confirm-title', ref: closeDialog, tabIndex: -1 },
             h('h3', { id: 'dsh-harmony-confirm-title' }, t('confirmTitle')),
             h('p', null, t('confirmBody')),
             h('div', { className: 'dshHarmonyConfirmActions' },
@@ -1740,13 +2307,17 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       ctx.effect(async () => {
         const status = await fetch('/dsh-harmony/runtime', { cache: 'no-store' }).then(response => response.json())
         if (status.state !== 'active') return
+        const SettingsSection = (props: { t: Translate }) => h(HarmonySettings, {
+          ...props,
+          syntaxHighlighter: ctx.get('syntaxHighlighter') as SyntaxHighlighterService | undefined,
+        })
         return ctx.slots.inject('settings.section', () => ctx.slots.register({
           name: 'settings.section',
           id: 'harmony',
           order: 35,
           label: () => t('nav'),
           locale: localeNamespace,
-        }, HarmonySettings))
+        }, SettingsSection))
       }, 'dsh-harmony: settings section')
     }
 

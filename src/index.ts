@@ -46,6 +46,8 @@ export interface HarmonyPatchTarget {
 }
 
 export interface HarmonyPatchOrder {
+  /** Human-readable explanation of what this Patch changes. */
+  description?: string
   /** Apply this Patch before every Patch owned by the named providers. Defining either field replaces the provider-wide rule. */
   before?: string[]
   /** Apply this Patch after every Patch owned by the named providers. Defining either field replaces the provider-wide rule. */
@@ -122,6 +124,7 @@ export interface HarmonyPatchContext {
 export interface HarmonyPatchStatus {
   key: string
   id: string
+  description?: string
   owner: string
   index: number
   before?: string[]
@@ -136,6 +139,7 @@ export interface HarmonyPatchStatus {
   declaration: string
   members?: Array<{
     id: string
+    description?: string
     target: HarmonyPatchTarget
     kind: 'source' | 'semantic' | 'loader'
     operation?: HarmonySemanticOperation
@@ -169,9 +173,10 @@ export type {
   HarmonyProfileView,
 } from './profile.js'
 export type {
-  HarmonyPluginConflict,
-  HarmonyPluginConflictDeclarations,
+  HarmonyPluginCompatibilityDeclarations,
+  HarmonyPluginCompatibilityFinding,
+  HarmonyPluginCompatibilityRanges,
   HarmonyPluginRef,
-} from './conflicts.js'
+} from './compatibility.js'
 export type { HarmonyReloadStatus } from './installer.js'
 export type { HarmonyOrderViolation } from './order.js'

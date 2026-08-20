@@ -19,7 +19,7 @@ test('profile order appends installed providers and removes uninstalled provider
       name,
       version: '1.0.0',
       dsh: {
-        plugin: { conflicts: name === 'first' ? { second: '*', ordinary: '^1', first: '*' } : {} },
+        plugin: { compatibility: { conflicts: name === 'first' ? { second: '*', ordinary: '^1', first: '*' } : {} } },
         harmony: { patches: ['./patch.cjs'] },
       },
     }))
@@ -39,19 +39,21 @@ test('profile order appends installed providers and removes uninstalled provider
 
   const synchronized = synchronizeHarmonyProfile(profile)
   expect(synchronized.order).toEqual(['second', 'first', 'ordinary'])
-  expect(synchronized.plugins.find(plugin => plugin.name === 'first')?.conflicts).toEqual({
-    second: '*', ordinary: '^1', first: '*',
+  expect(synchronized.plugins.find(plugin => plugin.name === 'first')?.compatibility).toEqual({
+    requires: {}, conflicts: { second: '*', ordinary: '^1', first: '*' }, integrates: {},
   })
   const expectedConflicts = [{
+    kind: 'conflict',
     left: { package: 'first', version: '1.0.0', entryIds: [] },
     right: { package: 'ordinary', version: '1.2.3', entryIds: [] },
     declaredBy: ['first'],
   }, {
+    kind: 'conflict',
     left: { package: 'first', version: '1.0.0', entryIds: [] },
     right: { package: 'second', version: '1.0.0', entryIds: [] },
     declaredBy: ['first'],
   }]
-  expect(synchronized.pluginConflicts).toEqual(expectedConflicts)
+  expect(synchronized.compatibility).toEqual(expectedConflicts)
   expect(synchronized.plugins.find(plugin => plugin.name === 'ordinary')).toMatchObject({
     patches: [],
     version: '1.2.3',
@@ -64,11 +66,11 @@ test('profile order appends installed providers and removes uninstalled provider
   })
 
   writeFileSync(join(profile, 'harmony.json'), JSON.stringify({ order: synchronized.order, patchOrder: [], disabled: ['first/*'] }))
-  expect(synchronizeHarmonyProfile(profile).pluginConflicts).toEqual(expectedConflicts)
+  expect(synchronizeHarmonyProfile(profile).compatibility).toEqual(expectedConflicts)
   writeFileSync(join(profile, 'harmony.json'), JSON.stringify({ order: synchronized.order, patchOrder: [], disabled: ['second/*'] }))
-  expect(synchronizeHarmonyProfile(profile).pluginConflicts).toEqual(expectedConflicts)
+  expect(synchronizeHarmonyProfile(profile).compatibility).toEqual(expectedConflicts)
   writeFileSync(join(profile, 'harmony.json'), JSON.stringify({ order: synchronized.order, patchOrder: [], disabled: ['first/test'] }))
-  expect(synchronizeHarmonyProfile(profile).pluginConflicts).toEqual(expectedConflicts)
+  expect(synchronizeHarmonyProfile(profile).compatibility).toEqual(expectedConflicts)
   writeFileSync(join(profile, 'harmony.json'), JSON.stringify({ order: synchronized.order, patchOrder: [], disabled: [] }))
 
   writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: { first: '1' } }))
@@ -81,7 +83,7 @@ test('profile order appends installed providers and removes uninstalled provider
   rmSync(profile, { recursive: true })
 })
 
-test('detects conflicts between ordinary active plugins', () => {
+test('detects compatibility between ordinary active plugins', () => {
   const profile = mkdtempSync(join(tmpdir(), 'dsh-harmony-ordinary-conflicts-'))
   for (const name of ['ordinary-alpha', 'ordinary-beta']) {
     mkdirSync(join(profile, 'node_modules', name), { recursive: true })
@@ -92,7 +94,7 @@ test('detects conflicts between ordinary active plugins', () => {
   writeFileSync(join(profile, 'node_modules', 'ordinary-alpha', 'package.json'), JSON.stringify({
     name: 'ordinary-alpha',
     version: '1.0.0',
-    dsh: { plugin: { conflicts: { 'ordinary-beta': '^2' } } },
+    dsh: { plugin: { compatibility: { conflicts: { 'ordinary-beta': '^2' } } } },
   }))
   writeFileSync(join(profile, 'node_modules', 'ordinary-beta', 'package.json'), JSON.stringify({
     name: 'ordinary-beta', version: '2.1.0',
@@ -102,12 +104,13 @@ test('detects conflicts between ordinary active plugins', () => {
     { name: 'ordinary-alpha', entryIds: ['alpha-entry'] },
     { name: 'ordinary-beta', entryIds: ['beta-entry'] },
   ]
-  expect(synchronizeHarmonyProfile(profile, undefined, false, active).pluginConflicts).toEqual([{
+  expect(synchronizeHarmonyProfile(profile, undefined, false, active).compatibility).toEqual([{
+    kind: 'conflict',
     left: { package: 'ordinary-alpha', version: '1.0.0', entryIds: ['alpha-entry'] },
     right: { package: 'ordinary-beta', version: '2.1.0', entryIds: ['beta-entry'] },
     declaredBy: ['ordinary-alpha'],
   }])
-  expect(synchronizeHarmonyProfile(profile, undefined, false, active.slice(0, 1)).pluginConflicts).toEqual([])
+  expect(synchronizeHarmonyProfile(profile, undefined, false, active.slice(0, 1)).compatibility).toEqual([])
   rmSync(profile, { recursive: true })
 })
 
@@ -177,7 +180,7 @@ test('reads, preflights, and atomically updates a stopped profile', async () => 
     patchOrder: ['second/only', 'first/b', 'first/a'],
     disabled: ['first/*'],
     orderViolations: [],
-    pluginConflicts: [],
+    compatibility: [],
   })
   expect(readFileSync(join(profile, 'harmony.json'), 'utf8')).toBe(before)
 

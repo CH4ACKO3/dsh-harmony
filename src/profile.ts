@@ -3,12 +3,12 @@ import { findPackageJSON } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
-  evaluatePluginConflicts,
-  parsePluginConflicts,
+  evaluatePluginCompatibility,
+  parsePluginCompatibility,
   type HarmonyActivePlugin,
-  type HarmonyPluginConflict,
-  type HarmonyPluginConflictDeclarations,
-} from './conflicts.js'
+  type HarmonyPluginCompatibilityDeclarations,
+  type HarmonyPluginCompatibilityFinding,
+} from './compatibility.js'
 import { orderViolations, type HarmonyOrderViolation, type HarmonyProvider } from './order.js'
 
 export interface InstalledPlugin extends HarmonyProvider {
@@ -16,7 +16,7 @@ export interface InstalledPlugin extends HarmonyProvider {
   version: string
   description: string
   patches: string[]
-  conflicts: HarmonyPluginConflictDeclarations
+  compatibility: HarmonyPluginCompatibilityDeclarations
   author: string
   contributors: string[]
   homepage: string
@@ -30,7 +30,7 @@ export interface HarmonyProfile {
   patchOrder: string[]
   disabled: string[]
   plugins: InstalledPlugin[]
-  pluginConflicts: HarmonyPluginConflict[]
+  compatibility: HarmonyPluginCompatibilityFinding[]
 }
 
 export interface HarmonyProfilePluginView {
@@ -42,7 +42,7 @@ export interface HarmonyProfilePluginView {
   patchCount?: number
   before: string[]
   after: string[]
-  conflicts: HarmonyPluginConflictDeclarations
+  compatibility: HarmonyPluginCompatibilityDeclarations
   author: string
   contributors: string[]
   homepage: string
@@ -58,7 +58,7 @@ export interface HarmonyProfileView {
   plugins: HarmonyProfilePluginView[]
   orderViolations: HarmonyOrderViolation[]
   patchOrderViolations: HarmonyOrderViolation[]
-  pluginConflicts: HarmonyPluginConflict[]
+  compatibility: HarmonyPluginCompatibilityFinding[]
 }
 
 export interface HarmonyProfileUpdate {
@@ -69,6 +69,7 @@ export interface HarmonyProfileUpdate {
 
 export const HARMONY_STATE_FILE = 'harmony.json'
 export const HARMONY_PLUGIN = 'dsh-harmony'
+const HARMONY_SETTINGS_TARGET = '@deepseek-ai/dsh-client-ui-settings-general'
 
 export function pinHarmonyOrder(order: string[]): string[] {
   if (!order.includes(HARMONY_PLUGIN)) return order
@@ -88,6 +89,12 @@ function installedPlugins(profileDir: string, requested?: string[]): InstalledPl
     dependencies?: Record<string, string>
   }
   const candidates = requested ?? [...new Set([...readState(profileDir).order, ...Object.keys(profile.dependencies ?? {})])]
+  let settingsTargetAvailable = false
+  try {
+    settingsTargetAvailable = findPackageJSON(HARMONY_SETTINGS_TARGET, pathToFileURL(profilePath)) !== undefined
+  } catch {
+    // A non-web profile does not install the Settings package.
+  }
   const plugins: InstalledPlugin[] = []
   for (const dependency of candidates) {
     let manifestPath: string | undefined
@@ -110,7 +117,7 @@ function installedPlugins(profileDir: string, requested?: string[]): InstalledPl
       bugs?: string | { url?: string }
       license?: string
       dsh?: {
-        plugin?: { conflicts?: unknown }
+        plugin?: { compatibility?: unknown }
         harmony?: { patches?: string[]; before?: string[]; after?: string[] }
       }
     }
@@ -120,10 +127,10 @@ function installedPlugins(profileDir: string, requested?: string[]): InstalledPl
       dir,
       version: manifest.version ?? '0.0.0',
       description: manifest.description ?? '',
-      patches: harmony?.patches ?? [],
+      patches: manifest.name === HARMONY_PLUGIN && !settingsTargetAvailable ? [] : harmony?.patches ?? [],
       before: harmony?.before ?? [],
       after: harmony?.after ?? [],
-      conflicts: parsePluginConflicts(manifest.dsh?.plugin?.conflicts, manifest.name),
+      compatibility: parsePluginCompatibility(manifest.dsh?.plugin?.compatibility, manifest.name),
       author: person(manifest.author),
       contributors: (manifest.contributors ?? []).map(person).filter(Boolean),
       homepage: manifest.homepage ?? '',
@@ -187,7 +194,7 @@ export function synchronizeHarmonyProfile(
     patchOrder: state.patchOrder,
     disabled: state.disabled,
     plugins,
-    pluginConflicts: evaluatePluginConflicts(
+    compatibility: evaluatePluginCompatibility(
       plugins,
       activePlugins ?? plugins.map(plugin => ({ name: plugin.name, entryIds: [] })),
     ),
@@ -269,13 +276,26 @@ export function createHarmonyProfileView(
     disabled: [...profile.disabled],
     orderViolations: orderViolations(profile.order, profile.plugins),
     patchOrderViolations: patchOrderViolations.map(item => ({ ...item })),
-    pluginConflicts: profile.pluginConflicts.map(item => ({
-      left: { ...item.left, entryIds: [...item.left.entryIds] },
-      right: { ...item.right, entryIds: [...item.right.entryIds] },
-      declaredBy: [...item.declaredBy],
-    })),
+    compatibility: profile.compatibility.map(item => item.kind === 'conflict'
+      ? {
+          ...item,
+          left: { ...item.left, entryIds: [...item.left.entryIds] },
+          right: { ...item.right, entryIds: [...item.right.entryIds] },
+          declaredBy: [...item.declaredBy],
+        }
+      : item.kind === 'requirement'
+        ? {
+            ...item,
+            owner: { ...item.owner, entryIds: [...item.owner.entryIds] },
+            target: { ...item.target, entryIds: [...item.target.entryIds] },
+          }
+        : {
+            ...item,
+            owner: { ...item.owner, entryIds: [...item.owner.entryIds] },
+            target: { ...item.target, entryIds: [...item.target.entryIds] },
+          }),
     plugins: profile.plugins.map(({
-      name, version, description, patches, before, after, conflicts, author, contributors, homepage, bugs, license,
+      name, version, description, patches, before, after, compatibility, author, contributors, homepage, bugs, license,
     }) => ({
       name,
       version,
@@ -285,7 +305,11 @@ export function createHarmonyProfileView(
       ...(patchCounts.has(name) ? { patchCount: patchCounts.get(name)! } : {}),
       before: [...before],
       after: [...after],
-      conflicts: { ...conflicts },
+      compatibility: {
+        requires: { ...compatibility.requires },
+        conflicts: { ...compatibility.conflicts },
+        integrates: { ...compatibility.integrates },
+      },
       author,
       contributors: [...contributors],
       homepage,

@@ -105,28 +105,41 @@ Press `Tab` in the TUI to switch between Provider and Patch views. The Patch vie
 
 ## Patch model
 
-Harmony runs every Patch from one global `patchOrder`. Provider-level `before` and `after` rules set the usual order. A Patch that declares either rule uses its own rules instead. In **Settings → Harmony**, users can move a whole provider or place one Patch between Patches from another provider. Harmony checks that the saved list contains every registered Patch exactly once.
+Harmony runs every Patch from one global `patchOrder`. Provider-level `before` and `after` rules set the usual order. A Patch that declares either rule uses its own rules instead. In **Settings → Harmony**, users can move a whole provider or place one Patch between Patches from another provider. Plugin and Patch details provide their enable and disable actions, while the Patch status page is a read-only runtime monitor. Harmony checks that the saved list contains every registered Patch exactly once.
+
+Plugin-wide disablement is an independent `provider/*` flag. It never clears or creates individual Patch flags. Re-enabling a plugin therefore restores only the Patches that were individually enabled before the plugin was disabled.
+
+Every Patch may declare a human-readable `description`. Harmony exposes it through Patch status and JSON output, and displays it in Settings so users can understand the Patch before changing its order or enablement.
 
 A composite Patch groups several Patches under one order position and switch. Members keep their declared order and apply only when every member succeeds. A failed standalone Patch is reported and skipped; later Patches and the Host continue to run.
 
-## Plugin conflicts
+## Plugin compatibility
 
-Any DSH plugin package can declare incompatible plugin versions under `dsh.plugin.conflicts`, whether or not it provides Harmony Patches:
+Any DSH plugin package can describe its relationships with other plugins under `dsh.plugin.compatibility`, whether or not it provides Harmony Patches:
 
 ```json
 {
   "dsh": {
     "plugin": {
-      "conflicts": {
-        "legacy-plugin": "*",
-        "@vendor/other-plugin": "<2.0.0"
+      "compatibility": {
+        "requires": {
+          "base-plugin": "^2.0.0"
+        },
+        "conflicts": {
+          "legacy-plugin": "*"
+        },
+        "integrates": {
+          "optional-renderer": "^1.0.0"
+        }
       }
     }
   }
 }
 ```
 
-Harmony warns when matching packages are enabled together, but does not disable or block either plugin. One declaration is sufficient, reciprocal declarations produce one warning, and disabling a Harmony Patch does not disable its owning plugin. Conflict targets are package names and values are semver ranges.
+`requires` reports a missing, inactive, or incompatible dependency; `conflicts` warns when an incompatible pair is active; and `integrates` reports an available optional integration. These declarations never install, enable, disable, or block plugins. Targets are package names and values are semver ranges. Reciprocal conflict declarations produce one warning, and disabling a Harmony Patch does not disable its owning plugin.
+
+Live reports use the plugins active in Loader. When the profile is stopped, Harmony can only inspect its installation and therefore treats installed profile packages as active.
 
 ## React-aware patches
 

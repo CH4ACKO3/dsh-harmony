@@ -1,4 +1,4 @@
-const target = { package: '@deepseek-ai/dsh-client-ui-sidebar', files: ['lib/client.js'] }
+const target = { package: '@deepseek-ai/dsh-client-ui-sidebar', file: 'lib/client.js' }
 
 module.exports = [
   'gamma-brand',

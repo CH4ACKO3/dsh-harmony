@@ -109,28 +109,41 @@ dsh harmony reload my-provider --profile web
 
 ## Patch 模型
 
-Harmony 按一份全局 `patchOrder` 运行所有 Patch。Provider 级 `before` / `after` 负责通常的先后关系；单个 Patch 只要声明其中一项，就改用自己的规则。在 **设置 → Harmony** 中，用户可以移动整个 Provider，也可以把一个 Patch 插到另一个 Provider 的两个 Patch 之间。保存时，Harmony 会检查列表是否恰好包含每个已注册 Patch 一次。
+Harmony 按一份全局 `patchOrder` 运行所有 Patch。Provider 级 `before` / `after` 负责通常的先后关系；单个 Patch 只要声明其中一项，就改用自己的规则。在 **设置 → Harmony** 中，用户可以移动整个 Provider，也可以把一个 Patch 插到另一个 Provider 的两个 Patch 之间。插件与 Patch 详情提供启停操作，Patch 状态页则是只读的运行时监视器。保存时，Harmony 会检查列表是否恰好包含每个已注册 Patch 一次。
+
+插件级停用使用独立的 `provider/*` 标志，不会清除或创建单个 Patch 的停用标志。因此重新启用插件时，只会恢复此前本就单独启用的 Patch。
+
+每个 Patch 都可以声明便于阅读的 `description`。Harmony 会在 Patch 状态和 JSON 输出中公开它，并在设置界面中显示，让用户在调整顺序或启停之前了解该 Patch 的作用。
 
 组合 Patch 让多个 Patch 共用一个排序位置和开关。成员按声明顺序执行，而且只有全部成功才会应用。独立 Patch 失败时，Harmony 会报告并跳过它；后续 Patch 和 Host 仍会运行。
 
-## 插件冲突
+## 插件兼容性
 
-任何 DSH 插件包都可以在 `dsh.plugin.conflicts` 中声明不兼容的插件版本，无论它是否提供 Harmony Patch：
+任何 DSH 插件包都可以在 `dsh.plugin.compatibility` 中描述它与其它插件的关系，无论它是否提供 Harmony Patch：
 
 ```json
 {
   "dsh": {
     "plugin": {
-      "conflicts": {
-        "legacy-plugin": "*",
-        "@vendor/other-plugin": "<2.0.0"
+      "compatibility": {
+        "requires": {
+          "base-plugin": "^2.0.0"
+        },
+        "conflicts": {
+          "legacy-plugin": "*"
+        },
+        "integrates": {
+          "optional-renderer": "^1.0.0"
+        }
       }
     }
   }
 }
 ```
 
-当匹配的插件包同时启用时，Harmony 会发出警告，但不会停用或阻止任何一方。单方声明即可生效；双方重复声明只产生一条警告；停用 Harmony Patch 不等于停用其所属插件。冲突目标使用包名，值使用 semver 范围。
+`requires` 报告缺失、未启用或版本不匹配的依赖，`conflicts` 警告同时启用的不兼容组合，`integrates` 报告当前可用的可选联动。声明只用于检测和展示，不会安装、启用、停用或阻止插件。目标使用包名，值使用 semver 范围；双方重复声明冲突时只产生一条警告。停用 Harmony Patch 不等于停用其所属插件。
+
+实时报告使用 Loader 中实际启用的插件。配置停止运行时，Harmony 只能检查安装情况，因此会把配置中已安装的包视为已启用。
 
 ## React-aware Patch
 

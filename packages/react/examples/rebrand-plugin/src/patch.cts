@@ -2,9 +2,10 @@ const { element } = require('dsh-harmony-react')
 
 module.exports = element({
   id: 'custom-sidebar-brand',
+  description: 'Replaces the built-in sidebar brand.',
   target: {
     package: '@deepseek-ai/dsh-client-ui-sidebar',
-    version: '0.1.0-rc.7',
+    version: '0.1.0-rc.8',
     file: 'lib/client.js',
   },
   select: { component: 'BrandWordmark' },

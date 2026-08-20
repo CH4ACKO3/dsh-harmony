@@ -19,9 +19,10 @@ const { element } = require('dsh-harmony-react')
 
 module.exports = element({
   id: 'custom-sidebar-brand',
+  description: '替换内置的侧栏品牌标识。',
   target: {
     package: '@deepseek-ai/dsh-client-ui-sidebar',
-    version: '0.1.0-rc.7',
+    version: '0.1.0-rc.8',
     file: 'lib/client.js',
   },
   select: { component: 'BrandWordmark' },
@@ -55,9 +56,10 @@ const { component } = require('dsh-harmony-react')
 
 module.exports = component({
   id: 'decorate-button',
+  description: '装饰共享 Button 组件的所有调用。',
   target: {
     package: '@deepseek-ai/dsh-client-ui-buttons',
-    version: '0.1.0-rc.7',
+    version: '0.1.0-rc.8',
     file: 'lib/client.js',
   },
   select: { name: 'Button' },

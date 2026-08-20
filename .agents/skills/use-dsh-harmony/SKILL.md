@@ -54,8 +54,16 @@ Create an ordinary DSH plugin. Declare CommonJS Patch modules under `dsh.harmony
   "name": "my-harmony-provider",
   "dsh": {
     "plugin": {
-      "conflicts": {
-        "legacy-patches": "*"
+      "compatibility": {
+        "requires": {
+          "base-plugin": "^2"
+        },
+        "conflicts": {
+          "legacy-patches": "*"
+        },
+        "integrates": {
+          "optional-renderer": "^1"
+        }
       }
     },
     "harmony": {
@@ -67,7 +75,9 @@ Create an ordinary DSH plugin. Declare CommonJS Patch modules under `dsh.harmony
 }
 ```
 
-Treat `before` and `after` as provider package ordering constraints, not dependencies. Any DSH plugin may declare incompatible package versions in `dsh.plugin.conflicts`; keys are package names and values are semver ranges. Harmony warns when matching plugins are enabled together but does not block either plugin. Disabling a Patch does not disable its owning plugin. Add `inject = ['harmony']` only when the provider plugin itself requires the Harmony service.
+Treat `before` and `after` as provider package ordering constraints, not dependencies. Any DSH plugin may describe package relationships in `dsh.plugin.compatibility`: `requires` reports unavailable required plugins, `conflicts` warns about incompatible active plugins, and `integrates` reports available optional integrations. Keys are package names and values are semver ranges. These declarations never change plugin state or block startup. Disabling a Patch does not disable its owning plugin. Add `inject = ['harmony']` only when the provider plugin itself requires the Harmony service.
+
+Give each user-facing Patch a concise `description` of its effect. Harmony exposes it in status output and Settings.
 
 ### Source Patch
 
@@ -77,6 +87,7 @@ Inspect the installed target's compiled file. Select the narrowest stable TypeSc
 /** @type {import('dsh-harmony').HarmonyPatch} */
 module.exports = {
   id: 'answer-value',
+  description: 'Changes answer() to return 42.',
   target: {
     package: 'some-dsh-plugin',
     version: '^1.2.0',
@@ -101,6 +112,7 @@ const { element } = require('dsh-harmony-react')
 
 module.exports = element({
   id: 'wrap-submit',
+  description: 'Wraps the submit button with the provider boundary.',
   target: {
     package: 'some-dsh-plugin',
     version: '^1.2.0',
@@ -232,7 +244,7 @@ Check these in order:
 4. Inspect earlier Patch outputs; a prior Patch may have changed or removed the selected node.
 5. Replace a browser Semantic Patch with a Source Patch.
 6. Resolve duplicate semantic `replace` ownership, overlapping source edits, or violated provider order.
-7. Treat `dsh.plugin.conflicts` as package compatibility warnings and contradictory `before`/`after` constraints as ordering problems.
+7. Check `dsh.plugin.compatibility` findings for unmet requirements or conflicts, and treat contradictory `before`/`after` constraints as ordering problems.
 
 Harmony skips an individual Patch that cannot match or apply, marks it `failed`, and continues with later Patches. Treat the warning and `status` exit code `1` as work to fix even though the Host remains available. A provider declaration that cannot load or a target reload that cannot commit still rolls back the candidate generation. Never repair a failure by modifying the installed target package or weakening `expect` without verifying the new compiled structure.
 

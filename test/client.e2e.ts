@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { runInNewContext } from 'node:vm'
 
 type Dictionaries = Record<'zh' | 'en', Record<string, string>>
@@ -11,6 +12,7 @@ interface Registration {
 
 interface ClientContext {
   effect(register: () => unknown): void
+  get(name: string): unknown
   locale: {
     register(namespace: string, value: Dictionaries): () => void
     bind(namespace: string): (key: string) => string
@@ -33,6 +35,13 @@ interface ClientRecord {
 
 let record: ClientRecord | undefined
 const effects: Promise<unknown>[] = []
+type FetchInit = { method?: string; body?: string }
+let handleFetch = async (url: string, _init?: FetchInit): Promise<{ ok: boolean; json(): Promise<unknown> }> => ({
+  ok: true,
+  json: async () => url === '/dsh-harmony/profile'
+    ? { order: [], patchOrder: ['alpha/first', 'beta/only', 'alpha/last'], disabled: [], plugins: [{ name: 'alpha', harmony: true }, { name: 'beta', harmony: true }], orderViolations: [], patchOrderViolations: [], compatibility: [] }
+    : { state: 'active' },
+})
 type FakeStyle = {
   dataset: { plugin: string }
   before(value: FakeMarker): void
@@ -56,13 +65,23 @@ const unowned = style('ordinary')
 const beta = style('beta')
 const alphaSecond = style('alpha')
 const headStyles = [alphaFirst, unowned, beta, alphaSecond]
+const existingPluginStyle = { textContent: 'stale' }
 const fakeHead = {
   querySelectorAll() { return [...headStyles] },
 }
+const fakeWindow = {
+  __ModuleLoader__: { load(value: unknown) { record = value as ClientRecord } },
+  addEventListener() {},
+  removeEventListener() {},
+  matchMedia() { return { matches: false } },
+  setTimeout,
+  clearTimeout,
+  location: { reload() {} },
+}
 runInNewContext(readFileSync(new URL('../browser-dist/client.js', import.meta.url), 'utf8'), {
-  window: { __ModuleLoader__: { load(value: unknown) { record = value as ClientRecord } } },
+  window: fakeWindow,
   document: {
-    querySelector() { return {} },
+    querySelector(selector: string) { return selector === 'style[data-plugin-css="dsh-harmony/client.css"]' ? existingPluginStyle : {} },
     head: fakeHead,
     createComment() { return { replaceWith() {} } },
   },
@@ -71,12 +90,9 @@ runInNewContext(readFileSync(new URL('../browser-dist/client.js', import.meta.ur
     disconnect() {}
   },
   queueMicrotask,
-  fetch: async (url: string) => ({
-    ok: true,
-    json: async () => url === '/dsh-harmony/profile'
-      ? { order: [], patchOrder: ['alpha/first', 'beta/only', 'alpha/last'], disabled: [], plugins: [{ name: 'alpha', harmony: true }, { name: 'beta', harmony: true }], orderViolations: [], patchOrderViolations: [], pluginConflicts: [] }
-      : { state: 'active' },
-  }),
+  requestAnimationFrame(callback: () => void) { queueMicrotask(callback); return 1 },
+  URLSearchParams,
+  fetch: (url: string, init?: FetchInit) => handleFetch(url, init),
   navigator: { language: 'zh-CN' },
 })
 
@@ -88,11 +104,13 @@ const client = loaded.factory(name => {
   return {
     createElement() {},
     useEffect() {},
+    useLayoutEffect() {},
     useMemo() {},
     useRef() {},
     useState() {},
   }
 })
+assert.match(existingPluginStyle.textContent, /dshHarmonySourceSummary\{position:sticky/)
 assert.deepEqual(Array.from(client.inject), ['slots', 'locale'])
 
 const registrations: Registration[] = []
@@ -101,6 +119,7 @@ client.apply({
   effect(register) {
     effects.push(Promise.resolve(register()))
   },
+  get() { return undefined },
   locale: {
     register(namespace, value) {
       assert.equal(namespace, 'dsh-harmony')
@@ -135,7 +154,217 @@ assert.equal(registration.options.locale, 'dsh-harmony')
 assert.ok(dictionaries !== undefined)
 assert.deepEqual(Object.keys(dictionaries.zh), Object.keys(dictionaries.en))
 assert.equal(dictionaries.zh.patchKindSource, '源码 Patch')
+assert.equal(dictionaries.zh.patchBound, '已启用')
+assert.equal(dictionaries.zh.viewPatchDetails, '查看详情')
 assert.equal(dictionaries.en.patchOperationReplace, 'Replace')
 assert.equal(typeof registration.component, 'function')
 assert.equal(registrations.find(value => value.options.id === 'harmony-runtime')?.options.name, 'shell.overlay')
 assert.equal(registrations.find(value => value.options.id === 'harmony-reload-notifications')?.options.name, 'shell.overlay')
+
+const profile = {
+  order: ['alpha'],
+  patchOrder: ['alpha/first'],
+  disabled: ['alpha/first'],
+  plugins: [{
+    name: 'alpha', version: '1.0.0', description: '', harmony: true, patches: ['patch.cjs'], patchCount: 1,
+    before: [], after: [], compatibility: {
+      requires: { base: '^2' }, conflicts: { legacy: '*' }, integrates: { renderer: '^1' },
+    }, author: '', contributors: [], homepage: '', bugs: '', license: '',
+  }],
+  orderViolations: [], patchOrderViolations: [], compatibility: [{
+    kind: 'conflict' as const,
+    left: { package: 'alpha', version: '1.0.0', entryIds: ['alpha-entry'] },
+    right: { package: 'legacy', version: '1.0.0', entryIds: ['legacy-entry'] },
+    declaredBy: ['alpha'],
+  }, {
+    kind: 'requirement' as const,
+    owner: { package: 'alpha', version: '1.0.0', entryIds: ['alpha-entry'] },
+    target: { package: 'base', range: '^2', version: null, entryIds: [] },
+    reason: 'missing' as const,
+  }, {
+    kind: 'integration' as const,
+    owner: { package: 'alpha', version: '1.0.0', entryIds: ['alpha-entry'] },
+    target: { package: 'renderer', version: '1.2.0', entryIds: ['renderer-entry'] },
+    range: '^1',
+  }],
+}
+const patch = {
+  key: 'alpha/first', id: 'first', owner: 'alpha', index: 0,
+  targets: [{ package: 'target', file: 'lib/client.js' }], kind: 'source',
+  state: 'disabled', matches: 0, generation: 1, declaration: 'patch.cjs',
+}
+const updates: Array<{ patchOrder: string[]; disabled: string[] }> = []
+const highlighted: string[] = []
+let inspectLargeDiff = false
+const largeBefore = Array.from({ length: 1000 }, (_, index) => `const before${index} = ${index}`).join('\n')
+const largeAfter = Array.from({ length: 1000 }, (_, index) => `const after${index} = ${index}`).join('\n')
+const syntaxHighlighter = {
+  highlight({ code }: { code: string }) {
+    highlighted.push(code)
+    return {
+      lines: code.split('\n').map(content => [{
+        content,
+        color: 'var(--shiki-token-keyword)',
+        style: { bold: true as const },
+      }]),
+    }
+  },
+}
+handleFetch = async (url, init) => {
+  if (url === '/dsh-harmony/runtime') return { ok: true, json: async () => ({ state: 'active' }) }
+  if (url === '/dsh-harmony/patches') return { ok: true, json: async () => ({ patches: [patch] }) }
+  if (url.startsWith('/dsh-harmony/inspect?')) return {
+    ok: true,
+    json: async () => ({
+      inspections: [{
+        original: inspectLargeDiff ? largeBefore : 'const answer = 1',
+        steps: [{ key: patch.key, matches: 1, source: inspectLargeDiff ? largeAfter : 'const answer = 2' }],
+        final: inspectLargeDiff ? largeAfter : 'const answer = 2',
+      }],
+    }),
+  }
+  if (url !== '/dsh-harmony/profile') throw new Error(`unexpected request: ${url}`)
+  if (init?.method === 'POST') {
+    const update = JSON.parse(init.body ?? '{}') as { patchOrder: string[]; disabled: string[] }
+    updates.push(update)
+    profile.patchOrder = [...update.patchOrder]
+    profile.disabled = [...update.disabled]
+    patch.state = profile.disabled.includes(patch.key) ? 'disabled' : 'bound'
+  }
+  return { ok: true, json: async () => profile }
+}
+
+const nodeRequire = createRequire(import.meta.url)
+const React = nodeRequire('react') as {
+  createElement(type: unknown, props?: Record<string, unknown>): unknown
+}
+const testRenderer = nodeRequire('react-test-renderer') as {
+  act(callback: () => void | Promise<void>): Promise<void>
+  create(element: unknown): {
+    root: {
+      find(predicate: (node: { type: unknown; props: Record<string, unknown>; children: unknown[] }) => boolean): {
+        type: unknown
+        props: Record<string, unknown>
+        children: unknown[]
+      }
+      findAll(predicate: (node: { type: unknown; props: Record<string, unknown>; children: unknown[] }) => boolean): Array<{
+        type: unknown
+        props: Record<string, unknown>
+        children: unknown[]
+      }>
+    }
+  }
+}
+const behaviorClient = loaded.factory(name => {
+  assert.equal(name, 'react')
+  return nodeRequire('react')
+})
+const behaviorRegistrations: Registration[] = []
+const behaviorEffects: Promise<unknown>[] = []
+behaviorClient.apply({
+  effect(register) { behaviorEffects.push(Promise.resolve(register())) },
+  get(name) {
+    assert.equal(name, 'syntaxHighlighter')
+    return syntaxHighlighter
+  },
+  locale: {
+    register() { return () => {} },
+    bind() { return key => dictionaries!.en[key] ?? key },
+  },
+  slots: {
+    inject(_name, mount) { mount() },
+    register(options, component) { behaviorRegistrations.push({ options, component }) },
+  },
+})
+await Promise.all(behaviorEffects)
+const behaviorComponent = behaviorRegistrations.find(value => value.options.id === 'harmony')?.component
+assert.ok(behaviorComponent !== undefined)
+
+let rendered!: ReturnType<typeof testRenderer.create>
+await testRenderer.act(async () => {
+  rendered = testRenderer.create(React.createElement(behaviorComponent, {
+    t: (key: string) => dictionaries!.en[key] ?? key,
+  }))
+  await new Promise(resolve => setImmediate(resolve))
+})
+const find = (predicate: (node: { type: unknown; props: Record<string, unknown>; children: unknown[] }) => boolean) => rendered.root.find(predicate)
+const button = (label: string) => find(node => node.type === 'button' && node.children.join('') === label)
+const compatibilityWarning = find(node => node.props.className === 'dshHarmonyWarning').children.join('')
+assert.match(compatibilityWarning, /alpha@1\.0\.0 ↔ legacy@1\.0\.0/)
+assert.match(compatibilityWarning, /alpha@1\.0\.0 → base@\^2 \(missing\)/)
+assert.doesNotMatch(compatibilityWarning, /renderer/)
+const compatibilityDeclarations = find(node => node.props.className === 'dshHarmonyConstraint').children.join('')
+assert.match(compatibilityDeclarations, /Requires plugins: base@\^2/)
+assert.match(compatibilityDeclarations, /Conflicts with plugins: legacy/)
+assert.match(compatibilityDeclarations, /Integrates with plugins: renderer@\^1/)
+assert.match(find(node => node.props.className === 'dshHarmonyStackMeta').children.join(''), /1 Patch/)
+
+await testRenderer.act(async () => {
+  const stack = find(node => node.props.className === 'dshHarmonyStack')
+  ;(stack.props.onClick as (event: { detail: number; clientY: number }) => void)({ detail: 1, clientY: 0 })
+})
+await testRenderer.act(async () => {
+  const card = find(node => node.type === 'button' && node.props['data-patch-key'] === patch.key)
+  let prevented = false
+  let stopped = false
+  ;(card.props.onKeyDown as (event: { key: string; altKey: boolean; preventDefault(): void; stopPropagation(): void }) => void)({
+    key: 'Escape', altKey: false,
+    preventDefault() { prevented = true },
+    stopPropagation() { stopped = true },
+  })
+  assert.equal(prevented, true)
+  assert.equal(stopped, true)
+})
+await testRenderer.act(async () => {
+  const stack = find(node => node.props.className === 'dshHarmonyStack')
+  ;(stack.props.onClick as (event: { detail: number; clientY: number }) => void)({ detail: 1, clientY: 0 })
+})
+await testRenderer.act(async () => {
+  const card = find(node => node.type === 'button' && node.props['data-patch-key'] === patch.key)
+  assert.match(String(card.props['aria-label']), /alpha\/first · Disabled · 1\/1/)
+  ;(card.props.onClick as () => void)()
+})
+await testRenderer.act(async () => { (button('Enable this Patch').props.onClick as () => void)() })
+assert.equal(updates.length, 0)
+assert.equal(button('Save').props.disabled, false)
+
+await testRenderer.act(async () => { (button('Undo').props.onClick as () => void)() })
+assert.equal(updates.length, 0)
+assert.equal(button('Enable this Patch').type, 'button')
+assert.equal(button('Save').props.disabled, true)
+
+await testRenderer.act(async () => { (button('Enable this Patch').props.onClick as () => void)() })
+await testRenderer.act(async () => {
+  ;(button('Save').props.onClick as () => void)()
+  await new Promise(resolve => setImmediate(resolve))
+})
+assert.deepEqual(updates, [{ patchOrder: ['alpha/first'], disabled: [] }])
+assert.equal(button('Disable this Patch').type, 'button')
+assert.equal(button('Save').props.disabled, true)
+
+await testRenderer.act(async () => {
+  ;(button('Patch status').props.onClick as () => void)()
+  await new Promise(resolve => setImmediate(resolve))
+  await new Promise(resolve => setImmediate(resolve))
+})
+assert.deepEqual(highlighted, ['const answer = 1', 'const answer = 2'])
+const highlightedTokens = rendered.root.findAll(node => {
+  const style = node.props.style as { color?: string } | undefined
+  return node.type === 'span' && style?.color === 'var(--shiki-token-keyword)'
+})
+assert.ok(highlightedTokens.length > 0)
+assert.ok(highlightedTokens.every(token => (token.props.style as { fontWeight?: string }).fontWeight === 'bold'))
+assert.equal(rendered.root.findAll(node => node.props.role === 'option').length, 0)
+assert.equal(find(node => node.props['data-patch-key'] === patch.key && node.props.className === 'dshHarmonyPatchRow').props['aria-current'], 'true')
+const diffAccessibility = rendered.root.findAll(node => node.props.className === 'dshHarmonySrOnly').flatMap(node => node.children).join(' ')
+assert.match(diffAccessibility, /Added line/)
+assert.match(diffAccessibility, /Removed line/)
+
+inspectLargeDiff = true
+await testRenderer.act(async () => { (button('Apply order').props.onClick as () => void)() })
+await testRenderer.act(async () => {
+  ;(button('Patch status').props.onClick as () => void)()
+  await new Promise(resolve => setImmediate(resolve))
+  await new Promise(resolve => setImmediate(resolve))
+})
+assert.match(find(node => node.props.className === 'dshHarmonyDiffEmpty').children.join(''), /too large to diff safely/)

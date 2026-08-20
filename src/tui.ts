@@ -45,11 +45,14 @@ function relation(provider: HarmonyProfileView['plugins'][number], locale: Harmo
     `After ${provider.after.join(', ')}`,
     `后于 ${provider.after.join(', ')}`,
   ))
-  const conflicts = Object.entries(provider.conflicts).map(([name, range]) => range === '*' ? name : `${name}@${range}`)
-  if (conflicts.length > 0) parts.push(copy(locale,
-    `Declares incompatible ${conflicts.join(', ')}`,
-    `声明不兼容 ${conflicts.join(', ')}`,
-  ))
+  const declaration = (field: keyof typeof provider.compatibility): string[] => Object.entries(provider.compatibility[field])
+    .map(([name, range]) => range === '*' ? name : `${name}@${range}`)
+  const required = declaration('requires')
+  const conflicts = declaration('conflicts')
+  const integrations = declaration('integrates')
+  if (required.length > 0) parts.push(copy(locale, `Requires ${required.join(', ')}`, `需要 ${required.join(', ')}`))
+  if (conflicts.length > 0) parts.push(copy(locale, `Conflicts with ${conflicts.join(', ')}`, `冲突于 ${conflicts.join(', ')}`))
+  if (integrations.length > 0) parts.push(copy(locale, `Integrates with ${integrations.join(', ')}`, `联动于 ${integrations.join(', ')}`))
   return parts.join(copy(locale, '; ', '；'))
 }
 
@@ -63,7 +66,10 @@ export function renderHarmonyTui(
   const byName = new Map(profile.plugins.map(plugin => [plugin.name, plugin]))
   const violations = orderViolations(profile.order, profile.plugins)
   const conflicting = new Set(violations.flatMap(item => [item.before, item.after]))
-  const incompatible = new Set(profile.pluginConflicts.flatMap(item => [item.left.package, item.right.package]))
+  const compatibilityWarnings = profile.compatibility.filter(item => item.kind !== 'integration')
+  const incompatible = new Set(compatibilityWarnings.flatMap(item => item.kind === 'conflict'
+    ? [item.left.package, item.right.package]
+    : [item.owner.package, item.target.package]))
   const header = [
     `${ESC}1mDSH Harmony${ESC}0m  ${copy(locale, 'profile', '配置')}: ${profile.dir.split('/').at(-1)}`,
     '',
@@ -99,15 +105,18 @@ export function renderHarmonyTui(
       ))
     }
   }
-  if (profile.pluginConflicts.length > 0) {
+  if (compatibilityWarnings.length > 0) {
     footer.push('', `${ESC}33m${copy(locale,
-      `${profile.pluginConflicts.length} plugin conflicts (warnings only; plugins remain enabled):`,
-      `${profile.pluginConflicts.length} 条插件冲突（仅警告，插件仍保持启用）：`,
+      `${compatibilityWarnings.length} compatibility warnings (Harmony does not change plugin state):`,
+      `${compatibilityWarnings.length} 条兼容性警告（Harmony 不改变插件状态）：`,
     )}${ESC}0m`)
-    for (const item of profile.pluginConflicts) {
-      footer.push(copy(locale,
-        `  - ${item.left.package}@${item.left.version} is incompatible with ${item.right.package}@${item.right.version} (declared by ${item.declaredBy.join(', ')})`,
-        `  - ${item.left.package}@${item.left.version} 与 ${item.right.package}@${item.right.version} 不兼容（由 ${item.declaredBy.join(', ')} 声明）`,
+    for (const item of compatibilityWarnings) {
+      footer.push(item.kind === 'conflict' ? copy(locale,
+        `  - ${item.left.package}@${item.left.version} conflicts with ${item.right.package}@${item.right.version} (declared by ${item.declaredBy.join(', ')})`,
+        `  - ${item.left.package}@${item.left.version} 与 ${item.right.package}@${item.right.version} 冲突（由 ${item.declaredBy.join(', ')} 声明）`,
+      ) : copy(locale,
+        `  - ${item.owner.package}@${item.owner.version} requires ${item.target.package}@${item.target.range} (${item.reason})`,
+        `  - ${item.owner.package}@${item.owner.version} 需要 ${item.target.package}@${item.target.range}（${item.reason}）`,
       ))
     }
   }
@@ -124,8 +133,8 @@ export function renderHarmonyTui(
     violations.length === 0
       ? `${ESC}32m${copy(locale, 'All order constraints are satisfied.', '顺序约束已全部满足。')}${ESC}0m`
       : `${ESC}31m${copy(locale, `${violations.length} order constraints are not satisfied.`, `${violations.length} 条顺序约束未满足。`)}${ESC}0m`,
-    ...(profile.pluginConflicts.length === 0
-      ? [] : [`${ESC}33m${copy(locale, `${profile.pluginConflicts.length} plugin conflicts (warnings only).`, `${profile.pluginConflicts.length} 条插件冲突（仅警告）。`)}${ESC}0m`]),
+    ...(compatibilityWarnings.length === 0
+      ? [] : [`${ESC}33m${copy(locale, `${compatibilityWarnings.length} compatibility warnings.`, `${compatibilityWarnings.length} 条兼容性警告。`)}${ESC}0m`]),
     ...(message.length === 0 ? [] : [`${ESC}33m${message}${ESC}0m`]),
   ]
   const available = Math.max(1, Math.floor(height) - header.length - compactFooter.length)
@@ -352,14 +361,6 @@ export async function runHarmonyTui(
     const patch = patches.find(item => item.key === profile.patchOrder[patchSelected])
     if (patch === undefined) return
     const disabled = new Set(profile.disabled)
-    const providerKey = `${patch.owner}/*`
-    if (disabled.has(providerKey)) {
-      message = copy(locale,
-        `Provider ${patch.owner} is disabled; press p to enable the entire Provider.`,
-        `Provider ${patch.owner} 已停用；按 p 启用整个 Provider。`,
-      )
-      return
-    }
     if (disabled.has(patch.key)) disabled.delete(patch.key)
     else disabled.add(patch.key)
     await persist({ disabled: [...disabled] }, copy(locale,
@@ -373,7 +374,6 @@ export async function runHarmonyTui(
     const disabled = new Set(profile.disabled)
     const providerKey = `${patch.owner}/*`
     const enable = disabled.has(providerKey)
-    for (const item of patches) if (item.owner === patch.owner) disabled.delete(item.key)
     if (enable) disabled.delete(providerKey)
     else disabled.add(providerKey)
     await persist({ disabled: [...disabled] }, copy(locale,

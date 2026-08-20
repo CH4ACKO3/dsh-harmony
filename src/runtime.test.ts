@@ -125,6 +125,7 @@ test('skips a Patch with the wrong match count and continues applying later Patc
   writeFileSync(join(provider, 'patch.cjs'), `
 module.exports = [{
   id: 'one-number',
+  description: 'Requires exactly one numeric literal.',
   target: { package: 'expect-target', file: 'lib/index.js' },
   select: 'NumericLiteral',
   expect: 1,
@@ -142,6 +143,7 @@ module.exports = [{
   expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('[1, 3]')
   expect(getPatchStatuses().find(patch => patch.key === 'expect-provider/one-number')).toMatchObject({
     index: 0,
+    description: 'Requires exactly one numeric literal.',
     state: 'failed',
     matches: 2,
   })
@@ -737,7 +739,7 @@ test('applies providers in the persisted manual order', () => {
   writeFileSync(join(first, 'package.json'), JSON.stringify({
     name: 'first-provider',
     dsh: {
-      plugin: { conflicts: { 'second-provider': '*' } },
+      plugin: { compatibility: { conflicts: { 'second-provider': '*' } } },
       harmony: { patches: ['./patch.cjs'], after: ['second-provider'] },
     },
   }))
@@ -767,11 +769,51 @@ module.exports = {
   readFileSync(join(target, 'lib/index.js'), 'utf8')
 
   expect((globalThis as any).__harmonyOrder).toEqual(['second', 'first'])
-  expect(currentProfile().pluginConflicts).toEqual([{
+  expect(currentProfile().compatibility).toEqual([{
+    kind: 'conflict',
     left: { package: 'first-provider', version: '0.0.0', entryIds: [] },
     right: { package: 'second-provider', version: '0.0.0', entryIds: [] },
     declaredBy: ['first-provider'],
   }])
+})
+
+test('publishes active plugin compatibility only when a plugin update commits', () => {
+  const profile = join(root, 'compatibility-transaction-profile')
+  const alpha = join(profile, 'node_modules', 'compatibility-alpha')
+  const beta = join(profile, 'node_modules', 'compatibility-beta')
+  mkdirSync(alpha, { recursive: true })
+  mkdirSync(beta, { recursive: true })
+  writeFileSync(join(profile, 'package.json'), JSON.stringify({
+    dependencies: { 'compatibility-alpha': '1', 'compatibility-beta': '1' },
+  }))
+  writeFileSync(join(alpha, 'package.json'), JSON.stringify({
+    name: 'compatibility-alpha',
+    version: '1.0.0',
+    dsh: { plugin: { compatibility: {
+      requires: { 'compatibility-beta': '*' },
+      integrates: { 'compatibility-beta': '*' },
+    } } },
+  }))
+  writeFileSync(join(beta, 'package.json'), JSON.stringify({
+    name: 'compatibility-beta', version: '1.0.0',
+  }))
+  const installed = ['compatibility-alpha', 'compatibility-beta']
+  const both = installed.map(name => ({ name, entryIds: [`${name}-entry`] }))
+  synchronizeProfile(profile, installed, both)
+  expect(currentProfile().compatibility).toEqual([expect.objectContaining({ kind: 'integration' })])
+
+  const pending = beginPluginUpdate(installed, false, both.slice(0, 1))
+  expect(pending.profile.compatibility).toEqual([expect.objectContaining({
+    kind: 'requirement', reason: 'inactive',
+  })])
+  expect(currentProfile().compatibility).toEqual([expect.objectContaining({ kind: 'integration' })])
+  pending.rollback()
+  expect(currentProfile().compatibility).toEqual([expect.objectContaining({ kind: 'integration' })])
+
+  beginPluginUpdate(installed, false, both.slice(0, 1)).commit()
+  expect(currentProfile().compatibility).toEqual([expect.objectContaining({
+    kind: 'requirement', reason: 'inactive',
+  })])
 })
 
 test('provides harmony and reloads a newly patched loader entry', async () => {
@@ -870,7 +912,7 @@ test('reconciles the existing Loader tree when Harmony activates', async () => {
   writeFileSync(join(provider, 'package.json'), JSON.stringify({
     name: 'initial-loader-provider',
     dsh: {
-      plugin: { conflicts: { 'incompatible-loader-provider': '*' } },
+      plugin: { compatibility: { conflicts: { 'incompatible-loader-provider': '*' } } },
       harmony: { patches: ['./patch.cjs'] },
     },
   }))
@@ -900,7 +942,7 @@ module.exports = [{
   writeFileSync(join(disabled, 'package.json'), JSON.stringify({
     name: 'disabled-loader-plugin',
     version: '1.0.0',
-    dsh: { plugin: { conflicts: { 'initial-loader-provider': '*' } } },
+    dsh: { plugin: { compatibility: { conflicts: { 'initial-loader-provider': '*' } } } },
   }))
   writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'initial-loader-target' }))
   writeFileSync(join(target, 'lib/index.js'), 'export const value = 1\n')
@@ -1479,10 +1521,11 @@ module.exports = [{
   await new Promise<void>(resolve => setImmediate(resolve))
 
   const stateBefore = readFileSync(join(profile, 'harmony.json'), 'utf8')
-  const request = (order: string[]) => Object.assign(
-    Readable.from([Buffer.from(JSON.stringify({ order }))]),
+  const jsonRequest = (body: unknown) => Object.assign(
+    Readable.from([Buffer.from(JSON.stringify(body))]),
     { method: 'POST' },
   )
+  const request = (order: string[]) => jsonRequest({ order })
   const response = () => ({
     status: 0,
     body: '',
@@ -1535,6 +1578,31 @@ module.exports = [{
   })
   expect(JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8')).disabled)
     .toEqual(['web-transaction-provider/transactional'])
+
+  const toggle = async (body: { key?: string; owner?: string; enabled: boolean }) => {
+    const result = response()
+    await routes.get('/dsh-harmony/patches')(jsonRequest(body), result)
+    expect(result.status).toBe(200)
+    return JSON.parse(result.body) as { patches: Array<{ key: string; state: string }> }
+  }
+  await toggle({ owner: 'web-transaction-provider', enabled: false })
+  expect(currentProfile().disabled).toEqual([
+    'web-transaction-provider/transactional',
+    'web-transaction-provider/*',
+  ])
+
+  const enabledBelowProvider = await toggle({ key: 'web-transaction-provider/transactional', enabled: true })
+  expect(currentProfile().disabled).toEqual(['web-transaction-provider/*'])
+  expect(enabledBelowProvider.patches.find(patch => patch.key === 'web-transaction-provider/transactional')?.state)
+    .toBe('disabled')
+
+  await toggle({ key: 'web-transaction-provider/transactional', enabled: false })
+  await toggle({ owner: 'web-transaction-provider', enabled: true })
+  expect(currentProfile().disabled).toEqual(['web-transaction-provider/transactional'])
+  expect(getPatchStatuses().find(patch => patch.key === 'web-transaction-provider/transactional')?.state)
+    .toBe('disabled')
+  expect(getPatchStatuses().find(patch => patch.key === 'web-transaction-provider/client')?.state)
+    .toBe('bound')
 
   const reversedPatchOrder = [...currentProfile().patchOrder].reverse()
   const patchOrderUpdate = await harmony.updateProfile({ patchOrder: reversedPatchOrder })
@@ -1641,4 +1709,36 @@ module.exports = {
 
   for (const dispose of disposers.reverse()) await dispose()
   expect(await reloadHarmonyRuntime(profile)).toBeUndefined()
+})
+
+test('applies the bundled Settings integration through the ordinary Patch pipeline', () => {
+  const target = join(root, 'bundled-settings-target')
+  const filename = join(target, 'lib/client.js')
+  mkdirSync(join(target, 'lib'), { recursive: true })
+  writeFileSync(join(target, 'package.json'), JSON.stringify({
+    name: '@deepseek-ai/dsh-client-ui-settings-general',
+    version: '0.1.0-rc.8',
+  }))
+  writeFileSync(filename, `
+const SettingsRoot_module_css_default = { panel: 'panel', navIcon: 'icon' };
+function setActiveId(id) {}
+function closeModal() {}
+function SettingsPanel() {
+  const close = () => { closeModal(); };
+  function navIcon(id) { return id; }
+  return { className: SettingsRoot_module_css_default.panel, onSelect: setActiveId };
+}
+`)
+
+  discoverPackage(process.cwd())
+  const transformed = readFileSync(filename, 'utf8')
+
+  expect(transformed).toContain('dshHarmonySettingsPanel')
+  expect(transformed).toContain('dshHarmonyNavIcon')
+  expect(transformed.match(/__dshHarmonyBeforeSettingsClose/g)).toHaveLength(2)
+  expect(getPatchStatuses()).toContainEqual(expect.objectContaining({
+    key: 'dsh-harmony/settings-integration',
+    state: 'bound',
+    matches: 1,
+  }))
 })

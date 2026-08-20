@@ -27,7 +27,7 @@ import {
   watchProfile,
 } from './runtime.js'
 import type { PatchTargets, ProfileTransaction } from './runtime.js'
-import type { HarmonyActivePlugin } from './conflicts.js'
+import type { HarmonyActivePlugin } from './compatibility.js'
 
 const imageAssets = [
   ['/dsh-harmony/assets/harmony-icon-mono.png', new URL('../assets/harmony-icon-mono.png', import.meta.url), 'image/png'],
@@ -184,24 +184,25 @@ export async function apply(ctx: Context): Promise<void> {
   let initializing = true
   let updateTail = Promise.resolve()
   const reloadingEntries = new Set<object>()
-  let warnedPluginConflicts = new Set<string>()
+  let warnedCompatibility = new Set<string>()
   let patchFailures = new Map<string, string>()
   let reloadSequence = 0
   let reloadStatus: HarmonyReloadStatus = { sequence: 0, state: 'idle' }
 
   registerActiveRuntimeRoute(ctx, () => reloadStatus)
 
-  const warnPluginConflicts = (profile: ProfileTransaction['profile']): void => {
+  const warnCompatibility = (profile: ProfileTransaction['profile']): void => {
     const next = new Set<string>()
-    for (const item of profile.pluginConflicts) {
+    for (const item of profile.compatibility) {
+      if (item.kind === 'integration') continue
       const key = JSON.stringify(item)
       next.add(key)
-      if (warnedPluginConflicts.has(key)) continue
-      ctx.logger.warn?.(
-        `dsh-harmony: ${item.left.package}@${item.left.version} conflicts with ${item.right.package}@${item.right.version}; both remain enabled`,
-      )
+      if (warnedCompatibility.has(key)) continue
+      ctx.logger.warn?.(item.kind === 'conflict'
+        ? `dsh-harmony: ${item.left.package}@${item.left.version} conflicts with ${item.right.package}@${item.right.version}; both remain enabled`
+        : `dsh-harmony: ${item.owner.package}@${item.owner.version} requires ${item.target.package}@${item.target.range} (${item.reason})`)
     }
-    warnedPluginConflicts = next
+    warnedCompatibility = next
   }
 
   const warnPatchFailures = (): void => {
@@ -269,7 +270,7 @@ export async function apply(ctx: Context): Promise<void> {
         rebuiltClients.push(packageName)
       }
       transaction.commit()
-      warnPluginConflicts(transaction.profile)
+      warnCompatibility(transaction.profile)
       warnPatchFailures()
     } catch (error) {
       const rollbackErrors = []
@@ -343,14 +344,9 @@ export async function apply(ctx: Context): Promise<void> {
       const disabled = new Set(currentProfile().disabled)
       if (owner !== undefined) {
         const providerKey = `${owner}/*`
-        for (const patch of patches) if (patch.owner === owner) disabled.delete(patch.key)
         if (enabled) disabled.delete(providerKey)
         else disabled.add(providerKey)
       } else {
-        const patch = patches.find(item => item.key === key)!
-        if (disabled.has(`${patch.owner}/*`)) {
-          throw new Error(`dsh-harmony: Provider ${JSON.stringify(patch.owner)} is disabled; enable it first`)
-        }
         if (enabled) disabled.delete(key!)
         else disabled.add(key!)
       }
@@ -359,15 +355,25 @@ export async function apply(ctx: Context): Promise<void> {
     return { result, patches: getPatchStatuses() }
   }
 
-  const inspect = (requestUrl?: string) => {
-    const url = new URL(requestUrl ?? '/', 'http://localhost')
-    return {
+  const operations = {
+    status: () => ({
+      profile: profileView(),
       patches: getPatchStatuses(),
-      targets: getPatchInspections(
-        url.searchParams.get('package') ?? undefined,
-        url.searchParams.get('file') ?? undefined,
-      ),
-    }
+      reload: { ...reloadStatus },
+    }),
+    updateProfile: (input: HarmonyProfileUpdate) => updateProfile(() => input),
+    updatePatch,
+    inspect: (input: { package?: string; file?: string } = {}) => ({
+      patches: getPatchStatuses(),
+      targets: getPatchInspections(input.package, input.file),
+    }),
+    reload: async (provider?: string) => {
+      if (provider !== undefined && !loaderInventory(ctx).packages.includes(provider)) {
+        throw new Error(`dsh-harmony: unknown plugin ${JSON.stringify(provider)}`)
+      }
+      await refreshPatches(true, provider)
+      return operations.status()
+    },
   }
 
   ctx.inject(['clientModules'], (clientCtx) => {
@@ -377,13 +383,8 @@ export async function apply(ctx: Context): Promise<void> {
 
   ctx.provide('harmony', {
     profile: profileView,
-    updateProfile: (input: HarmonyProfileUpdate) => updateProfile(() => input),
-    inspect(input: { package?: string; file?: string } = {}) {
-      return {
-        patches: getPatchStatuses(),
-        targets: getPatchInspections(input.package, input.file),
-      }
-    },
+    updateProfile: operations.updateProfile,
+    inspect: operations.inspect,
   })
 
   const controlToken = randomBytes(32).toString('hex')
@@ -396,18 +397,14 @@ export async function apply(ctx: Context): Promise<void> {
       }
       const path = new URL(request.url ?? '/', 'http://localhost').pathname
       if (path === '/dsh-harmony/status' && request.method === 'GET') {
-        return sendJson(response, {
-          profile: profileView(),
-          patches: getPatchStatuses(),
-          reload: { ...reloadStatus },
-        })
+        return sendJson(response, operations.status())
       }
       if (path === '/dsh-harmony/profile' && request.method === 'POST') {
         const input = await readJson<HarmonyProfileUpdate>(request)
-        return sendJson(response, await updateProfile(() => input))
+        return sendJson(response, await operations.updateProfile(input))
       }
       if (path === '/dsh-harmony/patches' && request.method === 'POST') {
-        return sendJson(response, await updatePatch(await readJson<{
+        return sendJson(response, await operations.updatePatch(await readJson<{
           key?: string
           owner?: string
           enabled?: unknown
@@ -418,18 +415,14 @@ export async function apply(ctx: Context): Promise<void> {
         if (provider !== undefined && typeof provider !== 'string') {
           throw new TypeError('dsh-harmony: reload provider must be a string')
         }
-        if (provider !== undefined && !loaderInventory(ctx).packages.includes(provider)) {
-          throw new Error(`dsh-harmony: unknown plugin ${JSON.stringify(provider)}`)
-        }
-        await refreshPatches(true, provider)
-        return sendJson(response, {
-          profile: profileView(),
-          patches: getPatchStatuses(),
-          reload: { ...reloadStatus },
-        })
+        return sendJson(response, await operations.reload(provider))
       }
       if (path === '/dsh-harmony/inspect' && request.method === 'GET') {
-        return sendJson(response, inspect(request.url))
+        const url = new URL(request.url ?? '/', 'http://localhost')
+        return sendJson(response, operations.inspect({
+          package: url.searchParams.get('package') ?? undefined,
+          file: url.searchParams.get('file') ?? undefined,
+        }))
       }
       response.writeHead(404)
       response.end()
@@ -461,7 +454,7 @@ export async function apply(ctx: Context): Promise<void> {
         if (request.method === 'POST') {
           try {
             const input = await readJson(request) as HarmonyProfileUpdate
-            const result = await updateProfile(() => input)
+            const result = await operations.updateProfile(input)
             return sendJson(response, result.profile)
           } catch (error) {
             return sendError(response, error)
@@ -477,7 +470,7 @@ export async function apply(ctx: Context): Promise<void> {
         if (request.method === 'GET') return sendJson(response, { patches: getPatchStatuses() })
         if (request.method === 'POST') {
           try {
-            const result = await updatePatch(await readJson(request))
+            const result = await operations.updatePatch(await readJson(request))
             return sendJson(response, { patches: result.patches })
           } catch (error) {
             return sendError(response, error)
@@ -496,8 +489,12 @@ export async function apply(ctx: Context): Promise<void> {
           return
         }
         const url = new URL(request.url ?? '/', 'http://localhost')
+        const inspection = operations.inspect({
+          package: url.searchParams.get('package') ?? undefined,
+          file: url.searchParams.get('file') ?? undefined,
+        })
         return sendJson(response, {
-          inspections: getPatchInspections(url.searchParams.get('package') ?? undefined, url.searchParams.get('file') ?? undefined),
+          inspections: inspection.targets,
         })
       },
     })]
