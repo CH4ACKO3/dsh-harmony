@@ -68,7 +68,7 @@ const freePort = () => new Promise<number>((resolvePort, reject) => {
 
 async function startRuntime(env: NodeJS.ProcessEnv = {}) {
   const port = await freePort()
-  const child = spawn(process.execPath, [official, 'web', '--port', String(port)], {
+  const child = spawn(process.execPath, [official, 'web', '--port', String(port), '--no-open'], {
     env: {
       ...process.env,
       DSH_HOME: home,

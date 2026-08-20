@@ -9,6 +9,7 @@ import type { AppExit } from '@deepseek-ai/dsh-cmdline'
 import type { WebServer } from '@deepseek-ai/dsh-host-webserver'
 import type { Context } from '@deepseek-ai/cordis'
 import { readJson, RequestBodyTooLargeError } from './http.js'
+import { terminalLocale, terminalText } from './locale.js'
 
 type RuntimeAction = 'install' | 'install-restart' | 'remove' | 'ignore'
 type RuntimeState = 'missing' | 'desktop-inactive' | 'working' | 'installed' | 'removed' | 'ignored' | 'error'
@@ -29,6 +30,8 @@ const manifest = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf
 const packageName = manifest.name
 const packageSpec = `${manifest.name}@${manifest.version}`
 const require = createRequire(import.meta.url)
+const locale = terminalLocale()
+const text = (english: string, chinese: string): string => terminalText(locale, english, chinese)
 const { resolveCommandPath } = require('../scripts/install-shim.cjs') as {
   resolveCommandPath(prefix: string, platform?: NodeJS.Platform): string
 }
@@ -62,7 +65,10 @@ function invocationProfile(): string {
   const args = process.argv.slice(2)
   if (args[0] === 'web') return 'web'
   const option = args.findIndex(arg => arg === '--profile' || arg.startsWith('--profile='))
-  if (option === -1) throw new Error('Cannot remove dsh-harmony without a profile name')
+  if (option === -1) throw new Error(text(
+    'Cannot remove dsh-harmony without a profile name',
+    '缺少 profile 名称，无法移除 dsh-harmony',
+  ))
   return args[option] === '--profile' ? args[option + 1]! : args[option]!.slice('--profile='.length)
 }
 
@@ -100,10 +106,16 @@ function restart(ctx: Context, command: string): void {
 async function terminalChoice(): Promise<RuntimeAction> {
   const input = createInterface({ input: process.stdin, output: process.stdout })
   try {
-    process.stdout.write('\ndsh-harmony is installed as a plugin, but its launcher is not active.\n')
-    process.stdout.write('  1. Install\n  2. Install and restart\n  3. Remove plugin\n  4. Ignore once\n')
+    process.stdout.write(`\n${text(
+      'dsh-harmony is installed as a plugin, but its launcher is not active.',
+      'dsh-harmony 已作为插件安装，但启动器尚未启用。',
+    )}\n`)
+    process.stdout.write(text(
+      '  1. Install\n  2. Install and restart\n  3. Remove plugin\n  4. Ignore once\n',
+      '  1. 安装\n  2. 安装并重启\n  3. 移除插件\n  4. 本次忽略\n',
+    ))
     while (true) {
-      const answer = (await input.question('Choose [1-4]: ')).trim()
+      const answer = (await input.question(text('Choose [1-4]: ', '请选择 [1-4]：'))).trim()
       const action = ({ 1: 'install', 2: 'install-restart', 3: 'remove', 4: 'ignore' } as Record<string, RuntimeAction>)[answer]
       if (action !== undefined) return action
     }
@@ -184,14 +196,20 @@ export async function waitForRuntimeChoice(ctx: Context): Promise<void> {
   }))
 
   if (!webInvocation()) {
-    if (!process.stdin.isTTY) throw new Error('dsh-harmony launcher is not active; run npm install -g dsh-harmony or start dsh in a terminal')
+    if (!process.stdin.isTTY) throw new Error(text(
+      'dsh-harmony launcher is not active; run npm install -g dsh-harmony or start dsh in a terminal',
+      'dsh-harmony 启动器尚未启用；请运行 npm install -g dsh-harmony，或在终端中启动 dsh',
+    ))
     const action = await terminalChoice()
     const result = await act(action)
     if (status.state === 'error') throw new Error(status.error)
     if (action === 'remove') return appExit(0)
     if (result.restartCommand !== undefined) return restart(ctx, result.restartCommand)
     if (action === 'install') {
-      process.stdout.write('dsh-harmony installed. Run dsh again to enable patches.\n')
+      process.stdout.write(`${text(
+        'dsh-harmony installed. Run dsh again to enable patches.',
+        'dsh-harmony 已安装。请重新运行 dsh 以启用 Patch。',
+      )}\n`)
       return appExit(0)
     }
   }

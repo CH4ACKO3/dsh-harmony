@@ -43,7 +43,8 @@
   "files": [
     "lib",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "README.zh-CN.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json && tsc -p examples/rebrand-plugin/tsconfig.json && tsc -p examples/rebrand-plugin/tsconfig.client.json",

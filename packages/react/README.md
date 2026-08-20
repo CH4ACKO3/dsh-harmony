@@ -1,5 +1,7 @@
 # dsh-harmony-react
 
+English | [简体中文](./README.zh-CN.md)
+
 React-aware source patch factories for [dsh-harmony](https://github.com/memorax-ai/dsh-harmony).
 
 This package is a Node-side Harmony extension, not a DSH client runtime. It turns

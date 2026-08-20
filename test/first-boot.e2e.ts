@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const home = mkdtempSync(join(tmpdir(), 'dsh-harmony-first-boot-'))
-const child = spawn(process.execPath, ['lib/bin.js', 'web', '--port', '0'], {
+const child = spawn(process.execPath, ['lib/bin.js', 'web', '--port', '0', '--no-open'], {
   env: { ...process.env, DSH_HOME: home },
   stdio: ['ignore', 'pipe', 'pipe'],
 })
@@ -58,9 +58,9 @@ rmSync(tuiHome, { recursive: true })
 const missingProfileHome = mkdtempSync(join(tmpdir(), 'dsh-harmony-missing-profile-'))
 const missingProfile = spawnSync(process.execPath, ['lib/bin.js', 'harmony', '--profile'], {
   encoding: 'utf8',
-  env: { ...process.env, DSH_HOME: missingProfileHome },
+  env: { ...process.env, DSH_HOME: missingProfileHome, LC_ALL: 'zh_CN.UTF-8' },
 })
 assert.notEqual(missingProfile.status, 0)
-assert.match(missingProfile.stderr, /argument missing/)
+assert.match(missingProfile.stderr, /错误: 选项 '--profile <name>' 缺少参数/)
 assert.equal(existsSync(join(missingProfileHome, 'profiles', 'web', 'package.json')), false)
 rmSync(missingProfileHome, { recursive: true })

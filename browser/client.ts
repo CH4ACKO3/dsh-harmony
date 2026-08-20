@@ -174,6 +174,14 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         patchWarning: '警告',
         patchDisabled: '已停用',
         patchFailed: '失败',
+        patchKindSource: '源码 Patch',
+        patchKindSemantic: '语义 Patch',
+        patchKindLoader: '加载器 Patch',
+        patchKindComposite: '组合 Patch',
+        patchOperationBefore: '之前执行',
+        patchOperationAfter: '之后执行',
+        patchOperationAround: '环绕执行',
+        patchOperationReplace: '替换',
         enable: '启用',
         disable: '停用',
         enableProvider: '启用 Provider',
@@ -188,7 +196,6 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         intro: '拖动插件封面移动整堆；展开后可将单个 Patch 拖到任意位置。',
         expandStack: '展开 Patch 卡片堆',
         collapseStack: '折叠 Patch 卡片堆',
-        movePatch: '拖动 Patch',
         dropAt: '放到第',
         orderEmpty: '当前没有可排序的 Harmony Patch。',
         preview: '插件示意图占位',
@@ -198,7 +205,6 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         conflicts: '声明不兼容',
         incompatibilityWarning: '检测到插件冲突；所有插件仍保持启用：',
         noConstraints: '没有声明 Harmony 顺序约束。',
-        fixed: '固定',
         keyboard: '长按卡片召回同插件 Patch · 拖动封面或单个 Patch · 滚轮仍可滚动',
         save: '保存',
         undo: '撤回',
@@ -254,6 +260,14 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         patchWarning: 'Warning',
         patchDisabled: 'Disabled',
         patchFailed: 'Failed',
+        patchKindSource: 'Source patch',
+        patchKindSemantic: 'Semantic patch',
+        patchKindLoader: 'Loader patch',
+        patchKindComposite: 'Composite patch',
+        patchOperationBefore: 'Before',
+        patchOperationAfter: 'After',
+        patchOperationAround: 'Around',
+        patchOperationReplace: 'Replace',
         enable: 'Enable',
         disable: 'Disable',
         enableProvider: 'Enable provider',
@@ -268,7 +282,6 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         intro: 'Drag a plugin cover to move its stack, or expand it to place an individual Patch.',
         expandStack: 'Expand patch stack',
         collapseStack: 'Collapse patch stack',
-        movePatch: 'Drag patch',
         dropAt: 'Drop at position',
         orderEmpty: 'There are no Harmony patches to order.',
         preview: 'Plugin preview placeholder',
@@ -278,7 +291,6 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         conflicts: 'Declares incompatible',
         incompatibilityWarning: 'Plugin conflicts detected; all plugins remain enabled:',
         noConstraints: 'No Harmony order constraints declared.',
-        fixed: 'Pinned',
         keyboard: 'Hold a card to recall its plugin Patches · Drag a cover or one Patch · Wheel scrolling stays available',
         save: 'Save',
         undo: 'Undo',
@@ -348,6 +360,22 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       error?: string
       members?: Array<{ id: string; kind: 'source' | 'semantic' | 'loader' }>
     }
+
+    const patchKindLabel = (t: Translate, kind: PatchStatus['kind']) => t({
+      source: 'patchKindSource',
+      semantic: 'patchKindSemantic',
+      loader: 'patchKindLoader',
+      composite: 'patchKindComposite',
+    }[kind] as TranslationKey)
+    const patchOperationLabel = (t: Translate, operation: NonNullable<PatchStatus['operation']>) => t({
+      before: 'patchOperationBefore',
+      after: 'patchOperationAfter',
+      around: 'patchOperationAround',
+      replace: 'patchOperationReplace',
+    }[operation] as TranslationKey)
+    const patchTypeLabel = (t: Translate, patch: PatchStatus) => `${patchKindLabel(t, patch.kind)}${
+      patch.operation ? ` / ${patchOperationLabel(t, patch.operation)}` : patch.loader ? ` / ${patch.loader}` : ''
+    }`
 
     interface PatchInspection {
       original: string
@@ -794,7 +822,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
                   h('div', { className: 'dshHarmonyPatchHeader' },
                     h('div', null,
                       h('h3', { className: 'dshHarmonyTitle' }, patch.key),
-                      h('p', { className: 'dshHarmonyScope' }, `${stateLabel(patch.state)} · ${patch.kind}${patch.operation ? ` / ${patch.operation}` : patch.loader ? ` / ${patch.loader}` : ''}`)),
+                      h('p', { className: 'dshHarmonyScope' }, `${stateLabel(patch.state)} · ${patchTypeLabel(t, patch)}`)),
                     h('div', { className: 'dshHarmonyPatchChain' },
                       h('button', {
                         className: 'dshHarmonySecondary', type: 'button', disabled: busy === patch.key,
@@ -813,7 +841,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
                     h('span', null, `${t('patchLoaded')}: ${patch.loaded ? '✓' : '—'}`),
                     h('span', null, `${t('patchMatches')}: ${patch.matches}`),
                     h('span', null, `${t('patchGeneration')}: ${patch.generation}`),
-                    patch.operation ? h('span', null, `${t('patchOperation')}: ${patch.operation}`) : null),
+                    patch.operation ? h('span', null, `${t('patchOperation')}: ${patchOperationLabel(t, patch.operation)}`) : null),
                   patch.error ? h('p', { className: 'dshHarmonyConstraint dshHarmonyError', role: 'alert' }, patch.error) : null,
                   inspection ? h(React.Fragment, null,
                     h('h4', { className: 'dshHarmonyScope' }, t('patchChain')),
@@ -1512,7 +1540,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
           h('span', { className: 'dshHarmonyPatchText' },
             h('span', { className: 'dshHarmonyPatchName', title: key }, patch?.id ?? key.slice(owner.length + 1)),
             h('span', { className: 'dshHarmonyPatchOwner' }, displayName(owner))),
-          h('span', { className: 'dshHarmonyOrderState', 'data-state': patch?.state, title: status === 'normal' ? patch?.state ?? '' : status })))
+          h('span', { className: 'dshHarmonyOrderState', 'data-state': patch?.state, title: stackHealthTitle([key]) })))
       }
 
       return h('div', { className: 'dshHarmonyPage', onWheel: scrollWhileDragging },
@@ -1609,7 +1637,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
                   h('h3', { className: 'dshHarmonyTitle' }, selectedPatch.id),
                   h('span', { className: 'dshHarmonyVersion' }, orderStateLabel(selectedPatch.state))),
                 h('p', { className: 'dshHarmonyScope' }, selectedPatch.key)),
-              h('p', { className: 'dshHarmonyDescription' }, `${selectedPatch.kind}${selectedPatch.operation ? ` / ${selectedPatch.operation}` : selectedPatch.loader ? ` / ${selectedPatch.loader}` : ''}`),
+              h('p', { className: 'dshHarmonyDescription' }, patchTypeLabel(t, selectedPatch)),
               h('div', { className: 'dshHarmonyFacts' },
                 h('span', null, `${t('patchProvider')}: ${displayName(selectedPatch.owner)}`),
                 selectedAuthor ? h('span', null, `${t('author')}: ${selectedAuthor}`) : null,
@@ -1618,7 +1646,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
                 h('span', null, `${t('patchLoaded')}: ${selectedPatch.loaded ? '✓' : '—'}`),
                 h('span', null, `${t('patchMatches')}: ${selectedPatch.matches}`),
                 h('span', null, `${t('patchGeneration')}: ${selectedPatch.generation}`)),
-              selectedPatch.members === undefined ? null : h('p', { className: 'dshHarmonyConstraint' }, selectedPatch.members.map(member => `${member.id} · ${member.kind}`).join(' · ')),
+              selectedPatch.members === undefined ? null : h('p', { className: 'dshHarmonyConstraint' }, selectedPatch.members.map(member => `${member.id} · ${patchKindLabel(t, member.kind)}`).join(' · ')),
               selectedPatch.error ? h('p', { className: 'dshHarmonyConstraint dshHarmonyError', role: 'alert' }, selectedPatch.error) : null)
             : selectedPlugin === undefined ? h('p', { className: 'dshHarmonyStatus' }, t('noDescription')) :
               h('section', { className: 'dshHarmonyDetail', 'aria-live': 'polite' },

@@ -29,9 +29,9 @@ test('TUI shows provider order, declarations, and the conflicting pair', () => {
       right: { package: 'late', version: '2.0.0', entryIds: ['late'] },
       declaredBy: ['early'],
     }],
-  }, 0, '')
+  }, 0, '', Number.POSITIVE_INFINITY, 'zh')
 
-  expect(output).toContain('profile: web')
+  expect(output).toContain('配置: web')
   expect(output).toContain('early 必须在 late 前')
   expect(output).toContain('前于 late')
   expect(output).toContain('early@1.0.0 与 late@2.0.0 不兼容（由 early 声明）')
@@ -63,12 +63,12 @@ test('TUI keeps the selected provider visible within the terminal height', () =>
     orderViolations: [],
     patchOrderViolations: [],
     pluginConflicts: [],
-  }, 17, '', 12)
+  }, 17, '', 12, 'en')
 
   expect(output.split('\n')).toHaveLength(12)
   expect(output).toContain('provider-17')
-  expect(output).toContain('项在上方')
-  expect(output).toContain('项在下方')
+  expect(output).toContain('items above')
+  expect(output).toContain('items below')
 })
 
 test('TUI Patch view shows runtime state and keeps the selected Patch visible', () => {
@@ -99,7 +99,7 @@ test('TUI Patch view shows runtime state and keeps the selected Patch visible', 
     generation: 4,
     declaration: '/provider/patch.cjs',
     ...(index === 12 ? { error: 'selector mismatch' } : {}),
-  })), 12, '', 13)
+  })), 12, '', 13, 'zh')
 
   expect(output.split('\n')).toHaveLength(13)
   expect(output).toContain('provider/patch-12')
@@ -160,7 +160,7 @@ module.exports = {
     columns: 100,
     write(value: string) { screen += value; return true },
   })
-  const running = runHarmonyTui(profile, input as any, output as any)
+  const running = runHarmonyTui(profile, input as any, output as any, 'zh')
   await new Promise<void>(resolve => setImmediate(resolve))
   input.emit('keypress', '\t', { name: 'tab' })
   input.emit('keypress', ' ', { name: 'space' })

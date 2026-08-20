@@ -30,7 +30,7 @@ const port = await new Promise<number>((resolvePort, reject) => {
     server.close(() => resolvePort(address.port))
   })
 })
-const child = spawn(process.execPath, [official, 'web', '--port', String(port)], {
+const child = spawn(process.execPath, [official, 'web', '--port', String(port), '--no-open'], {
   env: { ...process.env, DSH_HOME: home },
   stdio: ['ignore', 'pipe', 'pipe'],
 })
@@ -59,6 +59,7 @@ const html = await fetch(url).then(response => response.text())
 assert.match(html, /dsh-harmony-bootstrap/)
 const client = await fetch(`${url}/plugins/dsh-harmony-bootstrap/client.js`).then(response => response.text())
 assert.match(client, /Restart now/)
+assert.match(client, /立刻重启/)
 
 const restart = await fetch(`${url}/dsh-harmony-bootstrap/restart`, { method: 'POST' })
 assert.equal(restart.ok, true)
