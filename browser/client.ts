@@ -157,9 +157,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         patchSelect: '选择一个 Patch 查看详情。',
         patchTarget: '目标',
         patchVersion: '版本范围',
-        patchFile: '目标文件',
         patchMatches: '匹配数',
-        patchLoaded: '目标已加载',
         patchGeneration: '运行代次',
         patchOperation: '操作',
         patchProvider: '插件',
@@ -243,9 +241,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         patchSelect: 'Select a patch to inspect it.',
         patchTarget: 'Target',
         patchVersion: 'Version range',
-        patchFile: 'Target file',
         patchMatches: 'Matches',
-        patchLoaded: 'Target loaded',
         patchGeneration: 'Generation',
         patchOperation: 'Operation',
         patchProvider: 'Plugin',
@@ -345,18 +341,14 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       id: string
       owner: string
       index: number
-      targets: Array<{ package: string; version?: string; files: string[] }>
+      targets: Array<{ package: string; version?: string; file: string }>
       kind: 'source' | 'semantic' | 'loader' | 'composite'
       operation?: 'before' | 'after' | 'around' | 'replace'
       loader?: 'typescript'
       state: 'pending' | 'bound' | 'disabled' | 'failed'
-      status: 'normal' | 'warning' | 'error' | 'disabled'
-      loaded: boolean
       matches: number
       generation: number
       declaration: string
-      file?: string
-      files?: string[]
       error?: string
       members?: Array<{ id: string; kind: 'source' | 'semantic' | 'loader' }>
     }
@@ -425,7 +417,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       | { type: 'stack'; id: string; owner: string; keys: string[]; start: number; end: number; expanded: boolean }
       | { type: 'placeholder'; index: number }
     type PatchStackNode = Extract<PatchViewNode, { type: 'stack' }>
-    type PatchCardStatus = PatchStatus['status']
+    type PatchCardStatus = 'normal' | 'warning' | 'error' | 'disabled'
     type OrderSelection = { kind: 'plugin'; key: string } | { kind: 'patch'; key: string }
 
     let patchStyleOwners: string[] = []
@@ -529,7 +521,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
     const packageScope = (name: string) => name.match(/^(@[^/]+)\//)?.[1] ?? ''
     const detailAuthor = (plugin: PluginView) => [packageScope(plugin.name), plugin.author].filter(Boolean).join(' · ')
     const patchTargetLabel = (patch: PatchStatus | undefined) => patch?.targets
-      .map(target => `${target.package}/${target.files.join(' | ')}`)
+      .map(target => `${target.package}/${target.file}`)
       .join(', ') ?? ''
     const stackId = (owner: string, keys: string[]) => `${owner}:${keys.join('|')}`
     const stackBoundary = (left: string, right: string) => `${left}\0${right}`
@@ -766,16 +758,17 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
 
       useEffect(() => { void load() }, [])
       useEffect(() => {
-        if (patch?.file === undefined || patch.targets.length !== 1) return setInspection(null)
+        if (patch === undefined || patch.targets.length !== 1) return setInspection(null)
         let current = true
         setInspection(null)
-        const query = new URLSearchParams({ package: patch.targets[0]!.package, file: patch.file })
+        const target = patch.targets[0]!
+        const query = new URLSearchParams({ package: target.package, file: target.file })
         fetch(`/dsh-harmony/inspect?${query}`, { cache: 'no-store' })
           .then(response => response.ok ? response.json() : Promise.reject(new Error(`${response.status}`)))
           .then((value: { inspections: PatchInspection[] }) => { if (current) setInspection(value.inspections[0] ?? null) })
           .catch(reason => { if (current) setError(reason instanceof Error ? reason.message : String(reason)) })
         return () => { current = false }
-      }, [patch?.key, patch?.file])
+      }, [patch?.key])
 
       const toggle = async (provider: boolean) => {
         if (patch === undefined) return
@@ -837,8 +830,6 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
                     patch.targets.length === 1 && patch.targets[0]!.version
                       ? h('span', null, `${t('patchVersion')}: ${patch.targets[0]!.version}`)
                       : null,
-                    h('span', null, `${t('patchFile')}: ${patch.files?.join(' | ') ?? patch.file ?? patchTargetLabel(patch)}`),
-                    h('span', null, `${t('patchLoaded')}: ${patch.loaded ? '✓' : '—'}`),
                     h('span', null, `${t('patchMatches')}: ${patch.matches}`),
                     h('span', null, `${t('patchGeneration')}: ${patch.generation}`),
                     patch.operation ? h('span', null, `${t('patchOperation')}: ${patchOperationLabel(t, patch.operation)}`) : null),
@@ -900,9 +891,9 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         .flatMap(violation => [violation.before, violation.after])), [view])
       const cardStatus = (key: string): PatchCardStatus => {
         const patch = patchMap.get(key)
-        if (patch?.status === 'disabled' || patch?.state === 'disabled') return 'disabled'
-        if (patch?.status === 'error' || patch?.state === 'failed') return 'error'
-        if (patch?.status === 'warning' || warningPatchKeys.has(key)) return 'warning'
+        if (patch?.state === 'disabled') return 'disabled'
+        if (patch?.state === 'failed') return 'error'
+        if (warningPatchKeys.has(key)) return 'warning'
         return 'normal'
       }
       const stackStatuses = (keys: string[]) => keys.map(cardStatus)
@@ -1643,7 +1634,6 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
                 selectedAuthor ? h('span', null, `${t('author')}: ${selectedAuthor}`) : null,
                 h('span', null, `${t('patchTarget')}: ${patchTargetLabel(selectedPatch)}`),
                 h('span', null, `${t('patchDeclaration')}: ${selectedPatch.declaration}`),
-                h('span', null, `${t('patchLoaded')}: ${selectedPatch.loaded ? '✓' : '—'}`),
                 h('span', null, `${t('patchMatches')}: ${selectedPatch.matches}`),
                 h('span', null, `${t('patchGeneration')}: ${selectedPatch.generation}`)),
               selectedPatch.members === undefined ? null : h('p', { className: 'dshHarmonyConstraint' }, selectedPatch.members.map(member => `${member.id} · ${patchKindLabel(t, member.kind)}`).join(' · ')),

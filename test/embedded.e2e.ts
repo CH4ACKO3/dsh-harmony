@@ -98,13 +98,13 @@ try {
 module.exports = [{
   id: 'large-output',
   before: ['large-provider'],
-  target: { package: 'large-target', version: '1.0.0', files: ['lib/client.js'] },
+  target: { package: 'large-target', version: '1.0.0', file: 'lib/client.js' },
   select: 'NumericLiteral[text="1"]',
   expect: 1,
   apply({ node, sourceFile, edit }) { edit.overwrite(node.getStart(sourceFile), node.getEnd(), '2') },
 }, {
   id: 'stable-export',
-  target: { package: 'large-target', version: '1.0.0', files: ['lib/client.js'] },
+  target: { package: 'large-target', version: '1.0.0', file: 'lib/client.js' },
   select: 'VariableDeclaration',
   expect: 1,
   apply() {},

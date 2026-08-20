@@ -62,7 +62,7 @@ export function helper(): number { return value }
   }))
   writeFileSync(join(provider, 'patch.cjs'), `
 const replaceValue = (id, file) => ({
-  id, target: { package: 'module-hook-target', files: [file] },
+  id, target: { package: 'module-hook-target', file },
   select: 'NumericLiteral', expect: 1,
   apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '2') },
 })
@@ -70,16 +70,16 @@ module.exports = [
   replaceValue('array-source', 'lib/array.js'),
   replaceValue('typed-source', 'lib/typed.js'),
   {
-    id: 'typescript-loader', target: { package: 'module-hook-target', files: ['index.ts'] },
+    id: 'typescript-loader', target: { package: 'module-hook-target', file: 'index.ts' },
     loader: 'typescript',
   },
   {
-    id: 'typescript-source', target: { package: 'module-hook-target', files: ['index.ts'] },
+    id: 'typescript-source', target: { package: 'module-hook-target', file: 'index.ts' },
     select: 'NumericLiteral[text="1"]', expect: 1,
     apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '2') },
   },
   {
-    id: 'alias-source', target: { package: 'module-hook-target', files: ['lib/alias.js'] },
+    id: 'alias-source', target: { package: 'module-hook-target', file: 'lib/alias.js' },
     select: 'SourceFile', expect: 1,
     apply({ edit }) {
       globalThis.__dshHarmonyAliasApplications = (globalThis.__dshHarmonyAliasApplications ?? 0) + 1
@@ -87,7 +87,7 @@ module.exports = [
     },
   },
   {
-    id: 'idempotent', target: { package: 'module-hook-target', files: ['lib/idempotent.js'] },
+    id: 'idempotent', target: { package: 'module-hook-target', file: 'lib/idempotent.js' },
     select: 'SourceFile', expect: 1,
     apply({ edit }) {
       globalThis.__dshHarmonyIdempotentApplications = (globalThis.__dshHarmonyIdempotentApplications ?? 0) + 1

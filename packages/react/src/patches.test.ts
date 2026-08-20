@@ -14,7 +14,7 @@ const require = createRequire(import.meta.url)
 const target = {
   package: '@deepseek-ai/dsh-client-ui-example',
   version: '0.1.0-rc.7',
-  files: ['lib/client.js'],
+  file: 'lib/client.js',
 }
 
 function applyPatch(source: string, patch: HarmonySourcePatch): string {
@@ -405,12 +405,12 @@ describe('React source patches', () => {
     })).toThrow('id must not be empty')
 
     expect(() => element({
-      id: 'missing-files',
-      target: { ...target, files: [] },
+      id: 'missing-file',
+      target: { ...target, file: '' },
       select: { component: 'Composer' },
       expect: 1,
       operation: { kind: 'remove' },
-    })).toThrow('target.files must contain at least one file')
+    })).toThrow('target.file must not be empty')
 
     expect(() => element({
       id: 'invalid-expect',

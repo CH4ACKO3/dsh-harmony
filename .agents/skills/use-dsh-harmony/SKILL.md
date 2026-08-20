@@ -80,7 +80,7 @@ module.exports = {
   target: {
     package: 'some-dsh-plugin',
     version: '^1.2.0',
-    files: ['lib/index.js'],
+    file: 'lib/index.js',
   },
   select: 'FunctionDeclaration[name.name="answer"] NumericLiteral',
   expect: 1,
@@ -104,7 +104,7 @@ module.exports = element({
   target: {
     package: 'some-dsh-plugin',
     version: '^1.2.0',
-    files: ['lib/client.js'],
+    file: 'lib/client.js',
   },
   select: { component: 'SubmitButton' },
   expect: 1,
@@ -128,7 +128,7 @@ module.exports = {
   target: {
     package: 'typescript-only-plugin',
     version: '^1.0.0',
-    files: ['index.ts'],
+    file: 'index.ts',
   },
   loader: 'typescript',
 }
@@ -147,7 +147,7 @@ module.exports = {
   target: {
     package: 'some-dsh-plugin',
     version: '^1.2.0',
-    files: ['lib/index.js'],
+    file: 'lib/index.js',
     function: 'answer',
   },
   operation: 'after',
@@ -190,7 +190,7 @@ Use Settings or `dsh harmony` to reorder and enable or disable Patches. Do not e
 
 ## Control a profile from another plugin
 
-Use the Cordis service when already inside the running profile. `order` and `patchOrder` must be complete permutations of their current lists; omitted fields keep their current values. The result identifies the committed Patch generation, reload status, and client graph revision when the client module service is available:
+Use the Cordis service when already inside the running profile. `order` and `patchOrder` must be complete permutations of their current lists; omitted fields keep their current values. The result identifies the committed Patch generation and reload status:
 
 ```ts
 export const inject = ['harmony']
@@ -227,7 +227,7 @@ Offline preflight validates and normalizes profile state without writing it. It 
 Check these in order:
 
 1. Confirm the selected profile contains both the provider and target.
-2. Confirm `target.version` accepts the installed target version and `files` names a compiled file that exists.
+2. Confirm `target.version` accepts the installed target version and `file` names a compiled file that exists.
 3. Compare `expect` with the actual selector match count against the current compiled shape.
 4. Inspect earlier Patch outputs; a prior Patch may have changed or removed the selected node.
 5. Replace a browser Semantic Patch with a Source Patch.

@@ -90,11 +90,9 @@ test('TUI Patch view shows runtime state and keeps the selected Patch visible', 
     id: `patch-${index}`,
     owner: 'provider',
     index,
-    targets: [{ package: 'target', files: ['lib/index.js'] }],
+    targets: [{ package: 'target', file: 'lib/index.js' }],
     kind: 'source',
     state: index === 2 ? 'disabled' : index === 12 ? 'failed' : 'bound',
-    status: index === 2 ? 'disabled' : index === 12 ? 'error' : 'normal',
-    loaded: true,
     matches: 1,
     generation: 4,
     declaration: '/provider/patch.cjs',
@@ -126,13 +124,13 @@ test('TUI saves an order even when one Patch will be skipped', async () => {
   }
   writeFileSync(join(reader, 'patch.cjs'), `
 module.exports = {
-  id: 'read', target: { package: 'tui-target', files: ['lib/index.js'] },
+  id: 'read', target: { package: 'tui-target', file: 'lib/index.js' },
   select: 'NumericLiteral', expect: 1, apply() {},
 }
 `)
   writeFileSync(join(remover, 'patch.cjs'), `
 module.exports = {
-  id: 'remove', target: { package: 'tui-target', files: ['lib/index.js'] },
+  id: 'remove', target: { package: 'tui-target', file: 'lib/index.js' },
   select: 'NumericLiteral', expect: 1,
   apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), 'undefined') },
 }

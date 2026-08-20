@@ -166,7 +166,7 @@ export function renderHarmonyTui(
 }
 
 function patchTarget(patch: HarmonyPatchStatus): string {
-  return patch.targets.map(target => `${target.package}/${target.files.join('|')}`).join(', ')
+  return patch.targets.map(target => `${target.package}/${target.file}`).join(', ')
 }
 
 export function renderHarmonyPatchTui(
@@ -281,7 +281,7 @@ export async function runHarmonyTui(
   const offlineState = () => {
     installModuleHooks()
     discoverProfile(profileDir)
-    inspectPatchTargets(true)
+    inspectPatchTargets()
     const patches = getPatchStatuses()
     const patchCounts = new Map(currentProfile().plugins.map(plugin => [plugin.name, 0]))
     for (const patch of patches) patchCounts.set(patch.owner, (patchCounts.get(patch.owner) ?? 0) + 1)
@@ -411,11 +411,11 @@ export async function runHarmonyTui(
     const patch = patches.find(item => item.key === profile.patchOrder[patchSelected])
     if (patch === undefined) return
     try {
-      const target = patch.targets.length === 1 && patch.file !== undefined ? patch.targets[0] : undefined
+      const target = patch.targets.length === 1 ? patch.targets[0] : undefined
       const live = state.mode === 'live'
-        ? await inspectHarmonyRuntime(profileDir, target?.package, patch.file)
+        ? await inspectHarmonyRuntime(profileDir, target?.package, target?.file)
         : undefined
-      const inspections = live?.targets ?? (state.mode === 'offline' ? getPatchInspections(target?.package, patch.file) : [])
+      const inspections = live?.targets ?? (state.mode === 'offline' ? getPatchInspections(target?.package, target?.file) : [])
       const matched = inspections.filter(item => item.steps.some(step => step.key === patch.key))
       message = matched.length === 0
         ? copy(locale,

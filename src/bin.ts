@@ -130,7 +130,7 @@ if (isHarmonyCommand) {
   const offlineInspection = (): { mode: 'offline'; profile: ReturnType<typeof createHarmonyProfileView> } & HarmonyInspection => {
     installModuleHooks()
     discoverProfile(profileDir!)
-    inspectPatchTargets(true)
+    inspectPatchTargets()
     const patches = getPatchStatuses()
     const patchCounts = new Map(currentProfile().plugins.map(plugin => [plugin.name, 0]))
     for (const patch of patches) patchCounts.set(patch.owner, (patchCounts.get(patch.owner) ?? 0) + 1)
@@ -195,11 +195,11 @@ if (isHarmonyCommand) {
         ))
       }
       for (const patch of status.patches) {
-        const targets = patch.targets.map(target => `${target.package}/${target.files.join('|')}`).join(', ')
-        await writeStdout(`${patchStateLabel(patch.state).padEnd(8)} ${patch.key} [${patchKindLabel(patch.kind)}] -> ${patch.file ?? targets}\n`)
+        const targets = patch.targets.map(target => `${target.package}/${target.file}`).join(', ')
+        await writeStdout(`${patchStateLabel(patch.state).padEnd(8)} ${patch.key} [${patchKindLabel(patch.kind)}] -> ${targets}\n`)
         await writeStdout(text(
-          `  loaded=${patch.loaded} matches=${patch.matches} generation=${patch.generation}${patch.error === undefined ? '' : `\n  ${patch.error}`}\n`,
-          `  已加载=${patch.loaded} 匹配数=${patch.matches} 代次=${patch.generation}${patch.error === undefined ? '' : `\n  ${patch.error}`}\n`,
+          `  matches=${patch.matches} generation=${patch.generation}${patch.error === undefined ? '' : `\n  ${patch.error}`}\n`,
+          `  匹配数=${patch.matches} 代次=${patch.generation}${patch.error === undefined ? '' : `\n  ${patch.error}`}\n`,
         ))
       }
     }

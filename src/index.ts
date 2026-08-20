@@ -10,13 +10,9 @@ declare module '@deepseek-ai/cordis' {
 }
 
 export interface HarmonyService {
-  readonly binEntry: string
-  readonly profileDir: string
   profile(): HarmonyProfileView
   updateProfile(input: HarmonyProfileUpdate): Promise<HarmonyRuntimeProfileUpdateResult>
   inspect(input?: HarmonyInspectInput): HarmonyInspection
-  inspectDependencies(owner: string): HarmonyPatchDependency[]
-  reloadPlugin(name: string): Promise<void>
 }
 
 export interface HarmonyRuntimeProfileUpdateResult {
@@ -24,7 +20,6 @@ export interface HarmonyRuntimeProfileUpdateResult {
   profile: HarmonyProfileView
   generation: number
   reload: HarmonyReloadStatus
-  clientGraphRev?: string
 }
 
 export interface HarmonyOfflineProfileUpdateResult {
@@ -44,16 +39,9 @@ export interface HarmonyInspection {
   targets: HarmonyPatchInspection[]
 }
 
-export interface HarmonyPatchDependency {
-  patch: string
-  target: { package: string; file: string }
-  providerCandidates: string[]
-  reason: string
-}
-
 export interface HarmonyPatchTarget {
   package: string
-  files: string[]
+  file: string
   version?: string
 }
 
@@ -143,8 +131,6 @@ export interface HarmonyPatchStatus {
   operation?: HarmonySemanticOperation
   loader?: HarmonyLoaderPatch['loader']
   state: 'pending' | 'bound' | 'disabled' | 'failed'
-  status: 'normal' | 'warning' | 'error' | 'disabled'
-  loaded: boolean
   matches: number
   generation: number
   declaration: string
@@ -155,8 +141,6 @@ export interface HarmonyPatchStatus {
     operation?: HarmonySemanticOperation
     loader?: HarmonyLoaderPatch['loader']
   }>
-  file?: string
-  files?: string[]
   error?: string
 }
 
@@ -174,8 +158,6 @@ export interface HarmonyPatchInspection {
 }
 
 export { apply, inject } from './plugin.js'
-export { discoverHarmonyExtensions, loadHarmonyExtensions } from './extension.js'
-export type { HarmonyExtension } from './extension.js'
 export {
   preflightHarmonyProfileUpdate,
   readHarmonyProfile,
@@ -192,4 +174,4 @@ export type {
   HarmonyPluginRef,
 } from './conflicts.js'
 export type { HarmonyReloadStatus } from './installer.js'
-export type { HarmonyOrderViolation, HarmonyPatchOrderItem } from './order.js'
+export type { HarmonyOrderViolation } from './order.js'

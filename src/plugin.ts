@@ -2,13 +2,11 @@ import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { fileURLToPath } from 'node:url'
 import type { ClientModuleRegistry } from '@deepseek-ai/dsh-client-modules'
 import type { WebServer } from '@deepseek-ai/dsh-host-webserver'
 import type { Context, Fiber } from '@deepseek-ai/cordis'
 import type { Loader } from '@deepseek-ai/cordis-plugin-loader'
 import { publishRuntimeAddress } from './control.js'
-import { loadHarmonyExtensions } from './extension.js'
 import { readJson, RequestBodyTooLargeError } from './http.js'
 import { registerActiveRuntimeRoute, waitForRuntimeChoice } from './installer.js'
 import type { HarmonyReloadStatus } from './installer.js'
@@ -21,7 +19,6 @@ import {
   getPatchInspections,
   getPatchOrderViolations,
   getPatchStatuses,
-  inspectPatchDependencies,
   inspectPatchTargets,
   packageNameOf,
   prepareModuleReload,
@@ -264,7 +261,7 @@ export async function apply(ctx: Context): Promise<void> {
     const rebuiltClients: string[] = []
     const modules = clientModules
     try {
-      inspectPatchTargets(true)
+      inspectPatchTargets()
       restoreEntries = await reload(hostEntries(transaction.targets), transaction.generation)
       for (const [packageName, files] of transaction.targets) {
         if (!files.has('lib/client.js') || modules === undefined) continue
@@ -327,7 +324,6 @@ export async function apply(ctx: Context): Promise<void> {
       profile: profileView(),
       generation,
       reload: { ...reloadStatus },
-      ...(clientModules === undefined ? {} : { clientGraphRev: clientModules.graph().rev }),
     }
   }
 
@@ -380,8 +376,6 @@ export async function apply(ctx: Context): Promise<void> {
   })
 
   ctx.provide('harmony', {
-    binEntry: fileURLToPath(new URL('./bin.js', import.meta.url)),
-    profileDir,
     profile: profileView,
     updateProfile: (input: HarmonyProfileUpdate) => updateProfile(() => input),
     inspect(input: { package?: string; file?: string } = {}) {
@@ -390,20 +384,7 @@ export async function apply(ctx: Context): Promise<void> {
         targets: getPatchInspections(input.package, input.file),
       }
     },
-    inspectDependencies: (owner: string) => inspectPatchDependencies(owner),
-    reloadPlugin: (name: string) => refreshPatches(true, name),
   })
-  let disposeExtensions: (() => Promise<void>) | undefined
-  let extensionsDisposed = false
-  const extensionsReady = loadHarmonyExtensions(ctx, profileDir).then(async dispose => {
-    if (extensionsDisposed) await dispose()
-    else disposeExtensions = dispose
-  })
-  ctx.effect(() => async () => {
-    extensionsDisposed = true
-    await extensionsReady
-    await disposeExtensions?.()
-  }, 'dsh-harmony: extensions')
 
   const controlToken = randomBytes(32).toString('hex')
   const controlServer = createServer((request, response) => {
@@ -581,7 +562,7 @@ export async function apply(ctx: Context): Promise<void> {
     })
   }), 'dsh-harmony: patch reload')
   synchronizeLoader()
-  await Promise.all([extensionsReady, controlReady])
+  await controlReady
 }
 
 export const inject = ['appExit']

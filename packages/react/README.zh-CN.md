@@ -22,7 +22,7 @@ module.exports = element({
   target: {
     package: '@deepseek-ai/dsh-client-ui-sidebar',
     version: '0.1.0-rc.7',
-    files: ['lib/client.js'],
+    file: 'lib/client.js',
   },
   select: { component: 'BrandWordmark' },
   expect: 1,
@@ -58,7 +58,7 @@ module.exports = component({
   target: {
     package: '@deepseek-ai/dsh-client-ui-buttons',
     version: '0.1.0-rc.7',
-    files: ['lib/client.js'],
+    file: 'lib/client.js',
   },
   select: { name: 'Button' },
   expect: 1,

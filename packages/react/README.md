@@ -34,7 +34,7 @@ module.exports = element({
   target: {
     package: '@deepseek-ai/dsh-client-ui-sidebar',
     version: '0.1.0-rc.7',
-    files: ['lib/client.js'],
+    file: 'lib/client.js',
   },
   select: { component: 'BrandWordmark' },
   expect: 1,
@@ -94,7 +94,7 @@ module.exports = component({
   target: {
     package: '@deepseek-ai/dsh-client-ui-buttons',
     version: '0.1.0-rc.7',
-    files: ['lib/client.js'],
+    file: 'lib/client.js',
   },
   select: { name: 'Button' },
   expect: 1,
@@ -120,7 +120,7 @@ Element selectors can address a local or member component name, an intrinsic tag
 use raw TSQuery. A raw Element TSQuery must select the compiled `jsx`/`jsxs`
 `CallExpression` itself. A raw Component TSQuery must select the initialized variable or
 named function declaration itself. Every patch requires an exact `expect`, explicit
-target version, and explicit target files. A single patch rejects nested matches when
+target version, and one explicit target file. A single patch rejects nested matches when
 their source edits overlap; use explicitly ordered patches when both parent and child
 must change.
 

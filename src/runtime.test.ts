@@ -60,7 +60,7 @@ test('applies a declared patch while reading a plugin file', async () => {
   writeFileSync(join(provider, 'answer.patch.cjs'), `
 module.exports = {
   id: 'test-patch',
-  target: { package: 'target-plugin', files: ['lib/index.js'] },
+  target: { package: 'target-plugin', file: 'lib/index.js' },
   select: 'NumericLiteral[text="1"]',
   apply({ node, sourceFile, edit }) {
     edit.overwrite(node.getStart(sourceFile), node.getEnd(), '2')
@@ -88,7 +88,7 @@ test('does not re-enter a transformation when a Patch reads its own target', () 
   }))
   writeFileSync(join(provider, 'patch.cjs'), `
 module.exports = {
-  id: 'self-read', target: { package: 'reentrant-target', files: ['lib/index.js'] },
+  id: 'self-read', target: { package: 'reentrant-target', file: 'lib/index.js' },
   select: 'NumericLiteral', expect: 1,
   apply({ node, edit }) {
     globalThis.__dshHarmonyReentrantApplications = (globalThis.__dshHarmonyReentrantApplications ?? 0) + 1
@@ -125,13 +125,13 @@ test('skips a Patch with the wrong match count and continues applying later Patc
   writeFileSync(join(provider, 'patch.cjs'), `
 module.exports = [{
   id: 'one-number',
-  target: { package: 'expect-target', files: ['lib/index.js'] },
+  target: { package: 'expect-target', file: 'lib/index.js' },
   select: 'NumericLiteral',
   expect: 1,
   apply() {},
 }, {
   id: 'replace-two',
-  target: { package: 'expect-target', files: ['lib/index.js'] },
+  target: { package: 'expect-target', file: 'lib/index.js' },
   select: 'NumericLiteral[text="2"]',
   expect: 1,
   apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '3') },
@@ -142,11 +142,10 @@ module.exports = [{
   expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('[1, 3]')
   expect(getPatchStatuses().find(patch => patch.key === 'expect-provider/one-number')).toMatchObject({
     index: 0,
-    state: 'failed', status: 'error',
+    state: 'failed',
     matches: 2,
-    file: 'lib/index.js',
   })
-  expect(getPatchStatuses().find(patch => patch.key === 'expect-provider/replace-two')).toMatchObject({ index: 1, state: 'bound', status: 'normal' })
+  expect(getPatchStatuses().find(patch => patch.key === 'expect-provider/replace-two')).toMatchObject({ index: 1, state: 'bound' })
 })
 
 test('uses provider constraints by default and lets a Patch override them', () => {
@@ -169,7 +168,7 @@ test('uses provider constraints by default and lets a Patch override them', () =
   writeFileSync(join(first, 'patch.cjs'), `
 const patch = (id, order) => ({
   id, ...(order || {}),
-  target: { package: 'expected-patch-order-target', files: ['index.js'] },
+  target: { package: 'expected-patch-order-target', file: 'index.js' },
   select: 'SourceFile', apply() { globalThis.__expectedPatchOrder.push(id) },
 })
 module.exports = [patch('default'), patch('override', { after: ['expected-second-provider'] })]
@@ -179,7 +178,7 @@ module.exports = [patch('default'), patch('override', { after: ['expected-second
   }))
   writeFileSync(join(second, 'patch.cjs'), `
 module.exports = {
-  id: 'middle', target: { package: 'expected-patch-order-target', files: ['index.js'] },
+  id: 'middle', target: { package: 'expected-patch-order-target', file: 'index.js' },
   select: 'SourceFile', apply() { globalThis.__expectedPatchOrder.push('middle') },
 }
 `)
@@ -203,7 +202,7 @@ module.exports = {
   }))
   writeFileSync(join(added, 'patch.cjs'), `
 module.exports = {
-  id: 'added', target: { package: 'expected-patch-order-target', files: ['index.js'] },
+  id: 'added', target: { package: 'expected-patch-order-target', file: 'index.js' },
   select: 'SourceFile', apply() { globalThis.__expectedPatchOrder.push('added') },
 }
 `)
@@ -240,7 +239,7 @@ test('applies a complete user Patch order across provider boundaries', () => {
     }))
     writeFileSync(join(directory, 'patch.cjs'), `
 module.exports = ${JSON.stringify(ids)}.map(id => ({
-  id, target: { package: 'manual-patch-order-target', files: ['index.js'] },
+  id, target: { package: 'manual-patch-order-target', file: 'index.js' },
   select: 'SourceFile', apply() { globalThis.__manualPatchOrder.push(id) },
 }))
 `)
@@ -287,7 +286,7 @@ test('rolls back every file when one member of a composite Patch fails', () => {
   }))
   writeFileSync(join(provider, 'patch.cjs'), `
 const replace = (id, file, from, to) => ({
-  id, target: { package: 'failed-composite-target', files: [file] },
+  id, target: { package: 'failed-composite-target', file },
   select: 'NumericLiteral[text="' + from + '"]', expect: 1,
   apply({ node, edit }) {
     globalThis.__failedCompositeCalls = (globalThis.__failedCompositeCalls || 0) + 1
@@ -298,7 +297,7 @@ module.exports = [{
   id: 'atomic',
   patches: [replace('first', 'a.js', 1, 2), replace('second', 'b.js', 9, 4)],
 }, {
-  id: 'later', target: { package: 'failed-composite-target', files: ['a.js'] },
+  id: 'later', target: { package: 'failed-composite-target', file: 'a.js' },
   select: 'NumericLiteral[text="1"]', expect: 1,
   apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '5') },
 }]
@@ -335,7 +334,7 @@ test('toggles and reports a successful composite Patch as one unit', () => {
   }))
   writeFileSync(join(provider, 'patch.cjs'), `
 const replace = (id, file, from, to) => ({
-  id, target: { package: 'successful-composite-target', files: [file] },
+  id, target: { package: 'successful-composite-target', file },
   select: 'NumericLiteral[text="' + from + '"]', expect: 1,
   apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), String(to)) },
 })
@@ -351,17 +350,17 @@ module.exports = { id: 'atomic', patches: [
   expect(readFileSync(join(target, 'a.js'), 'utf8')).toContain('a = 2')
   expect(readFileSync(join(target, 'b.js'), 'utf8')).toContain('b = 4')
   expect(getPatchStatuses().find(patch => patch.key === 'successful-composite-provider/atomic')).toMatchObject({
-    kind: 'composite', state: 'bound', matches: 2, files: ['a.js', 'b.js'],
+    kind: 'composite', state: 'bound', matches: 2,
   })
 
   const transaction = beginProfileUpdate({ disabled: ['successful-composite-provider/atomic'] })
   transaction.commit()
   expect(readFileSync(join(target, 'a.js'), 'utf8')).toContain('a = 1')
   expect(readFileSync(join(target, 'b.js'), 'utf8')).toContain('b = 3')
-  expect(getPatchStatuses().find(patch => patch.key === 'successful-composite-provider/atomic')).toMatchObject({ state: 'disabled', status: 'disabled' })
+  expect(getPatchStatuses().find(patch => patch.key === 'successful-composite-provider/atomic')).toMatchObject({ state: 'disabled' })
 })
 
-test('uses target version ranges and the first existing candidate file', () => {
+test('uses target version ranges and an exact target file', () => {
   const target = join(root, 'version-target')
   const provider = join(root, 'version-provider')
   mkdirSync(join(target, 'dist'), { recursive: true })
@@ -375,7 +374,7 @@ test('uses target version ranges and the first existing candidate file', () => {
   writeFileSync(join(provider, 'patch.cjs'), `
 module.exports = {
   id: 'versioned',
-  target: { package: 'version-target', version: '^2.0.0', files: ['lib/index.js', 'dist/index.js'] },
+  target: { package: 'version-target', version: '^2.0.0', file: 'dist/index.js' },
   select: 'NumericLiteral',
   expect: 1,
   apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '2') },
@@ -385,7 +384,7 @@ module.exports = {
 
   expect(readFileSync(join(target, 'dist/index.js'), 'utf8')).toContain('value = 2')
   expect(getPatchStatuses().find(patch => patch.key === 'version-provider/versioned')).toMatchObject({
-    state: 'bound', matches: 1, file: 'dist/index.js',
+    state: 'bound', matches: 1,
   })
 
   writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'version-target', version: '3.0.0' }))
@@ -415,27 +414,27 @@ module.exports = { answer, delayed, defaulted }
   writeFileSync(join(provider, 'patch.cjs'), `
 module.exports = [{
   id: 'answer-before',
-  target: { package: 'semantic-target', files: ['lib/index.js'], function: 'answer' },
+  target: { package: 'semantic-target', file: 'lib/index.js', function: 'answer' },
   operation: 'before',
   handler({ args }) { return [args[0] + 1] },
 }, {
   id: 'answer-around',
-  target: { package: 'semantic-target', files: ['lib/index.js'], function: 'answer' },
+  target: { package: 'semantic-target', file: 'lib/index.js', function: 'answer' },
   operation: 'around',
   handler({ args, invoke }) { return invoke([args[0] + 1]) },
 }, {
   id: 'answer-after',
-  target: { package: 'semantic-target', files: ['lib/index.js'], function: 'answer' },
+  target: { package: 'semantic-target', file: 'lib/index.js', function: 'answer' },
   operation: 'after',
   handler({ result }) { return result + 1 },
 }, {
   id: 'delayed-after',
-  target: { package: 'semantic-target', files: ['lib/index.js'], function: 'delayed' },
+  target: { package: 'semantic-target', file: 'lib/index.js', function: 'delayed' },
   operation: 'after',
   async handler({ result }) { return result * 3 },
 }, {
   id: 'defaulted-after',
-  target: { package: 'semantic-target', files: ['lib/index.js'], function: 'defaulted' },
+  target: { package: 'semantic-target', file: 'lib/index.js', function: 'defaulted' },
   operation: 'after',
   handler({ result }) { return result },
 }]
@@ -465,12 +464,12 @@ test('applies source and semantic patches in one global declaration order', () =
   writeFileSync(join(provider, 'patch.cjs'), `
 module.exports = [{
   id: 'semantic-first',
-  target: { package: 'mixed-order-target', files: ['lib/index.js'], function: 'answer' },
+  target: { package: 'mixed-order-target', file: 'lib/index.js', function: 'answer' },
   operation: 'after',
   handler({ result }) { return result + 1 },
 }, {
   id: 'source-second',
-  target: { package: 'mixed-order-target', files: ['lib/index.js'] },
+  target: { package: 'mixed-order-target', file: 'lib/index.js' },
   select: 'PropertyAccessExpression[name.text="__dshHarmonyInvoke"]',
   expect: 1,
   apply() {},
@@ -496,7 +495,7 @@ test('adds React provenance only after every business patch has composed', () =>
   }))
   writeFileSync(join(provider, 'patch.cjs'), `
 module.exports = [{
-  id: 'replace', target: { package: 'trace-target', files: ['lib/client.js'] },
+  id: 'replace', target: { package: 'trace-target', file: 'lib/client.js' },
   select: 'CallExpression[arguments.0.name="Original"]', expect: 1,
   trace: {
     select: 'CallExpression[arguments.0.expression.expression.name="require"][arguments.0.expression.arguments.0.text="plugin-a"][arguments.0.argumentExpression.text="A"]',
@@ -507,7 +506,7 @@ module.exports = [{
     edit.overwrite(type.getStart(sourceFile), type.getEnd(), 'require("plugin-a")["A"]')
   },
 }, {
-  id: 'wrap', target: { package: 'trace-target', files: ['lib/client.js'] },
+  id: 'wrap', target: { package: 'trace-target', file: 'lib/client.js' },
   select: 'CallExpression[arguments.0.expression.expression.name="require"][arguments.0.expression.arguments.0.text="plugin-a"][arguments.0.argumentExpression.text="A"]', expect: 1,
   trace: {
     select: 'CallExpression[arguments.0.expression.expression.name="require"][arguments.0.expression.arguments.0.text="plugin-b"][arguments.0.argumentExpression.text="B"]',
@@ -524,7 +523,7 @@ module.exports = [{
   }))
   writeFileSync(join(external, 'patch.cjs'), `
 module.exports = {
-  id: 'external-props', target: { package: 'trace-target', files: ['lib/client.js'] },
+  id: 'external-props', target: { package: 'trace-target', file: 'lib/client.js' },
   select: 'CallExpression[arguments.0.expression.expression.name="require"][arguments.0.expression.arguments.0.text="plugin-b"][arguments.0.argumentExpression.text="B"]', expect: 1,
   trace: {
     select: 'CallExpression[arguments.0.expression.expression.name="require"][arguments.0.expression.arguments.0.text="plugin-b"][arguments.0.argumentExpression.text="B"]',
@@ -558,7 +557,7 @@ module.exports = {
     expect(inspection.final).not.toContain('__dshHarmonyPatchTrace')
     expect(inspection.final).toContain('require("plugin-b")["B"]')
     expect(getPatchStatuses().find(patch => patch.key === 'trace-provider/wrap')).toMatchObject({
-      declaration: 'patch.cjs', file: 'lib/client.js',
+      declaration: 'patch.cjs',
     })
   } finally {
     if (previous === undefined) delete process.env.DSH_HARMONY_REACT_TRACE
@@ -578,7 +577,7 @@ test('leaves normal Host browser output uninstrumented', () => {
   }))
   writeFileSync(join(provider, 'patch.cjs'), `
 module.exports = {
-  id: 'normal-trace', target: { package: 'normal-trace-target', files: ['lib/client.js'] },
+  id: 'normal-trace', target: { package: 'normal-trace-target', file: 'lib/client.js' },
   select: 'CallExpression[arguments.0.name="Original"]', expect: 1,
   trace: { select: 'CallExpression[arguments.0.name="Original"]', effect: 'wrap-element', maxMatches: 1 },
   apply({ patch, node, sourceFile, edit }) {
@@ -613,7 +612,7 @@ test('keeps old semantic bindings unchanged while a candidate transaction is pen
   writeFileSync(join(provider, 'patch.cjs'), `
 module.exports = {
   id: 'after',
-  target: { package: 'semantic-isolation-target', files: ['lib/index.js'], function: 'answer' },
+  target: { package: 'semantic-isolation-target', file: 'lib/index.js', function: 'answer' },
   operation: 'after',
   handler({ result }) { return result + 1 },
 }
@@ -646,7 +645,7 @@ test('keeps the first semantic replacement and skips later conflicts', () => {
   writeFileSync(join(provider, 'patch.cjs'), `
 module.exports = ['first', 'second'].map(id => ({
   id,
-  target: { package: 'replace-target', files: ['lib/index.js'], function: 'answer' },
+  target: { package: 'replace-target', file: 'lib/index.js', function: 'answer' },
   operation: 'replace',
   handler() { return 2 },
 }))
@@ -678,7 +677,7 @@ test('stages disabled patches and restores runtime and disk state on rollback', 
   writeFileSync(join(provider, 'patch.cjs'), `
 module.exports = {
   id: 'toggle',
-  target: { package: 'toggle-target', files: ['lib/index.js'] },
+  target: { package: 'toggle-target', file: 'lib/index.js' },
   select: 'NumericLiteral',
   expect: 1,
   apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '2') },
@@ -749,7 +748,7 @@ test('applies providers in the persisted manual order', () => {
   writeFileSync(join(first, 'patch.cjs'), `
 module.exports = {
   id: 'test-patch',
-  target: { package: 'ordered-target', files: ['lib/index.js'] },
+  target: { package: 'ordered-target', file: 'lib/index.js' },
   select: 'NumericLiteral',
   apply() { globalThis.__harmonyOrder.push('first') },
 }
@@ -757,7 +756,7 @@ module.exports = {
   writeFileSync(join(second, 'patch.cjs'), `
 module.exports = {
   id: 'test-patch',
-  target: { package: 'ordered-target', files: ['lib/index.js'] },
+  target: { package: 'ordered-target', file: 'lib/index.js' },
   select: 'NumericLiteral',
   apply() { globalThis.__harmonyOrder.push('second') },
 }
@@ -787,7 +786,7 @@ test('provides harmony and reloads a newly patched loader entry', async () => {
   writeFileSync(join(provider, 'patch.cjs'), `
 module.exports = {
   id: 'test-patch',
-  target: { package: 'live-target', files: ['lib/index.js'] },
+  target: { package: 'live-target', file: 'lib/index.js' },
   select: 'SourceFile',
   apply() {},
 }
@@ -799,7 +798,7 @@ module.exports = {
   writeFileSync(join(laterProvider, 'patch.cjs'), `
 module.exports = {
   id: 'test-patch',
-  target: { package: 'live-target', files: ['lib/index.js'] },
+  target: { package: 'live-target', file: 'lib/index.js' },
   select: 'SourceFile',
   apply() {},
 }
@@ -878,18 +877,18 @@ test('reconciles the existing Loader tree when Harmony activates', async () => {
   writeFileSync(join(provider, 'patch.cjs'), `
 module.exports = [{
   id: 'test-patch',
-  target: { package: 'initial-loader-target', files: ['lib/index.js'] },
+  target: { package: 'initial-loader-target', file: 'lib/index.js' },
   select: 'SourceFile',
   apply() {},
 }, {
   id: 'wrong-count',
-  target: { package: 'initial-loader-target', files: ['lib/index.js'] },
+  target: { package: 'initial-loader-target', file: 'lib/index.js' },
   select: 'NumericLiteral',
   expect: 2,
   apply() {},
 }, {
   id: 'missing-target',
-  target: { package: 'initial-loader-target-absent', files: ['lib/index.js'] },
+  target: { package: 'initial-loader-target-absent', file: 'lib/index.js' },
   select: 'SourceFile',
   apply() {},
 }]
@@ -967,7 +966,7 @@ test('sends client bundle changes through the official client HMR path', async (
   writeFileSync(join(provider, 'patch.cjs'), `
 module.exports = {
   id: 'test-patch',
-  target: { package: 'web-target', files: ['lib/client.js'] },
+  target: { package: 'web-target', file: 'lib/client.js' },
   select: 'SourceFile',
   apply() {},
 }
@@ -1014,7 +1013,7 @@ test('keeps the previous loader fiber when a patched replacement fails', async (
   writeFileSync(join(provider, 'patch.cjs'), `
 module.exports = {
   id: 'test-patch',
-  target: { package: 'failing-live-target', files: ['lib/index.js'] },
+  target: { package: 'failing-live-target', file: 'lib/index.js' },
   select: 'SourceFile',
   apply() {},
 }
@@ -1101,7 +1100,7 @@ test('reloads a changed patch file while the profile is running', async () => {
   const writePatch = (value: number): void => writeFileSync(patchFile, `
 module.exports = {
   id: 'test-patch',
-  target: { package: 'watched-target', files: ['lib/index.js'] },
+  target: { package: 'watched-target', file: 'lib/index.js' },
   select: 'NumericLiteral',
   apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '${value}') },
 }
@@ -1149,7 +1148,7 @@ test('reloads a provider whose patch target changes', () => {
   const writePatch = (target: string, value: number): void => writeFileSync(join(provider, 'patch.cjs'), `
 module.exports = {
   id: 'test-patch',
-  target: { package: '${target}', files: ['lib/index.js'] },
+  target: { package: '${target}', file: 'lib/index.js' },
   select: 'NumericLiteral',
   apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '${value}') },
 }
@@ -1180,7 +1179,7 @@ test('reloads a provider when its local CommonJS helper changes', () => {
   writeFileSync(join(provider, 'patch.cjs'), `
 const value = require('./value.cjs')
 module.exports = {
-  id: 'helper', target: { package: 'provider-helper-target', files: ['lib/index.js'] },
+  id: 'helper', target: { package: 'provider-helper-target', file: 'lib/index.js' },
   select: 'NumericLiteral', expect: 1,
   apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), String(value)) },
 }
@@ -1243,7 +1242,7 @@ test('ignores plugin lifecycle events emitted by Harmony reloads', async () => {
   writeFileSync(join(provider, 'patch.cjs'), `
 const shared = require('./shared.cjs')
 module.exports = {
-  id: 'retry', target: { package: 'provider-retry-target', files: ['lib/index.js'] },
+  id: 'retry', target: { package: 'provider-retry-target', file: 'lib/index.js' },
   select: 'NumericLiteral', expect: 1,
   apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), String(shared.value)) },
 }
@@ -1399,17 +1398,17 @@ test('commits WebUI order updates only after loader reload succeeds', async () =
   writeFileSync(join(provider, 'patch.cjs'), `
 module.exports = [{
   id: 'transactional',
-  target: { package: 'web-transaction-target', files: ['lib/index.js'] },
+  target: { package: 'web-transaction-target', file: 'lib/index.js' },
   select: 'NumericLiteral',
   expect: 1,
   apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '2') },
 }, {
   id: 'client',
-  target: { package: 'web-transaction-client', files: ['lib/client.js'] },
+  target: { package: 'web-transaction-client', file: 'lib/client.js' },
   select: 'NumericLiteral', expect: 1, apply() {},
 }, {
   id: 'client-b',
-  target: { package: 'web-transaction-client-b', files: ['lib/client.js'] },
+  target: { package: 'web-transaction-client-b', file: 'lib/client.js' },
   select: 'NumericLiteral', expect: 1, apply() {},
 }]
 `)
@@ -1453,7 +1452,6 @@ module.exports = [{
   const routes = new Map<string, any>()
   const disposers: Array<() => void> = []
   let harmony!: HarmonyService
-  let graphRevision = 0
   await applyHarmonyPlugin({
     provide(name: string, service: HarmonyService) {
       if (name === 'harmony') harmony = service
@@ -1470,10 +1468,8 @@ module.exports = [{
         : { clientModules: {
             rebuilt(name: string) {
               if (failClient === name) throw new Error('client rebuild failed')
-              graphRevision += 1
               clientRebuilds.push({ name, order: [...currentProfile().order] })
             },
-            graph() { return { rev: `graph-${graphRevision}`, entries: [] } },
           } }
       const dispose = start(injected)
       if (typeof dispose === 'function') disposers.push(dispose)
@@ -1532,7 +1528,6 @@ module.exports = [{
   expect(serviceUpdate).toMatchObject({
     generation: expect.any(Number),
     reload: { state: 'succeeded' },
-    clientGraphRev: `graph-${graphRevision}`,
     profile: {
       order: desired,
       disabled: ['web-transaction-provider/transactional'],
@@ -1593,7 +1588,7 @@ test('controls a running profile without a Web server', async () => {
   writeFileSync(join(provider, 'patch.cjs'), `
 module.exports = {
   id: 'non-web',
-  target: { package: 'non-web-target', files: ['lib/index.js'] },
+  target: { package: 'non-web-target', file: 'lib/index.js' },
   select: 'NumericLiteral', expect: 1, apply() {},
 }
 `)

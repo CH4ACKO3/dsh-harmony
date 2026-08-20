@@ -27,10 +27,7 @@ function assertText(value: string, name: string): void {
 function validateTarget(target: ReactPatchTarget): void {
   assertText(target.package, 'target.package')
   assertText(target.version, 'target.version')
-  if (!Array.isArray(target.files) || target.files.length === 0) {
-    throw new Error('dsh-harmony-react: target.files must contain at least one file')
-  }
-  for (const file of target.files) assertText(file, 'target.files entry')
+  assertText(target.file, 'target.file')
 }
 
 function validatePatch(options: { id: string; target: ReactPatchTarget; expect: number }): void {
@@ -189,7 +186,7 @@ function sourcePatch(
     target: {
       package: options.target.package,
       version: options.target.version,
-      files: [...options.target.files],
+      file: options.target.file,
     },
     select,
     expect: options.expect,
