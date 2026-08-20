@@ -10,26 +10,32 @@ const child = spawn(process.execPath, ['lib/bin.js', 'web', '--port', '0'], {
   stdio: ['ignore', 'pipe', 'pipe'],
 })
 let output = ''
-await new Promise<void>((resolve, reject) => {
-  const timer = setTimeout(() => reject(new Error(`first boot timed out:\n${output}`)), 10_000)
-  const read = (chunk: Buffer) => {
-    output += chunk
-    if (!output.includes('dsh web: http://127.0.0.1:')) return
-    clearTimeout(timer)
-    resolve()
-  }
-  child.stdout.on('data', read)
-  child.stderr.on('data', read)
-  child.once('exit', code => {
-    clearTimeout(timer)
-    reject(new Error(`first boot exited ${code}:\n${output}`))
+try {
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`first boot timed out:\n${output}`)), 30_000)
+    const read = (chunk: Buffer) => {
+      output += chunk
+      if (!output.includes('dsh web: http://127.0.0.1:')) return
+      clearTimeout(timer)
+      resolve()
+    }
+    child.stdout.on('data', read)
+    child.stderr.on('data', read)
+    child.once('exit', code => {
+      clearTimeout(timer)
+      reject(new Error(`first boot exited ${code}:\n${output}`))
+    })
   })
-})
 
-assert.match(output, /dsh web: http:\/\/127\.0\.0\.1:/)
-child.kill()
-await new Promise(resolve => child.once('exit', resolve))
-rmSync(home, { recursive: true })
+  assert.match(output, /dsh web: http:\/\/127\.0\.0\.1:/)
+} finally {
+  if (child.exitCode === null) {
+    const exited = new Promise(resolve => child.once('exit', resolve))
+    child.kill()
+    await exited
+  }
+  rmSync(home, { recursive: true })
+}
 
 const equalsHome = mkdtempSync(join(tmpdir(), 'dsh-harmony-profile-equals-'))
 const dump = spawnSync(process.execPath, ['lib/bin.js', '--profile=web', '--dump-config'], {

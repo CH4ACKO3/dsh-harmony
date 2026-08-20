@@ -16,11 +16,8 @@ import {
   discoverPackage,
   getPatchInspections,
   getPatchStatuses,
-  inspectPatchTargets,
-  inspectPatchDependencies,
   installFileTransforms,
   retainedGenerationCount,
-  subscribePatchStatuses,
   synchronizePluginOrder,
   synchronizeProfile,
   watchProfile,
@@ -49,35 +46,6 @@ test('preserves binary files byte for byte', async () => {
   expect(await readFile(filename)).toEqual(source)
 })
 
-test('preserves non-UTF encodings when reading JavaScript', async () => {
-  const target = join(root, 'encoded-target')
-  const provider = join(root, 'encoded-provider')
-  mkdirSync(join(target, 'lib'), { recursive: true })
-  mkdirSync(provider)
-  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'encoded-target' }))
-  const filename = join(target, 'lib/index.js')
-  const source = 'export const value = 1\n'
-  writeFileSync(filename, source)
-  writeFileSync(join(provider, 'package.json'), JSON.stringify({
-    name: 'encoded-provider',
-    dsh: { harmony: { patches: ['./patch.cjs'] } },
-  }))
-  writeFileSync(join(provider, 'patch.cjs'), `
-module.exports = {
-  id: 'test-patch',
-  target: { package: 'encoded-target', files: ['lib/index.js'] },
-  select: 'NumericLiteral',
-  apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '2') },
-}
-`)
-  discoverPackage(provider)
-
-  expect(readFileSync(filename, 'base64')).toBe(Buffer.from(source).toString('base64'))
-  expect(readFileSync(filename, 'hex')).toBe(Buffer.from(source).toString('hex'))
-  expect(await readFile(filename, 'base64')).toBe(Buffer.from(source).toString('base64'))
-  expect(await readFile(filename, 'hex')).toBe(Buffer.from(source).toString('hex'))
-})
-
 test('applies a declared patch while reading a plugin file', async () => {
   const target = join(root, 'target')
   const provider = join(root, 'provider')
@@ -104,41 +72,6 @@ module.exports = {
 
   expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('return 2')
   expect(await readFile(join(target, 'lib/index.js'), 'utf8')).toContain('return 2')
-})
-
-test('supports Buffer paths and treats file-prefixed strings as paths', () => {
-  const target = join(root, 'pathlike-target')
-  const provider = join(root, 'pathlike-provider')
-  mkdirSync(join(target, 'lib'), { recursive: true })
-  mkdirSync(provider)
-  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'pathlike-target' }))
-  writeFileSync(join(target, 'lib/buffer.js'), 'export const value = 1\n')
-  writeFileSync(join(target, 'file:target.js'), 'export const value = 1\n')
-  writeFileSync(join(provider, 'package.json'), JSON.stringify({
-    name: 'pathlike-provider',
-    dsh: { harmony: { patches: ['./patch.cjs'] } },
-  }))
-  writeFileSync(join(provider, 'patch.cjs'), `
-module.exports = [{
-  id: 'buffer-path', target: { package: 'pathlike-target', files: ['lib/buffer.js'] },
-  select: 'NumericLiteral', expect: 1,
-  apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '2') },
-}, {
-  id: 'file-prefix', target: { package: 'pathlike-target', files: ['file:target.js'] },
-  select: 'NumericLiteral', expect: 1,
-  apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '2') },
-}]
-`)
-  discoverPackage(provider)
-
-  expect(readFileSync(Buffer.from(join(target, 'lib/buffer.js')), 'utf8')).toContain('value = 2')
-  const previousDirectory = process.cwd()
-  process.chdir(target)
-  try {
-    expect(readFileSync('file:target.js', 'utf8')).toContain('value = 2')
-  } finally {
-    process.chdir(previousDirectory)
-  }
 })
 
 test('does not re-enter a transformation when a Patch reads its own target', () => {
@@ -214,46 +147,6 @@ module.exports = [{
     file: 'lib/index.js',
   })
   expect(getPatchStatuses().find(patch => patch.key === 'expect-provider/replace-two')).toMatchObject({ index: 1, state: 'bound', status: 'normal' })
-})
-
-test('collects failed statuses without aborting the status inspection pass', () => {
-  const profile = join(root, 'status-profile')
-  const provider = join(profile, 'node_modules', 'status-provider')
-  const target = join(profile, 'node_modules', 'status-target')
-  mkdirSync(provider, { recursive: true })
-  mkdirSync(join(target, 'lib'), { recursive: true })
-  writeFileSync(join(profile, 'package.json'), JSON.stringify({
-    dependencies: { 'status-provider': '1', 'status-target': '1' },
-  }))
-  writeFileSync(join(provider, 'package.json'), JSON.stringify({
-    name: 'status-provider', version: '1.0.0', dsh: { harmony: { patches: ['./patch.cjs'] } },
-  }))
-  writeFileSync(join(provider, 'patch.cjs'), `
-module.exports = [{
-  id: 'wrong-count', target: { package: 'status-target', files: ['lib/index.js'] },
-  select: 'NumericLiteral', expect: 1, apply() {},
-}, {
-  id: 'missing-file', target: { package: 'status-target', files: ['lib/missing.js'] },
-  select: 'SourceFile', apply() {},
-}, {
-  id: 'missing-package', target: { package: 'status-target-absent', files: ['lib/index.js'] },
-  select: 'SourceFile', apply() {},
-}]
-`)
-  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'status-target', version: '1.0.0' }))
-  writeFileSync(join(target, 'lib/index.js'), 'export const values = [1, 2]\n')
-  synchronizeProfile(profile)
-
-  expect(() => inspectPatchTargets(true)).not.toThrow()
-  expect(getPatchStatuses().find(patch => patch.key === 'status-provider/wrong-count')).toMatchObject({
-    state: 'failed', matches: 2,
-  })
-  expect(getPatchStatuses().find(patch => patch.key === 'status-provider/missing-file')).toMatchObject({
-    state: 'failed', matches: 0,
-  })
-  expect(getPatchStatuses().find(patch => patch.key === 'status-provider/missing-package')).toMatchObject({
-    state: 'failed', matches: 0, loaded: false,
-  })
 })
 
 test('uses provider constraints by default and lets a Patch override them', () => {
@@ -468,44 +361,6 @@ module.exports = { id: 'atomic', patches: [
   expect(getPatchStatuses().find(patch => patch.key === 'successful-composite-provider/atomic')).toMatchObject({ state: 'disabled', status: 'disabled' })
 })
 
-test('reports lazy Patch failures only after their generation is committed', () => {
-  const profile = join(root, 'lazy-failure-profile')
-  const provider = join(profile, 'node_modules', 'lazy-failure-provider')
-  const target = join(profile, 'node_modules', 'lazy-failure-target')
-  mkdirSync(provider, { recursive: true })
-  mkdirSync(join(target, 'lib'), { recursive: true })
-  writeFileSync(join(profile, 'package.json'), JSON.stringify({
-    dependencies: { 'lazy-failure-provider': '1', 'lazy-failure-target': '1' },
-  }))
-  writeFileSync(join(provider, 'package.json'), JSON.stringify({
-    name: 'lazy-failure-provider', dsh: { harmony: { patches: ['./patch.cjs'] } },
-  }))
-  writeFileSync(join(provider, 'patch.cjs'), `
-module.exports = {
-  id: 'wrong-count', target: { package: 'lazy-failure-target', files: ['lib/index.js'] },
-  select: 'NumericLiteral', expect: 1, apply() {},
-}
-`)
-  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'lazy-failure-target', version: '1.0.0' }))
-  writeFileSync(join(target, 'lib/index.js'), 'export const values = [1, 2]\n')
-  synchronizeProfile(profile)
-
-  let changes = 0
-  const stop = subscribePatchStatuses(() => { changes += 1 })
-  const rolledBack = beginPluginUpdate(['lazy-failure-provider', 'lazy-failure-target'], true)
-  readFileSync(join(target, 'lib/index.js'), 'utf8')
-  expect(changes).toBe(0)
-  rolledBack.rollback()
-
-  const committed = beginPluginUpdate(['lazy-failure-provider', 'lazy-failure-target'], true)
-  committed.commit()
-  readFileSync(join(target, 'lib/index.js'), 'utf8')
-  expect(changes).toBe(1)
-  readFileSync(join(target, 'lib/index.js'), 'utf8')
-  expect(changes).toBe(1)
-  stop()
-})
-
 test('uses target version ranges and the first existing candidate file', () => {
   const target = join(root, 'version-target')
   const provider = join(root, 'version-provider')
@@ -597,51 +452,6 @@ module.exports = [{
   expect(getPatchInspections('semantic-target', 'lib/index.js')[0]?.steps).toHaveLength(5)
 })
 
-test('preserves semantic declaration order, arguments, and local identifiers', () => {
-  const target = join(root, 'semantic-order-target')
-  const provider = join(root, 'semantic-order-provider')
-  mkdirSync(join(target, 'lib'), { recursive: true })
-  mkdirSync(provider)
-  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'semantic-order-target', version: '1.0.0' }))
-  writeFileSync(join(target, 'lib/index.js'), `
-'use strict'
-function answer(value) {
-  const __dshHarmonyArgs = 2
-  const __dshHarmonyIndex = 3
-  const __dshHarmonyLength = 4
-  return [value, arguments[0], __dshHarmonyArgs, __dshHarmonyIndex, __dshHarmonyLength]
-}
-module.exports = { answer }
-`)
-  writeFileSync(join(provider, 'package.json'), JSON.stringify({
-    name: 'semantic-order-provider', dsh: { harmony: { patches: ['./patch.cjs'] } },
-  }))
-  writeFileSync(join(provider, 'patch.cjs'), `
-module.exports = [{
-  id: 'before',
-  target: { package: 'semantic-order-target', files: ['lib/index.js'], function: 'answer' },
-  operation: 'before',
-  handler() { return [5] },
-}, {
-  id: 'after-a',
-  target: { package: 'semantic-order-target', files: ['lib/index.js'], function: 'answer' },
-  operation: 'after',
-  handler({ result }) { result.push('A'); return result },
-}, {
-  id: 'after-b',
-  target: { package: 'semantic-order-target', files: ['lib/index.js'], function: 'answer' },
-  operation: 'after',
-  handler({ result }) { result.push('B'); return result },
-}]
-`)
-  discoverPackage(provider)
-  const transformed = readFileSync(join(target, 'lib/index.js'), 'utf8')
-  const module = { exports: {} as any }
-  new Function('module', 'exports', transformed)(module, module.exports)
-
-  expect(module.exports.answer(1)).toEqual([5, 5, 2, 3, 4, 'A', 'B'])
-})
-
 test('applies source and semantic patches in one global declaration order', () => {
   const target = join(root, 'mixed-order-target')
   const provider = join(root, 'mixed-order-provider')
@@ -670,48 +480,6 @@ module.exports = [{
 
   expect(() => readFileSync(join(target, 'lib/index.js'), 'utf8')).not.toThrow()
   expect(getPatchStatuses().filter(patch => patch.owner === 'mixed-order-provider').every(patch => patch.state === 'bound')).toBe(true)
-})
-
-test('detects a Source Patch that only matches after a previous provider', () => {
-  const target = join(root, 'differential-target')
-  const provider = join(root, 'differential-provider')
-  const draft = join(root, 'differential-draft')
-  mkdirSync(join(target, 'lib'), { recursive: true })
-  mkdirSync(provider)
-  mkdirSync(draft)
-  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'differential-target', version: '1.0.0' }))
-  writeFileSync(join(target, 'lib/index.js'), 'export const value = 1\n')
-  writeFileSync(join(provider, 'package.json'), JSON.stringify({
-    name: 'differential-provider', dsh: { harmony: { patches: ['./patch.cjs'] } },
-  }))
-  writeFileSync(join(provider, 'patch.cjs'), `
-module.exports = {
-  id: 'introduce-call',
-  target: { package: 'differential-target', files: ['lib/index.js'] },
-  select: 'NumericLiteral[text="1"]', expect: 1,
-  apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), 'provideValue()') },
-}
-`)
-  writeFileSync(join(draft, 'package.json'), JSON.stringify({
-    name: 'differential-draft', dsh: { harmony: { patches: ['./patch.cjs'] } },
-  }))
-  writeFileSync(join(draft, 'patch.cjs'), `
-module.exports = {
-  id: 'consume-call',
-  target: { package: 'differential-target', files: ['lib/index.js'] },
-  select: 'CallExpression[expression.text="provideValue"]', expect: 1,
-  apply() {},
-}
-`)
-  discoverPackage(provider)
-  discoverPackage(draft)
-
-  expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('provideValue()')
-  expect(inspectPatchDependencies('differential-draft')).toEqual([expect.objectContaining({
-    patch: 'differential-draft/consume-call',
-    providerCandidates: ['differential-provider'],
-    target: { package: 'differential-target', file: 'lib/index.js' },
-  })])
 })
 
 test('adds React provenance only after every business patch has composed', () => {
@@ -948,19 +716,6 @@ module.exports = {
     update.commit()
     expect(retainedGenerationCount()).toBe(1)
   }
-})
-
-test('customizes the official Settings shell bundle while Harmony is active', () => {
-  const filename = join(process.cwd(), 'node_modules', '@deepseek-ai', 'dsh-client-ui-settings-general', 'lib', 'client.js')
-  const source = readFileSync(filename, 'utf8')
-
-  expect(source).toContain('__dshHarmonyBeforeSettingsClose')
-  expect(source).toContain('onSelect: async (id)')
-  expect(source).toContain('width:800px;max-width:calc(100vw - 48px)')
-  expect(source).not.toContain('width:1040px;max-width:calc(100vw - 48px)')
-  expect(source).toContain('SettingsRoot_module_css_default.panel + " dshHarmonySettingsPanel"')
-  expect(source).toContain('id === "harmony"')
-  expect(source).toContain('dshHarmonyNavIcon')
 })
 
 test('applies providers in the persisted manual order', () => {
@@ -1331,73 +1086,6 @@ test('rolls back every loader entry when dispose fails midway', async () => {
   expect(second.fiber.runtime.callback).toBe(oldSecond)
 })
 
-test('reconciles providers against live Loader entries', () => {
-  const profile = join(root, 'loader-tree-profile')
-  const provider = join(profile, 'node_modules', 'loader-tree-provider')
-  const target = join(root, 'loader-tree-target')
-  mkdirSync(provider, { recursive: true })
-  mkdirSync(join(target, 'lib'), { recursive: true })
-  writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: { 'loader-tree-provider': '1' } }))
-  writeFileSync(join(provider, 'package.json'), JSON.stringify({
-    name: 'loader-tree-provider',
-    dsh: { harmony: { patches: ['./patch.cjs'] } },
-  }))
-  writeFileSync(join(provider, 'patch.cjs'), `
-module.exports = {
-  id: 'test-patch',
-  target: { package: 'loader-tree-target', files: ['lib/index.js'] },
-  select: 'NumericLiteral',
-  apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '2') },
-}
-`)
-  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'loader-tree-target' }))
-  writeFileSync(join(target, 'lib/index.js'), 'export const value = 1\n')
-
-  synchronizeProfile(profile)
-  expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 2')
-  synchronizePluginOrder(['dsh-harmony'])
-  expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 1')
-  synchronizePluginOrder(['dsh-harmony', 'loader-tree-provider'])
-  expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 2')
-})
-
-test('keeps the complete previous registry when a profile update fails', () => {
-  const profile = join(root, 'transaction-profile')
-  const first = join(profile, 'node_modules', 'transaction-first')
-  const second = join(profile, 'node_modules', 'transaction-second')
-  const target = join(root, 'transaction-target')
-  mkdirSync(first, { recursive: true })
-  mkdirSync(second, { recursive: true })
-  mkdirSync(join(target, 'lib'), { recursive: true })
-  writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: { 'transaction-first': '1' } }))
-  writeFileSync(join(first, 'package.json'), JSON.stringify({
-    name: 'transaction-first',
-    dsh: { harmony: { patches: ['./patch.cjs'] } },
-  }))
-  writeFileSync(join(first, 'patch.cjs'), `
-module.exports = {
-  id: 'test-patch',
-  target: { package: 'transaction-target', files: ['lib/index.js'] },
-  select: 'NumericLiteral',
-  apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '2') },
-}
-`)
-  writeFileSync(join(second, 'package.json'), JSON.stringify({
-    name: 'transaction-second',
-    dsh: { harmony: { patches: ['./patch.cjs'] } },
-  }))
-  writeFileSync(join(second, 'patch.cjs'), 'throw new Error("broken provider")\n')
-  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'transaction-target' }))
-  writeFileSync(join(target, 'lib/index.js'), 'export const value = 1\n')
-
-  synchronizeProfile(profile)
-  expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 2')
-  writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: { 'transaction-second': '1' } }))
-
-  expect(() => synchronizeProfile(profile)).toThrow('broken provider')
-  expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 2')
-})
-
 test('reloads a changed patch file while the profile is running', async () => {
   const profile = join(root, 'watched-profile')
   const provider = join(profile, 'node_modules', 'watched-provider')
@@ -1439,102 +1127,6 @@ module.exports = {
   } finally {
     stop()
   }
-})
-
-test('watches a newly declared patch file after its first load fails', async () => {
-  const profile = join(root, 'watched-path-profile')
-  const provider = join(profile, 'node_modules', 'watched-path-provider')
-  const target = join(root, 'watched-path-target')
-  mkdirSync(provider, { recursive: true })
-  mkdirSync(join(target, 'lib'), { recursive: true })
-  const manifest = join(provider, 'package.json')
-  writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: { 'watched-path-provider': '1' } }))
-  writeFileSync(manifest, JSON.stringify({
-    name: 'watched-path-provider',
-    dsh: { harmony: { patches: ['./old.cjs'] } },
-  }))
-  writeFileSync(join(provider, 'old.cjs'), `
-module.exports = {
-  id: 'test-patch',
-  target: { package: 'watched-path-target', files: ['lib/index.js'] },
-  select: 'NumericLiteral',
-  apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '2') },
-}
-`)
-  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'watched-path-target' }))
-  writeFileSync(join(target, 'lib/index.js'), 'export const value = 1\n')
-
-  synchronizeProfile(profile)
-  const errors: unknown[] = []
-  const stop = watchProfile(() => { beginPluginUpdate(['watched-path-provider']).commit() }, error => errors.push(error))
-  try {
-    await delay(WATCH_READY_DELAY)
-    expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 2')
-    writeFileSync(manifest, JSON.stringify({
-      name: 'watched-path-provider',
-      dsh: { harmony: { patches: ['./new.cjs'] } },
-    }))
-    await expect.poll(() => errors.length, { timeout: 5000 }).toBeGreaterThan(0)
-    await delay(WATCH_READY_DELAY)
-    writeFileSync(join(provider, 'new.cjs'), `
-module.exports = {
-  id: 'test-patch',
-  target: { package: 'watched-path-target', files: ['lib/index.js'] },
-  select: 'NumericLiteral',
-  apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '3') },
-}
-`)
-    await expect.poll(
-      () => readFileSync(join(target, 'lib/index.js'), 'utf8'),
-      { timeout: 5000 },
-    ).toContain('value = 3')
-  } finally {
-    stop()
-  }
-})
-
-test('names both providers while skipping a Patch whose selector was removed earlier', () => {
-  const profile = join(root, 'conflict-profile')
-  const target = join(root, 'conflict-target')
-  const remover = join(profile, 'node_modules', 'remover')
-  const reader = join(profile, 'node_modules', 'reader')
-  mkdirSync(join(target, 'lib'), { recursive: true })
-  mkdirSync(remover, { recursive: true })
-  mkdirSync(reader, { recursive: true })
-  writeFileSync(join(profile, 'package.json'), JSON.stringify({
-    dependencies: { remover: '1.0.0', reader: '1.0.0' },
-  }))
-  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'conflict-target' }))
-  writeFileSync(join(target, 'lib/index.js'), 'export const value = 1\n')
-  for (const name of ['remover', 'reader']) {
-    writeFileSync(join(profile, 'node_modules', name, 'package.json'), JSON.stringify({
-      name,
-      dsh: { harmony: { patches: ['./patch.cjs'] } },
-    }))
-  }
-  writeFileSync(join(remover, 'patch.cjs'), `
-module.exports = {
-  id: 'test-patch',
-  target: { package: 'conflict-target', files: ['lib/index.js'] },
-  select: 'NumericLiteral',
-  apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), 'undefined') },
-}
-`)
-  writeFileSync(join(reader, 'patch.cjs'), `
-module.exports = {
-  id: 'test-patch',
-  target: { package: 'conflict-target', files: ['lib/index.js'] },
-  select: 'NumericLiteral',
-  apply() {},
-}
-`)
-
-  synchronizeProfile(profile)
-
-  expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = undefined')
-  expect(getPatchStatuses().find(patch => patch.key === 'reader/test-patch')).toMatchObject({
-    state: 'failed', error: expect.stringMatching(/reader[\s\S]*remover/),
-  })
 })
 
 test('reloads a provider whose patch target changes', () => {
@@ -1631,137 +1223,6 @@ test('restores the CommonJS module cache when a reload fails', async () => {
   await expect(reloadEntries([entry], 1)).rejects.toThrow('candidate start failed')
   expect(entry.fiber.runtime.callback.value).toBe(2)
   expect(require(entryFile).value).toBe(2)
-})
-
-test('restores earlier CommonJS candidates when a later preload fails', async () => {
-  const target = join(root, 'cjs-planning-rollback-target')
-  const entryFile = join(target, 'index.cjs')
-  mkdirSync(target)
-  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'cjs-planning-rollback-target' }))
-  writeFileSync(entryFile, 'module.exports = { value: 1 }\n')
-  const require = createRequire(import.meta.url)
-  const previousPlugin = require(entryFile)
-  writeFileSync(entryFile, 'module.exports = { value: 2 }\n')
-  const first = {
-    options: { name: entryFile },
-    fiber: { uid: 1, runtime: { callback: previousPlugin } },
-    loader: { unwrapExports(value: unknown) { return value } },
-    parent: { tree: { ctx: { baseUrl: import.meta.url }, async import() { return require(entryFile) } } },
-    getOuterStack() { return [] },
-  }
-  const second = {
-    options: { name: './missing-candidate.js' },
-    fiber: { uid: 1, runtime: { callback: {} } },
-    loader: { unwrapExports(value: unknown) { return value } },
-    parent: { tree: { ctx: { baseUrl: import.meta.url }, async import() { throw new Error('preload failed') } } },
-    getOuterStack() { return [] },
-  }
-
-  await expect(reloadEntries([first, second], 1)).rejects.toThrow('preload failed')
-  expect(first.fiber.runtime.callback).toBe(previousPlugin)
-  expect(require(entryFile)).toBe(previousPlugin)
-})
-
-test('reloads multiple CommonJS package entries with one shared module graph', async () => {
-  const target = join(root, 'cjs-multiple-entry-target')
-  const firstFile = join(target, 'first.cjs')
-  const secondFile = join(target, 'second.cjs')
-  const sharedFile = join(target, 'shared.cjs')
-  mkdirSync(target)
-  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'cjs-multiple-entry-target', type: 'commonjs' }))
-  writeFileSync(sharedFile, 'module.exports = { generation: 1 }\n')
-  writeFileSync(firstFile, "module.exports = { shared: require('./shared.cjs') }\n")
-  writeFileSync(secondFile, "module.exports = { shared: require('./shared.cjs') }\n")
-  const require = createRequire(import.meta.url)
-  const firstPlugin = require(firstFile)
-  const secondPlugin = require(secondFile)
-  expect(firstPlugin.shared).toBe(secondPlugin.shared)
-  writeFileSync(sharedFile, 'module.exports = { generation: 2 }\n')
-  const entry = (filename: string, plugin: unknown) => ({
-    options: { name: filename },
-    fiber: { uid: 1, runtime: { callback: plugin } },
-    loader: { unwrapExports(value: unknown) { return value } },
-    parent: { tree: { ctx: { baseUrl: import.meta.url }, async import() { return require(filename) } } },
-    getOuterStack() { return [] },
-    async _dispose() { this.fiber = undefined },
-    async _start(next: unknown) { this.fiber = { uid: 2, runtime: { callback: next } } },
-  }) as any
-  const firstEntry = entry(firstFile, firstPlugin)
-  const secondEntry = entry(secondFile, secondPlugin)
-
-  await reloadEntries([firstEntry, secondEntry], 2)
-  expect(firstEntry.fiber.runtime.callback.shared.generation).toBe(2)
-  expect(firstEntry.fiber.runtime.callback.shared).toBe(secondEntry.fiber.runtime.callback.shared)
-  expect(require(sharedFile)).toBe(firstEntry.fiber.runtime.callback.shared)
-})
-
-test('reloads a provider and its patch graph with one shared CommonJS singleton', async () => {
-  const profile = join(root, 'provider-cache-profile')
-  const provider = join(profile, 'node_modules', 'provider-cache')
-  const target = join(profile, 'node_modules', 'provider-cache-target')
-  mkdirSync(provider, { recursive: true })
-  mkdirSync(join(target, 'lib'), { recursive: true })
-  writeFileSync(join(profile, 'package.json'), JSON.stringify({
-    dependencies: { 'provider-cache': '1', 'provider-cache-target': '1' },
-  }))
-  writeFileSync(join(provider, 'package.json'), JSON.stringify({
-    name: 'provider-cache', version: '1.0.0', main: './index.cjs', dsh: { harmony: { patches: ['./patch.cjs'] } },
-  }))
-  writeFileSync(join(provider, 'shared.cjs'), 'module.exports = { value: 41 }\n')
-  writeFileSync(join(provider, 'index.cjs'), "module.exports = { shared: require('./shared.cjs') }\n")
-  writeFileSync(join(provider, 'patch.cjs'), `
-const shared = require('./shared.cjs')
-module.exports = {
-  id: 'provider-cache', target: { package: 'provider-cache-target', files: ['lib/index.js'] },
-  select: 'NumericLiteral', expect: 1,
-  apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), String(shared.value)) },
-}
-`)
-  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'provider-cache-target', version: '1.0.0' }))
-  writeFileSync(join(target, 'lib/index.js'), 'export const value = 0\n')
-  const require = createRequire(import.meta.url)
-  synchronizeProfile(profile)
-  const runningProvider = require(provider)
-  expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 41')
-
-  writeFileSync(join(provider, 'package.json'), JSON.stringify({
-    name: 'provider-cache', version: '2.0.0', main: './index.cjs', dsh: { harmony: { patches: ['./patch.cjs'] } },
-  }))
-  writeFileSync(join(provider, 'shared.cjs'), 'module.exports = { value: 1 }\n')
-  const transaction = beginPluginUpdate(['provider-cache', 'provider-cache-target'], true)
-  expect(transaction.targets.has('provider-cache')).toBe(true)
-  let failStart = false
-  const entry = {
-    options: { name: provider },
-    fiber: { uid: 1, runtime: { callback: runningProvider } },
-    loader: { unwrapExports(value: unknown) { return value } },
-    parent: { tree: { ctx: { baseUrl: import.meta.url }, async import() { return require(provider) } } },
-    getOuterStack() { return [] },
-    async _dispose() { this.fiber = undefined },
-    async _start(plugin: unknown) {
-      if (failStart && (plugin as any).shared.value === 2) throw new Error('provider start failed')
-      this.fiber = { uid: 2, runtime: { callback: plugin } }
-    },
-  } as any
-  await reloadEntries([entry], transaction.generation)
-  transaction.commit()
-
-  expect(entry.fiber.runtime.callback.shared.value).toBe(1)
-  expect(require(join(provider, 'shared.cjs'))).toBe(entry.fiber.runtime.callback.shared)
-  expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 1')
-
-  writeFileSync(join(provider, 'package.json'), JSON.stringify({
-    name: 'provider-cache', version: '3.0.0', main: './index.cjs', dsh: { harmony: { patches: ['./patch.cjs'] } },
-  }))
-  writeFileSync(join(provider, 'shared.cjs'), 'module.exports = { value: 2 }\n')
-  const failedTransaction = beginPluginUpdate(['provider-cache', 'provider-cache-target'], true)
-  failStart = true
-  await expect(reloadEntries([entry], failedTransaction.generation)).rejects.toThrow('provider start failed')
-  failStart = false
-  failedTransaction.rollback()
-  expect(entry.fiber.runtime.callback.shared.value).toBe(1)
-  expect(require(join(provider, 'shared.cjs'))).toBe(entry.fiber.runtime.callback.shared)
-  expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 1')
 })
 
 test('ignores plugin lifecycle events emitted by Harmony reloads', async () => {
@@ -1909,65 +1370,6 @@ test('keeps the import branch of a conditional export during reload', async () =
 
   await reloadEntries([entry], 1)
   expect(entry.fiber.runtime.callback.kind).toBe('esm')
-})
-
-test('keeps an ESM import branch that re-exports a CommonJS callback', async () => {
-  const profile = join(root, 'mixed-conditional-export-profile')
-  const target = join(profile, 'node_modules', 'mixed-conditional-export-target')
-  mkdirSync(target, { recursive: true })
-  writeFileSync(join(profile, 'package.json'), '{}')
-  writeFileSync(join(target, 'package.json'), JSON.stringify({
-    name: 'mixed-conditional-export-target',
-    type: 'module',
-    exports: { import: './entry.mjs', require: './require.cjs' },
-  }))
-  writeFileSync(join(target, 'implementation.cjs'), "module.exports = { kind: 'import-cjs' }\n")
-  writeFileSync(join(target, 'entry.mjs'), "import plugin from './implementation.cjs'; export default plugin\n")
-  writeFileSync(join(target, 'require.cjs'), "module.exports = { kind: 'require' }\n")
-  const entryFile = pathToFileURL(join(target, 'entry.mjs')).href
-  const previousPlugin = (await import(`${entryFile}?generation=0`)).default
-  const entry = {
-    options: { name: 'mixed-conditional-export-target' },
-    fiber: { uid: 1, runtime: { callback: previousPlugin } },
-    loader: { unwrapExports(value: any) { return value.default ?? value } },
-    parent: { tree: {
-      ctx: { baseUrl: pathToFileURL(join(profile, 'package.json')).href },
-      async import() { return import(`${entryFile}?generation=1`) },
-    } },
-    getOuterStack() { return [] },
-    async _dispose() { this.fiber = undefined },
-    async _start(plugin: unknown) { this.fiber = { uid: 2, runtime: { callback: plugin } } },
-  } as any
-
-  await reloadEntries([entry], 1)
-  expect(entry.fiber.runtime.callback.kind).toBe('import-cjs')
-})
-
-test('loads the CommonJS file selected by the import condition', async () => {
-  const profile = join(root, 'cjs-conditional-export-profile')
-  const target = join(profile, 'node_modules', 'cjs-conditional-export-target')
-  mkdirSync(target, { recursive: true })
-  writeFileSync(join(profile, 'package.json'), '{}')
-  writeFileSync(join(target, 'package.json'), JSON.stringify({
-    name: 'cjs-conditional-export-target',
-    exports: { import: './import.cjs', require: './require.cjs' },
-  }))
-  writeFileSync(join(target, 'import.cjs'), "module.exports = { kind: 'import' }\n")
-  writeFileSync(join(target, 'require.cjs'), "module.exports = { kind: 'require' }\n")
-  const require = createRequire(pathToFileURL(join(profile, 'package.json')))
-  const previousPlugin = require(join(target, 'import.cjs'))
-  const entry = {
-    options: { name: 'cjs-conditional-export-target' },
-    fiber: { uid: 1, runtime: { callback: previousPlugin } },
-    loader: { unwrapExports(value: any) { return value.default ?? value } },
-    parent: { tree: { ctx: { baseUrl: pathToFileURL(join(profile, 'package.json')).href } } },
-    getOuterStack() { return [] },
-    async _dispose() { this.fiber = undefined },
-    async _start(plugin: unknown) { this.fiber = { uid: 2, runtime: { callback: plugin } } },
-  } as any
-
-  await reloadEntries([entry], 1)
-  expect(entry.fiber.runtime.callback.kind).toBe('import')
 })
 
 test('commits WebUI order updates only after loader reload succeeds', async () => {

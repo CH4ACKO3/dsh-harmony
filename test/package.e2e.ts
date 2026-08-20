@@ -10,8 +10,13 @@ const home = join(root, 'home')
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const binDir = process.platform === 'win32' ? prefix : join(prefix, 'bin')
 const dsh = process.platform === 'win32' ? join(prefix, 'dsh.cmd') : join(binDir, 'dsh')
-const manifest = JSON.parse(readFileSync('package.json', 'utf8')) as { name: string; version: string }
+const manifest = JSON.parse(readFileSync('package.json', 'utf8')) as {
+  name: string
+  version: string
+  peerDependencies: Record<string, string>
+}
 const tarball = join(root, `${manifest.name}-${manifest.version}.tgz`)
+const dshVersion = manifest.peerDependencies['@deepseek-ai/dsh']!
 
 function run(command: string, args: string[], env: NodeJS.ProcessEnv = process.env): string {
   const result = spawnSync(command, args, { cwd: resolve('.'), encoding: 'utf8', env })
@@ -26,14 +31,14 @@ try {
     ...process.env,
     DSH_HOME: home,
   }
-  run(npm, ['install', '--global', '--prefix', prefix, '@deepseek-ai/dsh@0.1.0-rc.7'], installEnv)
+  run(npm, ['install', '--global', '--prefix', prefix, `@deepseek-ai/dsh@${dshVersion}`], installEnv)
   run(npm, ['install', '--global', '--prefix', prefix, tarball], installEnv)
 
   const env = {
     ...installEnv,
     PATH: `${binDir}${delimiter}${process.env.PATH ?? ''}`,
   }
-  assert.match(run(dsh, ['--version'], env), /0\.1\.0-rc\.7/)
+  assert.ok(run(dsh, ['--version'], env).includes(dshVersion))
   const config = run(dsh, ['web', '--dump-config'], env)
   assert.match(config, /dsh-harmony-bootstrap/)
   assert.match(config, /id: harmony\s+name: dsh-harmony/)
