@@ -184,6 +184,14 @@ npm install dsh-harmony-react
 npm test
 ```
 
+启动 DSH 时设置 `DSH_HARMONY_PERF=1`，可让 Harmony 为每次启动、插件更新、配置更新和手动重载输出一条结构化耗时记录：
+
+```sh
+DSH_HARMONY_PERF=1 dsh web --no-open
+```
+
+记录分别包含 Patch 准备、源码变换、Host 重载、浏览器重建和总耗时。探针默认不工作，不会给正常加载路径增加计时开销。Node.js 诊断工具也可以直接订阅 `diagnostics_channel` 的 `dsh-harmony:load` 通道，而不打开日志输出。
+
 ## 许可证
 
 [MIT](LICENSE)

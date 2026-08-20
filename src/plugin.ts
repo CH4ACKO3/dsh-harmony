@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto'
+import { channel } from 'node:diagnostics_channel'
 import { readFileSync } from 'node:fs'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
@@ -48,6 +49,35 @@ interface ReloadableEntry {
   getOuterStack(): string[]
   _dispose(fiber?: ReloadFiber): Promise<void>
   _start(plugin: unknown): Promise<void>
+}
+
+interface HarmonyLoadPerformance {
+  operation: 'startup' | 'plugin-update' | 'profile-update' | 'manual-reload'
+  generation?: number
+  status: 'succeeded' | 'failed'
+  targetPackages: number
+  targetFiles: number
+  prepareMs: number
+  transformMs: number
+  hostReloadMs: number
+  clientRebuildMs: number
+  totalMs: number
+  error?: string
+}
+
+interface HarmonyLoadProbe {
+  operation: HarmonyLoadPerformance['operation']
+  started: bigint
+  prepareMs: number
+  transformMs: number
+  hostReloadMs: number
+  clientRebuildMs: number
+}
+
+const loadPerformanceChannel = channel('dsh-harmony:load')
+
+function elapsedMilliseconds(started: bigint): number {
+  return Math.round(Number(process.hrtime.bigint() - started) / 1e3) / 1e3
 }
 
 function loaderInventory(ctx: Context): { packages: string[]; active: HarmonyActivePlugin[] } {
@@ -188,6 +218,45 @@ export async function apply(ctx: Context): Promise<void> {
   let patchFailures = new Map<string, string>()
   let reloadSequence = 0
   let reloadStatus: HarmonyReloadStatus = { sequence: 0, state: 'idle' }
+  const logPerformance = process.env.DSH_HARMONY_PERF === '1'
+
+  const startLoadProbe = (operation: HarmonyLoadProbe['operation']): HarmonyLoadProbe | undefined => {
+    if (!logPerformance && !loadPerformanceChannel.hasSubscribers) return undefined
+    return {
+      operation,
+      started: process.hrtime.bigint(),
+      prepareMs: 0,
+      transformMs: 0,
+      hostReloadMs: 0,
+      clientRebuildMs: 0,
+    }
+  }
+
+  const finishLoadProbe = (
+    probe: HarmonyLoadProbe | undefined,
+    transaction: ProfileTransaction | undefined,
+    status: HarmonyLoadPerformance['status'],
+    error?: unknown,
+  ): void => {
+    if (probe === undefined) return
+    const record: HarmonyLoadPerformance = {
+      operation: probe.operation,
+      generation: transaction?.generation,
+      status,
+      targetPackages: transaction?.targets.size ?? 0,
+      targetFiles: transaction === undefined
+        ? 0
+        : [...transaction.targets.values()].reduce((count, files) => count + files.size, 0),
+      prepareMs: probe.prepareMs,
+      transformMs: probe.transformMs,
+      hostReloadMs: probe.hostReloadMs,
+      clientRebuildMs: probe.clientRebuildMs,
+      totalMs: elapsedMilliseconds(probe.started),
+      ...(error === undefined ? {} : { error: error instanceof Error ? error.message : String(error) }),
+    }
+    loadPerformanceChannel.publish(record)
+    if (logPerformance) ctx.logger.info?.(`dsh-harmony: performance ${JSON.stringify(record)}`)
+  }
 
   registerActiveRuntimeRoute(ctx, () => reloadStatus)
 
@@ -257,22 +326,41 @@ export async function apply(ctx: Context): Promise<void> {
       for (const entry of entries) reloadingEntries.delete(entry)
     }
   }
-  const applyTransaction = async (transaction: ProfileTransaction): Promise<void> => {
+  const applyTransaction = async (transaction: ProfileTransaction, probe?: HarmonyLoadProbe): Promise<void> => {
     let restoreEntries: (() => Promise<void>) | undefined
     const rebuiltClients: string[] = []
     const modules = clientModules
+    let failure: unknown
     try {
-      inspectPatchTargets()
-      restoreEntries = await reload(hostEntries(transaction.targets), transaction.generation)
-      for (const [packageName, files] of transaction.targets) {
-        if (!files.has('lib/client.js') || modules === undefined) continue
-        modules.rebuilt(packageName)
-        rebuiltClients.push(packageName)
+      const transformStarted = probe === undefined ? undefined : process.hrtime.bigint()
+      try {
+        inspectPatchTargets()
+      } finally {
+        if (probe !== undefined && transformStarted !== undefined) probe.transformMs = elapsedMilliseconds(transformStarted)
+      }
+      const hostReloadStarted = probe === undefined ? undefined : process.hrtime.bigint()
+      try {
+        restoreEntries = await reload(hostEntries(transaction.targets), transaction.generation)
+      } finally {
+        if (probe !== undefined && hostReloadStarted !== undefined) probe.hostReloadMs = elapsedMilliseconds(hostReloadStarted)
+      }
+      const clientRebuildStarted = probe === undefined ? undefined : process.hrtime.bigint()
+      try {
+        for (const [packageName, files] of transaction.targets) {
+          if (!files.has('lib/client.js') || modules === undefined) continue
+          modules.rebuilt(packageName)
+          rebuiltClients.push(packageName)
+        }
+      } finally {
+        if (probe !== undefined && clientRebuildStarted !== undefined) {
+          probe.clientRebuildMs = elapsedMilliseconds(clientRebuildStarted)
+        }
       }
       transaction.commit()
       warnCompatibility(transaction.profile)
       warnPatchFailures()
     } catch (error) {
+      failure = error
       const rollbackErrors = []
       try {
         await restoreEntries?.()
@@ -293,31 +381,55 @@ export async function apply(ctx: Context): Promise<void> {
       }
       if (rollbackErrors.length > 0) throw new AggregateError([error, ...rollbackErrors], 'dsh-harmony: transaction rollback failed')
       throw error
+    } finally {
+      finishLoadProbe(probe, transaction, failure === undefined ? 'succeeded' : 'failed', failure)
     }
   }
 
-  const refreshPatches = (force = true, reload?: string): Promise<void> => enqueueUpdate(async () => {
-    const inventory = loaderInventory(ctx)
-    const transaction = beginPluginUpdate(inventory.packages, force, inventory.active)
-    if (reload !== undefined) {
-      const files = transaction.targets.get(reload) ?? new Set<string>()
-      files.add('lib/index.js')
-      files.add('lib/client.js')
-      transaction.targets.set(reload, files)
+  const runTransaction = async (
+    operation: HarmonyLoadProbe['operation'],
+    prepare: () => ProfileTransaction,
+  ): Promise<ProfileTransaction> => {
+    const probe = startLoadProbe(operation)
+    const prepareStarted = probe === undefined ? undefined : process.hrtime.bigint()
+    let transaction: ProfileTransaction | undefined
+    try {
+      transaction = prepare()
+    } catch (error) {
+      if (probe !== undefined && prepareStarted !== undefined) probe.prepareMs = elapsedMilliseconds(prepareStarted)
+      finishLoadProbe(probe, undefined, 'failed', error)
+      throw error
     }
-    await applyTransaction(transaction)
+    if (probe !== undefined && prepareStarted !== undefined) probe.prepareMs = elapsedMilliseconds(prepareStarted)
+    await applyTransaction(transaction, probe)
+    return transaction
+  }
+
+  const refreshPatches = (force = true, reload?: string): Promise<void> => enqueueUpdate(async () => {
+    await runTransaction(reload !== undefined ? 'manual-reload' : initializing ? 'startup' : 'plugin-update', () => {
+      const inventory = loaderInventory(ctx)
+      const transaction = beginPluginUpdate(inventory.packages, force, inventory.active)
+      if (reload !== undefined) {
+        const files = transaction.targets.get(reload) ?? new Set<string>()
+        files.add('lib/index.js')
+        files.add('lib/client.js')
+        transaction.targets.set(reload, files)
+      }
+      return transaction
+    })
   })
 
   const updateProfile = async (input: () => HarmonyProfileUpdate): Promise<HarmonyRuntimeProfileUpdateResult> => {
     const generation = await enqueueUpdate(async () => {
-      const requested = input()
-      const candidate = prepareHarmonyProfileUpdate(currentProfile(), requested)
-      const transaction = beginProfileUpdate({
-        ...(requested.order === undefined ? {} : { order: candidate.order }),
-        ...(requested.patchOrder === undefined ? {} : { patchOrder: candidate.patchOrder }),
-        ...(requested.disabled === undefined ? {} : { disabled: candidate.disabled }),
+      const transaction = await runTransaction('profile-update', () => {
+        const requested = input()
+        const candidate = prepareHarmonyProfileUpdate(currentProfile(), requested)
+        return beginProfileUpdate({
+          ...(requested.order === undefined ? {} : { order: candidate.order }),
+          ...(requested.patchOrder === undefined ? {} : { patchOrder: candidate.patchOrder }),
+          ...(requested.disabled === undefined ? {} : { disabled: candidate.disabled }),
+        })
       })
-      await applyTransaction(transaction)
       return transaction.generation
     })
     return {

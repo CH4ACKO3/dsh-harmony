@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, realpathSync, watchFile, unwatchFile } from 'node:fs'
 import { createRequire, findPackageJSON } from 'node:module'
-import { dirname, isAbsolute, join, relative } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL, URL } from 'node:url'
 import semver from 'semver'
 import ts from 'typescript'
@@ -74,11 +74,19 @@ interface TransformRecord {
   inspection: HarmonyPatchInspection
 }
 
+interface TargetFileRecord {
+  filename: string
+  package: PackageInfo
+}
+
 interface GenerationState {
   providers: ProviderRecord[]
   order: string[]
   patchOrder: string[]
   disabled: Set<string>
+  targetFiles?: Map<string, TargetFileRecord>
+  targetIndexComplete?: boolean
+  targetFileSuffixes: Set<string>
 }
 
 export interface ProfileTransaction {
@@ -105,11 +113,14 @@ const moduleSourcesLoading = new Map<string, number>()
 const transformationsInProgress = new Set<string>()
 let transformCache = new Map<string, TransformRecord>()
 let patchStatuses = new Map<string, HarmonyPatchStatus>()
-let semanticBindings = new Map<string, BoundSemanticPatch<RegisteredPatch>[]>()
+type SemanticOriginal = (args: unknown[]) => unknown
+type SemanticDispatcher = (self: unknown, args: unknown[], original: SemanticOriginal) => unknown
+const invokeOriginal: SemanticDispatcher = (_self, args, original) => original(args)
+let semanticBindings = new Map<string, SemanticDispatcher>()
 let generation = 0
 let generationSequence = 0
 const generationStates = new Map<number, GenerationState>([[0, {
-  providers: [], order: [], patchOrder: [], disabled: new Set(),
+  providers: [], order: [], patchOrder: [], disabled: new Set(), targetFileSuffixes: new Set(),
 }]])
 let activeProfileDir: string | undefined
 let providerOrder: string[] = []
@@ -324,6 +335,9 @@ function snapshotGeneration(retainedGeneration?: number): void {
     order: [...providerOrder],
     patchOrder: [...patchOrder],
     disabled: new Set(disabledPatchKeys),
+    targetFileSuffixes: new Set([...providers.values()].flatMap(provider => provider.patches)
+      .flatMap(registered => registered.members)
+      .map(patch => `/${patch.target.file.replaceAll('\\', '/').replace(/^\.\//, '')}`)),
   })
 }
 
@@ -461,6 +475,7 @@ function prepareProvider(info: PackageInfo, current?: ProviderRecord, stage = fa
 }
 
 export function discoverPackage(packageDir: string): void {
+  packageCache.clear()
   const info = readPackageInfo(packageDir)
   const current = providers.get(info.name)
   const next = prepareProvider(info, current)
@@ -489,6 +504,7 @@ export function synchronizeProfile(
   installed?: string[],
   enabledPlugins?: HarmonyActivePlugin[],
 ): HarmonyProfile {
+  packageCache.clear()
   const previousTargets = allTargets()
   const previousOrder = providerOrder
   const previousPatchOrder = patchOrder
@@ -574,6 +590,7 @@ export function beginPluginUpdate(
   force = false,
   enabledPlugins: HarmonyActivePlugin[] = installed.map(name => ({ name, entryIds: [] })),
 ): ProfileTransaction {
+  packageCache.clear()
   const profile = synchronizeHarmonyProfile(activeProfileDir!, installed, false, enabledPlugins)
   const harmonyProviders = profile.plugins.filter(plugin => plugin.patches.length > 0)
   const nextDeclared = new Set([
@@ -941,7 +958,9 @@ function finishWorkingTransform(
   bind: boolean,
 ): TransformRecord {
   if (bind) {
-    for (const value of state.semantic.values()) semanticBindings.set(value.bindingKey, [...value.patches])
+    for (const value of state.semantic.values()) {
+      semanticBindings.set(value.bindingKey, compileSemanticDispatcher(value.patches))
+    }
   }
   const runtimeOutput = instrumentSourceTraces(
     state.filename,
@@ -1046,6 +1065,25 @@ function canonicalFilename(filename: string): string {
   return realpathSync(filename)
 }
 
+function targetFilename(
+  filename: string,
+  requestedGeneration = generation,
+  discoverTarget = false,
+): string | undefined {
+  if (!isSourceFile(filename)) return undefined
+  const state = generationStates.get(requestedGeneration)
+  if (state === undefined) return undefined
+  const absolute = isAbsolute(filename) ? filename : resolve(filename)
+  const target = state.targetFiles?.get(absolute)?.filename
+  if (target !== undefined) return target
+  if (state.targetIndexComplete === true && !discoverTarget) return undefined
+  const normalized = absolute.replaceAll('\\', '/')
+  for (const suffix of state.targetFileSuffixes) {
+    if (normalized.endsWith(suffix)) return canonicalFilename(absolute)
+  }
+  return undefined
+}
+
 function beginModuleSourceLoad(filename: string): void {
   moduleSourcesLoading.set(filename, (moduleSourcesLoading.get(filename) ?? 0) + 1)
 }
@@ -1061,7 +1099,7 @@ function activeTypeScriptLoader(
   requestedGeneration: number,
 ): PackageInfo | undefined {
   if (!isTypeScript(filename)) return undefined
-  packageCache.clear()
+  filename = canonicalFilename(filename)
   const pkg = packageFor(filename)
   const state = generationStates.get(requestedGeneration)
   if (pkg === undefined || state === undefined) return undefined
@@ -1181,7 +1219,6 @@ function hasTypelessEsmSyntax(filename: string): boolean {
 
 function transform(filename: string, source: string, requestedGeneration = generation): string {
   if (!isSourceFile(filename)) return source
-  filename = canonicalFilename(filename)
   if (loadedPatchFiles.has(filename) || loadingPatchFiles.has(filename)) return source
   const cacheKey = `${requestedGeneration}\0${filename}`
   if (transformationsInProgress.has(cacheKey)) return source
@@ -1194,8 +1231,10 @@ function transform(filename: string, source: string, requestedGeneration = gener
   }
   transformationsInProgress.add(cacheKey)
   try {
-    packageCache.clear()
-    const pkg = packageFor(filename)
+    const indexed = state?.targetFiles?.get(filename)
+    const sourceChanged = cached !== undefined && cached.source !== source
+    if (sourceChanged) packageCache.clear()
+    const pkg = sourceChanged ? packageFor(filename) : indexed?.package ?? packageFor(filename)
     if (pkg === undefined) return source
     if (cached?.packageVersion === pkg.version && cached.source === source) return cached.output
     if (state === undefined) return source
@@ -1219,8 +1258,7 @@ function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
   return typeof value === 'object' && value !== null && 'then' in value && typeof value.then === 'function'
 }
 
-function invokeSemantic(bindingKey: string, self: unknown, initialArgs: unknown[], original: (args: unknown[]) => unknown): unknown {
-  const patches = semanticBindings.get(bindingKey) ?? []
+function compileSemanticDispatcher(patches: BoundSemanticPatch<RegisteredPatch>[]): SemanticDispatcher {
   const before = patches.filter(item => item.patch.operation === 'before')
   const decorators = patches.filter(item => {
     const operation = item.patch.operation
@@ -1228,34 +1266,44 @@ function invokeSemantic(bindingKey: string, self: unknown, initialArgs: unknown[
   })
   const after = patches.filter(item => item.patch.operation === 'after')
 
-  const runBefore = (index: number, args: unknown[]): unknown[] | PromiseLike<unknown> => {
+  const runBefore = (index: number, self: unknown, args: unknown[]): unknown[] | PromiseLike<unknown> => {
     if (index === before.length) return args
     const patch = before[index]!.patch
-    const changed = patch.handler({ args, self, invoke: next => runBefore(index + 1, next ?? args) })
-    const proceed = (value: unknown): unknown[] | PromiseLike<unknown> => runBefore(index + 1, Array.isArray(value) ? value : args)
+    const changed = patch.handler({ args, self, invoke: next => runBefore(index + 1, self, next ?? args) })
+    const proceed = (value: unknown): unknown[] | PromiseLike<unknown> => runBefore(index + 1, self, Array.isArray(value) ? value : args)
     return isPromiseLike(changed) ? changed.then(proceed) : proceed(changed)
   }
 
-  const runDecorators = (index: number, args: unknown[]): unknown => {
+  const runDecorators = (index: number, self: unknown, args: unknown[], original: SemanticOriginal): unknown => {
     if (index === decorators.length) return original(args)
     const patch = decorators[index]!.patch
-    return patch.handler({ args, self, invoke: next => runDecorators(index + 1, next ?? args) })
+    return patch.handler({ args, self, invoke: next => runDecorators(index + 1, self, next ?? args, original) })
   }
 
-  const runAfter = (index: number, result: unknown): unknown => {
+  const runAfter = (index: number, self: unknown, initialArgs: unknown[], result: unknown): unknown => {
     if (index === after.length) return result
     const patch = after[index]!.patch
     const changed = patch.handler({ args: initialArgs, self, result, invoke: () => result })
-    const proceed = (value: unknown): unknown => runAfter(index + 1, value === undefined ? result : value)
+    const proceed = (value: unknown): unknown => runAfter(index + 1, self, initialArgs, value === undefined ? result : value)
     return isPromiseLike(changed) ? changed.then(proceed) : proceed(changed)
   }
 
-  const execute = (args: unknown[]): unknown => {
-    const result = runDecorators(0, args)
-    return isPromiseLike(result) ? result.then(value => runAfter(0, value)) : runAfter(0, result)
+  const execute = (self: unknown, initialArgs: unknown[], args: unknown[], original: SemanticOriginal): unknown => {
+    const result = runDecorators(0, self, args, original)
+    return isPromiseLike(result)
+      ? result.then(value => runAfter(0, self, initialArgs, value))
+      : runAfter(0, self, initialArgs, result)
   }
-  const args = runBefore(0, initialArgs)
-  return isPromiseLike(args) ? args.then(value => execute(value as unknown[])) : execute(args)
+  return (self, initialArgs, original) => {
+    const args = runBefore(0, self, initialArgs)
+    return isPromiseLike(args)
+      ? args.then(value => execute(self, initialArgs, value as unknown[], original))
+      : execute(self, initialArgs, args, original)
+  }
+}
+
+function invokeSemantic(bindingKey: string, self: unknown, initialArgs: unknown[], original: SemanticOriginal): unknown {
+  return (semanticBindings.get(bindingKey) ?? invokeOriginal)(self, initialArgs, original)
 }
 
 ;(globalThis as typeof globalThis & { __dshHarmonyInvoke?: typeof invokeSemantic }).__dshHarmonyInvoke = invokeSemantic
@@ -1288,6 +1336,8 @@ function inspectTargets(order: string[], disabled: Set<string>, bind: boolean): 
   const profileManifest = pathToFileURL(join(activeProfileDir!, 'package.json'))
   const allPatches = orderedPatches([...providers.values()].flatMap(provider => provider.patches), order)
   const targetPackages = new Set(allPatches.flatMap(item => item.members.map(patch => patch.target.package)))
+  const targetFiles = new Map<string, TargetFileRecord>()
+  let targetIndexComplete = true
   const working = new Map<string, WorkingTransform>()
   const applications = new Map<string, Map<string, HarmonyPatch[]>>()
   const failures = new Map<string, string>()
@@ -1297,13 +1347,15 @@ function inspectTargets(order: string[], disabled: Set<string>, bind: boolean): 
       manifest = findPackageJSON(packageName, profileManifest)
     } catch {}
     if (manifest === undefined) {
+      targetIndexComplete = false
       const error = `dsh-harmony: target package ${JSON.stringify(packageName)} is not installed`
       for (const item of allPatches.filter(registered => registered.members.some(patch => patch.target.package === packageName))) {
         failures.set(item.key, error)
       }
       continue
     }
-    const pkg = readPackageInfo(dirname(manifest))
+    const packageDir = dirname(manifest)
+    const pkg = readPackageInfo(packageDir)
     packageCache.set(pkg.dir, pkg)
     for (const item of allPatches) {
       const members = item.members.filter(patch => patch.target.package === packageName)
@@ -1315,7 +1367,11 @@ function inspectTargets(order: string[], disabled: Set<string>, bind: boolean): 
           failures.set(item.key, incompatible ?? `target file does not exist: ${patch.target.file}`)
           continue
         }
-        const filename = join(pkg.dir, file)
+        const filename = canonicalFilename(join(pkg.dir, file))
+        const target = { filename, package: pkg }
+        targetFiles.set(filename, target)
+        targetFiles.set(resolve(packageDir, file), target)
+        packageCache.set(dirname(filename), pkg)
         if (!working.has(filename)) {
           working.set(filename, beginWorkingTransform(filename, nativeReadFileSync(filename, 'utf8')))
         }
@@ -1365,6 +1421,11 @@ function inspectTargets(order: string[], disabled: Set<string>, bind: boolean): 
   }
 
   if (bind) {
+    const generationState = generationStates.get(generation)
+    if (generationState !== undefined) {
+      generationState.targetFiles = targetFiles
+      generationState.targetIndexComplete = targetIndexComplete
+    }
     for (const [filename, state] of working) {
       const result = finishWorkingTransform(state, generation, true)
       transformCache.set(`${generation}\0${filename}`, result)
@@ -1400,8 +1461,7 @@ export function preflightProfileUpdate(input: {
 
 export function installFileTransforms(): void {
   installNodeFileTransforms({
-    canonicalFilename,
-    isJavaScript,
+    targetFilename,
     isModuleSourceLoading: filename => moduleSourcesLoading.has(filename),
     transform,
   })
@@ -1412,6 +1472,7 @@ export function installModuleHooks(): void {
     aliases: { index: indexUrl, plugin: pluginUrl, manifest: manifestUrl },
     currentGeneration: () => generation,
     canonicalFilename,
+    targetFilename: (filename, requestedGeneration) => targetFilename(filename, requestedGeneration, true),
     packageDirectory: filename => packageFor(filename)?.dir,
     resolveTypeScriptDependency,
     activeTypeScriptLoader,
@@ -1439,7 +1500,6 @@ export function prepareModuleReload(
     ts.ModuleKind.ESNext,
   ).resolvedModule?.resolvedFileName
   if (filename === undefined) return undefined
-  packageCache.clear()
   const pkg = packageFor(filename)
   if (pkg === undefined) return undefined
   const currentRestore = packageUpdates.get(pkg.dir)

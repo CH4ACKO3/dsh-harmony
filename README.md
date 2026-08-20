@@ -180,6 +180,14 @@ Documentation sources and local preview tooling live on the [`docs`](https://git
 npm test
 ```
 
+Set `DSH_HARMONY_PERF=1` when starting DSH to log one structured timing record for each Harmony startup, plugin update, profile update, and manual reload:
+
+```sh
+DSH_HARMONY_PERF=1 dsh web --no-open
+```
+
+Each record separates Patch preparation, source transformation, Host reload, browser rebuild, and total time. The probe stays inactive by default. Node.js diagnostic tools can instead subscribe to the `diagnostics_channel` channel `dsh-harmony:load` without enabling log output.
+
 ## License
 
 [MIT](LICENSE)

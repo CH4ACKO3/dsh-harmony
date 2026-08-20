@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import { registerHooks, syncBuiltinESMExports } from 'node:module'
+import { dirname, isAbsolute, relative } from 'node:path'
 import { fileURLToPath, pathToFileURL, URL } from 'node:url'
 
 const nativeReadFileSync = fs.readFileSync.bind(fs)
@@ -28,8 +29,7 @@ function isUtf8Read(options: unknown): boolean {
 }
 
 export interface FileTransformHooks {
-  canonicalFilename(filename: string): string
-  isJavaScript(filename: string): boolean
+  targetFilename(filename: string): string | undefined
   isModuleSourceLoading(filename: string): boolean
   transform(filename: string, source: string): string
 }
@@ -38,21 +38,21 @@ export function installNodeFileTransforms(runtime: FileTransformHooks): void {
   fs.readFileSync = ((path: Parameters<typeof fs.readFileSync>[0], ...args: unknown[]) => {
     const value = nativeReadFileSync(path, ...args as [])
     const filename = filenameOf(path)
-    if (filename === undefined || !runtime.isJavaScript(filename) || (!Buffer.isBuffer(value) && typeof value !== 'string')) return value
+    if (filename === undefined || (!Buffer.isBuffer(value) && typeof value !== 'string')) return value
     if (typeof value === 'string' && !isUtf8Read(args[0])) return value
-    const canonical = runtime.canonicalFilename(filename)
-    if (runtime.isModuleSourceLoading(canonical)) return value
-    const output = runtime.transform(canonical, value.toString())
+    const target = runtime.targetFilename(filename)
+    if (target === undefined || runtime.isModuleSourceLoading(target)) return value
+    const output = runtime.transform(target, value.toString())
     return Buffer.isBuffer(value) ? Buffer.from(output) : output
   }) as typeof fs.readFileSync
   fs.promises.readFile = (async (path: Parameters<typeof fs.promises.readFile>[0], ...args: unknown[]) => {
     const value = await nativeReadFile(path, ...args as [])
     const filename = filenameOf(path)
-    if (filename === undefined || !runtime.isJavaScript(filename) || (!Buffer.isBuffer(value) && typeof value !== 'string')) return value
+    if (filename === undefined || (!Buffer.isBuffer(value) && typeof value !== 'string')) return value
     if (typeof value === 'string' && !isUtf8Read(args[0])) return value
-    const canonical = runtime.canonicalFilename(filename)
-    if (runtime.isModuleSourceLoading(canonical)) return value
-    const output = runtime.transform(canonical, value.toString())
+    const target = runtime.targetFilename(filename)
+    if (target === undefined || runtime.isModuleSourceLoading(target)) return value
+    const output = runtime.transform(target, value.toString())
     return Buffer.isBuffer(value) ? Buffer.from(output) : output
   }) as typeof fs.promises.readFile
   syncBuiltinESMExports()
@@ -62,6 +62,7 @@ export interface ModuleTransformHooks<Loader> {
   aliases: { index: string; plugin: string; manifest: string }
   currentGeneration(): number
   canonicalFilename(filename: string): string
+  targetFilename(filename: string, generation: number): string | undefined
   packageDirectory(filename: string): string | undefined
   resolveTypeScriptDependency(specifier: string, parentUrl: string | undefined, generation: number): string | undefined
   activeTypeScriptLoader(filename: string, generation: number): Loader | undefined
@@ -73,14 +74,20 @@ export interface ModuleTransformHooks<Loader> {
 
 export function installNodeModuleHooks<Loader>(runtime: ModuleTransformHooks<Loader>): void {
   if (moduleHooksInstalled) return
+  const runtimeDirectory = dirname(fileURLToPath(runtime.aliases.manifest))
+  const isRuntimeModule = (url: string): boolean => {
+    if (!url.startsWith('file:')) return false
+    const path = relative(runtimeDirectory, fileURLToPath(url))
+    return path === '' || !path.startsWith('..') && !isAbsolute(path)
+  }
   registerHooks({
     resolve(specifier, context, nextResolve) {
-      if (specifier === 'dsh-harmony') return { url: runtime.aliases.index, shortCircuit: true }
-      if (specifier === 'dsh-harmony:plugin') return { url: runtime.aliases.plugin, shortCircuit: true }
-      if (specifier === 'dsh-harmony/package.json') return { url: runtime.aliases.manifest, shortCircuit: true }
       const marker = '?dsh-harmony='
       const index = specifier.lastIndexOf(marker)
       const cleanSpecifier = index === -1 ? specifier : specifier.slice(0, index)
+      if (cleanSpecifier === 'dsh-harmony') return { url: runtime.aliases.index, shortCircuit: true }
+      if (cleanSpecifier === 'dsh-harmony:plugin') return { url: runtime.aliases.plugin, shortCircuit: true }
+      if (cleanSpecifier === 'dsh-harmony/package.json') return { url: runtime.aliases.manifest, shortCircuit: true }
       let nextGeneration = index === -1 ? undefined : specifier.slice(index + marker.length)
       const inherited = context.parentURL?.startsWith('file:')
         ? new URL(context.parentURL).searchParams.get('dsh-harmony') ?? undefined
@@ -107,20 +114,22 @@ export function installNodeModuleHooks<Loader>(runtime: ModuleTransformHooks<Loa
         }
       }
       if (nextGeneration === undefined) return result
+      if (isRuntimeModule(result.url)) return result
       const url = new URL(result.url)
       url.searchParams.set('dsh-harmony', nextGeneration)
       return { ...result, url: url.href, shortCircuit: true }
     },
     load(url, context, nextLoad) {
       const path = url.startsWith('file:') ? fileURLToPath(url) : undefined
-      const filename = path === undefined ? undefined : runtime.canonicalFilename(path)
       const requested = Number(new URL(url).searchParams.get('dsh-harmony') ?? runtime.currentGeneration())
-      const loader = filename === undefined ? undefined : runtime.activeTypeScriptLoader(filename, requested)
-      if (filename !== undefined && loader !== undefined) {
+      const loader = path === undefined ? undefined : runtime.activeTypeScriptLoader(path, requested)
+      if (path !== undefined && loader !== undefined) {
+        const filename = runtime.canonicalFilename(path)
         const source = nativeReadFileSync(filename, 'utf8')
         const transformed = runtime.transform(filename, source, requested)
         return { ...runtime.transpileTypeScript(filename, transformed, loader), shortCircuit: true }
       }
+      const filename = path === undefined ? undefined : runtime.targetFilename(path, requested)
       if (filename !== undefined) runtime.beginModuleSourceLoad(filename)
       let result
       try {

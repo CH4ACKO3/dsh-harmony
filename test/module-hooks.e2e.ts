@@ -4,6 +4,7 @@ import { registerHooks } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { apply as harmonyApply } from '../lib/index.js'
 import {
   beginProfileUpdate,
   getPatchStatuses,
@@ -130,6 +131,11 @@ module.exports = [
   installModuleHooks()
   installModuleHooks()
   installFileTransforms()
+
+  const versionedRuntime = await import(`${new URL('../lib/runtime.js', import.meta.url).href}?dsh-harmony=${generation}`)
+  assert.equal(versionedRuntime.getPatchStatuses, getPatchStatuses)
+  const versionedPackage = await import(`dsh-harmony?dsh-harmony=${generation}`)
+  assert.equal(versionedPackage.apply, harmonyApply)
 
   const array = await import(`${urls.array}?dsh-harmony=${generation}`)
   const typed = await import(`${urls.typed}?dsh-harmony=${generation}`)

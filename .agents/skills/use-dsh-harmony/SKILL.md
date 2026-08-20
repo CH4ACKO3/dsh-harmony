@@ -245,6 +245,7 @@ Check these in order:
 5. Replace a browser Semantic Patch with a Source Patch.
 6. Resolve duplicate semantic `replace` ownership, overlapping source edits, or violated provider order.
 7. Check `dsh.plugin.compatibility` findings for unmet requirements or conflicts, and treat contradictory `before`/`after` constraints as ordering problems.
+8. When load or reload performance is in question, start DSH with `DSH_HARMONY_PERF=1` and compare the reported `prepareMs`, `transformMs`, `hostReloadMs`, `clientRebuildMs`, and `totalMs` fields. Node.js diagnostic tools may subscribe to the `dsh-harmony:load` diagnostics channel instead of enabling logs.
 
 Harmony skips an individual Patch that cannot match or apply, marks it `failed`, and continues with later Patches. Treat the warning and `status` exit code `1` as work to fix even though the Host remains available. A provider declaration that cannot load or a target reload that cannot commit still rolls back the candidate generation. Never repair a failure by modifying the installed target package or weakening `expect` without verifying the new compiled structure.
 

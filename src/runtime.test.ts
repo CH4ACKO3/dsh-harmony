@@ -1,3 +1,4 @@
+import { channel } from 'node:diagnostics_channel'
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
@@ -16,6 +17,7 @@ import {
   discoverPackage,
   getPatchInspections,
   getPatchStatuses,
+  inspectPatchTargets,
   installFileTransforms,
   retainedGenerationCount,
   synchronizePluginOrder,
@@ -72,6 +74,39 @@ module.exports = {
 
   expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('return 2')
   expect(await readFile(join(target, 'lib/index.js'), 'utf8')).toContain('return 2')
+})
+
+test('bypasses package discovery for unrelated JavaScript reads', () => {
+  const profile = join(root, 'target-index-profile')
+  const provider = join(profile, 'node_modules', 'target-index-provider')
+  const target = join(profile, 'node_modules', 'target-index-target')
+  const unrelated = join(profile, 'unrelated')
+  mkdirSync(provider, { recursive: true })
+  mkdirSync(join(target, 'lib'), { recursive: true })
+  mkdirSync(join(unrelated, 'lib'), { recursive: true })
+  writeFileSync(join(profile, 'package.json'), JSON.stringify({
+    dependencies: { 'target-index-provider': '1', 'target-index-target': '1' },
+  }))
+  writeFileSync(join(provider, 'package.json'), JSON.stringify({
+    name: 'target-index-provider',
+    dsh: { harmony: { patches: ['./patch.cjs'] } },
+  }))
+  writeFileSync(join(provider, 'patch.cjs'), `
+module.exports = {
+  id: 'target-index',
+  target: { package: 'target-index-target', file: 'lib/index.js' },
+  select: 'SourceFile', expect: 1, apply() {},
+}
+`)
+  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'target-index-target' }))
+  writeFileSync(join(target, 'lib/index.js'), 'export const value = 1\n')
+  writeFileSync(join(unrelated, 'package.json'), '{ invalid json')
+  writeFileSync(join(unrelated, 'lib/index.js'), 'export const unrelated = true\n')
+
+  synchronizeProfile(profile)
+  inspectPatchTargets()
+
+  expect(readFileSync(join(unrelated, 'lib/index.js'), 'utf8')).toBe('export const unrelated = true\n')
 })
 
 test('does not re-enter a transformation when a Patch reads its own target', () => {
@@ -1665,23 +1700,43 @@ module.exports = {
   synchronizeProfile(profile)
 
   const disposers: Array<() => void | Promise<void>> = []
-  await applyHarmonyPlugin({
-    provide() {},
-    logger: { error() {}, warn() {} },
-    on() {},
-    effect(start: () => unknown) {
-      const dispose = start()
-      if (typeof dispose === 'function') disposers.push(dispose as () => void | Promise<void>)
-    },
-    inject() {},
-    loader: {
-      *entries() {
-        yield { options: { name: 'non-web-provider' } }
-        yield { options: { name: 'non-web-target' } }
+  const performanceRecords: unknown[] = []
+  const performanceChannel = channel('dsh-harmony:load')
+  const capturePerformance = (message: unknown): void => { performanceRecords.push(message) }
+  performanceChannel.subscribe(capturePerformance)
+  try {
+    await applyHarmonyPlugin({
+      provide() {},
+      logger: { error() {}, warn() {} },
+      on() {},
+      effect(start: () => unknown) {
+        const dispose = start()
+        if (typeof dispose === 'function') disposers.push(dispose as () => void | Promise<void>)
       },
-    },
-  } as any)
-  await new Promise<void>(resolve => setImmediate(resolve))
+      inject() {},
+      loader: {
+        *entries() {
+          yield { options: { name: 'non-web-provider' } }
+          yield { options: { name: 'non-web-target' } }
+        },
+      },
+    } as any)
+    await new Promise<void>(resolve => setImmediate(resolve))
+  } finally {
+    performanceChannel.unsubscribe(capturePerformance)
+  }
+  expect(performanceRecords).toContainEqual(expect.objectContaining({
+    operation: 'startup',
+    status: 'succeeded',
+    generation: expect.any(Number),
+    targetPackages: expect.any(Number),
+    targetFiles: expect.any(Number),
+    prepareMs: expect.any(Number),
+    transformMs: expect.any(Number),
+    hostReloadMs: expect.any(Number),
+    clientRebuildMs: expect.any(Number),
+    totalMs: expect.any(Number),
+  }))
 
   const addressFile = join(profile, '.dsh-harmony-runtime.json')
   const address = JSON.parse(readFileSync(addressFile, 'utf8')) as { url: string }
