@@ -1,6 +1,6 @@
 import MagicString from 'magic-string'
 import ts from 'typescript'
-import { tsquery } from '@phenomnomnominal/tsquery'
+import { tsquery, type Selector } from '@phenomnomnominal/tsquery'
 import type { HarmonyPatch, HarmonySemanticPatch, HarmonySourcePatch } from './index.js'
 
 export interface PatchIdentity {
@@ -28,11 +28,50 @@ export function parseSource(filename: string, source: string): ts.SourceFile {
   return ts.createSourceFile(filename, source, ts.ScriptTarget.Latest, true, scriptKind)
 }
 
-function matches(filename: string, source: string, selector: string): boolean {
-  return tsquery(parseSource(filename, source), selector).length > 0
+const SELECTOR_CACHE_LIMIT = 256
+const selectorCache = new Map<string, Selector>()
+
+function parsedSelector(selector: string): Selector {
+  const cached = selectorCache.get(selector)
+  if (cached !== undefined) {
+    selectorCache.delete(selector)
+    selectorCache.set(selector, cached)
+    return cached
+  }
+  const parsed = tsquery.parse.ensure(selector)
+  if (selectorCache.size >= SELECTOR_CACHE_LIMIT) selectorCache.delete(selectorCache.keys().next().value!)
+  selectorCache.set(selector, parsed)
+  return parsed
 }
 
-function conflictOwner(filename: string, original: string, selector: string, history: Array<{ owner: string; source: string }>): string | undefined {
+function query(sourceFile: ts.SourceFile, selector: string): ts.Node[] {
+  return tsquery(sourceFile, parsedSelector(selector))
+}
+
+function sourceFileFor(filename: string, source: string, previous?: ts.SourceFile): ts.SourceFile {
+  if (previous === undefined) return parseSource(filename, source)
+  if (previous.text === source) return previous
+  let start = 0
+  const shared = Math.min(previous.text.length, source.length)
+  while (start < shared && previous.text.charCodeAt(start) === source.charCodeAt(start)) start += 1
+  let previousEnd = previous.text.length
+  let sourceEnd = source.length
+  while (previousEnd > start && sourceEnd > start
+    && previous.text.charCodeAt(previousEnd - 1) === source.charCodeAt(sourceEnd - 1)) {
+    previousEnd -= 1
+    sourceEnd -= 1
+  }
+  return ts.updateSourceFile(previous, source, ts.createTextChangeRange(
+    ts.createTextSpan(start, previousEnd - start),
+    sourceEnd - start,
+  ))
+}
+
+function matches(filename: string, source: string, selector: string): boolean {
+  return query(parseSource(filename, source), selector).length > 0
+}
+
+function conflictOwner(filename: string, original: string, selector: string, history: ReadonlyArray<{ owner: string; source: string }>): string | undefined {
   let hadMatch = matches(filename, original, selector)
   let conflict: string | undefined
   for (const step of history) {
@@ -57,10 +96,11 @@ export function applySourcePatch(
   original: string,
   registered: PatchIdentity,
   patch: HarmonySourcePatch,
-  history: Array<{ owner: string; source: string }>,
-): { source: string; matches: number } {
-  const sourceFile = parseSource(filename, source)
-  const nodes = tsquery(sourceFile, patch.select)
+  history: ReadonlyArray<{ owner: string; source: string }>,
+  previousSourceFile?: ts.SourceFile,
+): { source: string; matches: number; sourceFile: ts.SourceFile } {
+  const sourceFile = sourceFileFor(filename, source, previousSourceFile)
+  const nodes = query(sourceFile, patch.select)
   try {
     expectedMatches(registered, patch, nodes.length, target)
   } catch (error) {
@@ -96,7 +136,7 @@ export function applySourcePatch(
       `  error: ${cause instanceof Error ? cause.message : String(cause)}`,
     ].join('\n'), { cause })
   }
-  return { source: edit.toString(), matches: nodes.length }
+  return { source: edit.hasChanged() ? edit.toString() : source, matches: nodes.length, sourceFile }
 }
 
 interface SourceTraceMetadata {
@@ -145,7 +185,7 @@ export function instrumentSourceTraces<T extends PatchIdentity>(
     if (trace === undefined) continue
     let nodes: ts.Node[]
     try {
-      nodes = tsquery(sourceFile, trace.select)
+      nodes = query(sourceFile, trace.select)
     } catch {
       continue
     }

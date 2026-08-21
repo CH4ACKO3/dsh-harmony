@@ -7,7 +7,27 @@ import {
   readHarmonyProfile,
   updateHarmonyProfile,
 } from './index.js'
-import { synchronizeHarmonyProfile } from './profile.js'
+import { groupHarmonyPatchOrder, synchronizeHarmonyProfile } from './profile.js'
+
+test('groups Patch order in one pass while preserving scoped and overlapping owners', () => {
+  expect(groupHarmonyPatchOrder(
+    ['@scope/pkg/extra', 'plain', '@scope/pkg'],
+    [
+      '@scope/pkg/first',
+      'plain/first',
+      '@scope/pkg/extra/only',
+      '@scope/pkg/nested/id',
+      'unknown/ignored',
+      'plain/second',
+    ],
+  )).toEqual([
+    '@scope/pkg/extra/only',
+    'plain/first',
+    'plain/second',
+    '@scope/pkg/first',
+    '@scope/pkg/nested/id',
+  ])
+})
 
 test('profile discovery reconciles installed providers without writing', () => {
   const profile = mkdtempSync(join(tmpdir(), 'dsh-harmony-profile-'))
@@ -158,12 +178,21 @@ test('declares the built-in Settings Patch when its target plugin is present', (
   rmSync(profile, { recursive: true })
 })
 
-test('rejects an incomplete persisted Harmony state', () => {
+test('reads persisted Harmony state from before Patch ordering was introduced', () => {
   const profile = mkdtempSync(join(tmpdir(), 'dsh-harmony-profile-'))
   writeFileSync(join(profile, 'package.json'), '{}')
-  writeFileSync(join(profile, 'harmony.json'), JSON.stringify({ order: [] }))
+  writeFileSync(join(profile, 'harmony.json'), JSON.stringify({ order: [], disabled: [] }))
 
-  expect(() => synchronizeHarmonyProfile(profile)).toThrow('patchOrder must be an array')
+  expect(synchronizeHarmonyProfile(profile).patchOrder).toEqual([])
+  rmSync(profile, { recursive: true })
+})
+
+test('rejects persisted Harmony state without a disabled list', () => {
+  const profile = mkdtempSync(join(tmpdir(), 'dsh-harmony-profile-'))
+  writeFileSync(join(profile, 'package.json'), '{}')
+  writeFileSync(join(profile, 'harmony.json'), JSON.stringify({ order: [], patchOrder: [] }))
+
+  expect(() => synchronizeHarmonyProfile(profile)).toThrow('disabled must be an array')
   rmSync(profile, { recursive: true })
 })
 

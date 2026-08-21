@@ -49,9 +49,9 @@ export function orderViolations(order: string[], providers: HarmonyProvider[]): 
 
 const EXACT_CYCLE_LIMIT = 14
 
-type Priority = (left: number, right: number) => boolean
+type Priority<T> = (left: T, right: T) => boolean
 
-function pushHeap(heap: number[], node: number, priority: Priority): void {
+function pushHeap<T>(heap: T[], node: T, priority: Priority<T>): void {
   let index = heap.push(node) - 1
   while (index > 0) {
     const parent = Math.floor((index - 1) / 2)
@@ -62,7 +62,7 @@ function pushHeap(heap: number[], node: number, priority: Priority): void {
   heap[index] = node
 }
 
-function popHeap(heap: number[], priority: Priority): number | undefined {
+function popHeap<T>(heap: T[], priority: Priority<T>): T | undefined {
   const first = heap[0]
   const last = heap.pop()
   if (heap.length === 0 || last === undefined) return first
@@ -134,55 +134,59 @@ function components(size: number, edges: Edge[]): { groups: number[][]; groupOf:
   return { groups, groupOf }
 }
 
-interface Candidate {
-  violations: number
-  inversions: number
-  order: number[]
-}
-
 function exactComponentOrder(component: number[], edges: Edge[]): number[] {
   const local = new Map(component.map((node, index) => [node, index]))
-  const incoming = Array.from({ length: component.length }, () => 0n)
+  const incoming = new Uint16Array(component.length)
   for (const edge of edges) {
     const from = local.get(edge.from)
     const to = local.get(edge.to)
-    if (from !== undefined && to !== undefined) incoming[to] |= 1n << BigInt(from)
+    if (from !== undefined && to !== undefined) incoming[to] |= 1 << from
   }
-  const full = (1n << BigInt(component.length)) - 1n
-  const memo = new Map<bigint, Candidate>()
-  const count = (value: bigint): number => {
-    let total = 0
-    while (value !== 0n) {
-      value &= value - 1n
-      total += 1
-    }
-    return total
+  const states = 1 << component.length
+  const full = states - 1
+  const popcount = new Uint8Array(states)
+  for (let state = 1; state < states; state += 1) {
+    popcount[state] = popcount[state >> 1]! + (state & 1)
   }
-  const solve = (placed: bigint): Candidate => {
-    if (placed === full) return { violations: 0, inversions: 0, order: [] }
-    const cached = memo.get(placed)
-    if (cached !== undefined) return cached
-    let best: Candidate | undefined
+  const violations = new Uint16Array(states)
+  const inversions = new Uint16Array(states)
+  const choices = new Int8Array(states).fill(-1)
+  const computed = new Uint8Array(states)
+  computed[full] = 1
+  const solve = (placed: number): void => {
+    if (computed[placed]) return
+    let bestNode = -1
+    let bestViolations = Number.POSITIVE_INFINITY
+    let bestInversions = Number.POSITIVE_INFINITY
     for (let node = 0; node < component.length; node += 1) {
-      const bit = 1n << BigInt(node)
-      if ((placed & bit) !== 0n) continue
+      const bit = 1 << node
+      if ((placed & bit) !== 0) continue
       const remaining = full ^ (placed | bit)
-      const tail = solve(placed | bit)
-      const candidate = {
-        violations: count(incoming[node]! & remaining) + tail.violations,
-        inversions: count(remaining & (bit - 1n)) + tail.inversions,
-        order: [component[node]!, ...tail.order],
-      }
-      if (best === undefined
-        || candidate.violations < best.violations
-        || candidate.violations === best.violations && candidate.inversions < best.inversions) {
-        best = candidate
+      const next = placed | bit
+      solve(next)
+      const candidateViolations = popcount[incoming[node]! & remaining]! + violations[next]!
+      const candidateInversions = popcount[remaining & (bit - 1)]! + inversions[next]!
+      if (candidateViolations < bestViolations
+        || candidateViolations === bestViolations && candidateInversions < bestInversions) {
+        bestNode = node
+        bestViolations = candidateViolations
+        bestInversions = candidateInversions
       }
     }
-    memo.set(placed, best!)
-    return best!
+    choices[placed] = bestNode
+    violations[placed] = bestViolations
+    inversions[placed] = bestInversions
+    computed[placed] = 1
   }
-  return solve(0n).order
+  solve(0)
+  const result: number[] = []
+  let placed = 0
+  while (placed !== full) {
+    const node = choices[placed]!
+    result.push(component[node]!)
+    placed |= 1 << node
+  }
+  return result
 }
 
 function heuristicComponentOrder(component: number[], edges: Edge[]): number[] {
@@ -197,15 +201,20 @@ function heuristicComponentOrder(component: number[], edges: Edge[]): number[] {
   const remaining = new Set(component)
   const sources: number[] = []
   const sinks: number[] = []
-  const ascending: Priority = (left, right) => left < right
-  const descending: Priority = (left, right) => left > right
+  const ascending: Priority<number> = (left, right) => left < right
+  const descending: Priority<number> = (left, right) => left > right
+  const score = (node: number): number => outgoing.get(node)!.size - incoming.get(node)!.size
+  const scored: Array<{ node: number; score: number }> = []
+  const scorePriority: Priority<{ node: number; score: number }> = (left, right) => left.score > right.score
+    || left.score === right.score && left.node < right.node
   for (const node of component) {
     if (incoming.get(node)!.size === 0) pushHeap(sources, node, ascending)
     if (outgoing.get(node)!.size === 0) pushHeap(sinks, node, descending)
+    pushHeap(scored, { node, score: score(node) }, scorePriority)
   }
   const left: number[] = []
   const right: number[] = []
-  const take = (heap: number[], priority: Priority, empty: (node: number) => boolean): number | undefined => {
+  const take = (heap: number[], priority: Priority<number>, empty: (node: number) => boolean): number | undefined => {
     while (heap.length > 0) {
       const node = popHeap(heap, priority)!
       if (remaining.has(node) && empty(node)) return node
@@ -218,11 +227,13 @@ function heuristicComponentOrder(component: number[], edges: Edge[]): number[] {
       if (!remaining.has(source)) continue
       outgoing.get(source)!.delete(node)
       if (outgoing.get(source)!.size === 0) pushHeap(sinks, source, descending)
+      pushHeap(scored, { node: source, score: score(source) }, scorePriority)
     }
     for (const target of outgoing.get(node)!) {
       if (!remaining.has(target)) continue
       incoming.get(target)!.delete(node)
       if (incoming.get(target)!.size === 0) pushHeap(sources, target, ascending)
+      pushHeap(scored, { node: target, score: score(target) }, scorePriority)
     }
   }
 
@@ -242,15 +253,14 @@ function heuristicComponentOrder(component: number[], edges: Edge[]): number[] {
     if (remaining.size === 0) break
     if (changed) continue
     let selected: number | undefined
-    let best = Number.NEGATIVE_INFINITY
-    for (const item of component) {
-      if (!remaining.has(item)) continue
-      const score = outgoing.get(item)!.size - incoming.get(item)!.size
-      if (score > best) {
-        selected = item
-        best = score
+    while (scored.length > 0) {
+      const candidate = popHeap(scored, scorePriority)!
+      if (remaining.has(candidate.node) && candidate.score === score(candidate.node)) {
+        selected = candidate.node
+        break
       }
     }
+    if (selected === undefined) throw new Error('dsh-harmony: cyclic component score heap is empty')
     remove(selected!)
     left.push(selected!)
   }
@@ -264,7 +274,7 @@ function stableTopologicalOrder(order: string[], edges: Edge[]): string[] {
     indegree[edge.to]! += 1
     outgoing[edge.from]!.push(edge.to)
   }
-  const ascending: Priority = (left, right) => left < right
+  const ascending: Priority<number> = (left, right) => left < right
   const ready: number[] = []
   for (let node = 0; node < order.length; node += 1) {
     if (indegree[node] === 0) pushHeap(ready, node, ascending)
@@ -348,6 +358,40 @@ export function patchOrderViolations(
   return patchEdges(order, patches, providers)
     .filter(edge => position.get(edge.before)! > position.get(edge.after)!)
     .map(({ before, after, declaredBy }) => ({ before, after, declaredBy }))
+}
+
+export function patchOrderInsertionIndex(
+  order: string[],
+  key: string,
+  patches: HarmonyPatchOrderItem[],
+  providers: HarmonyProvider[],
+  defaultRank: ReadonlyMap<string, number>,
+): number {
+  const keyBefore = Array<number>(order.length).fill(0)
+  const keyAfter = Array<number>(order.length).fill(0)
+  for (const edge of patchEdges([...order, key], patches, providers)) {
+    if (edge.before === key) keyBefore[edge.to] += 1
+    if (edge.after === key) keyAfter[edge.from] += 1
+  }
+
+  const keyRank = defaultRank.get(key)!
+  let violations = keyAfter.reduce((total, count) => total + count, 0)
+  let inversions = order.reduce((total, existing) =>
+    total + (defaultRank.get(existing)! < keyRank ? 1 : 0), 0)
+  let bestIndex = 0
+  let bestViolations = violations
+  let bestInversions = inversions
+  for (let index = 0; index < order.length; index += 1) {
+    violations += keyBefore[index]! - keyAfter[index]!
+    inversions += defaultRank.get(order[index]!)! < keyRank ? -1 : 1
+    if (violations < bestViolations
+      || violations === bestViolations && inversions < bestInversions) {
+      bestIndex = index + 1
+      bestViolations = violations
+      bestInversions = inversions
+    }
+  }
+  return bestIndex
 }
 
 export function autoSortPatchOrder(

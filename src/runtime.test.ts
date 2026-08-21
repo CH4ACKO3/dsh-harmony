@@ -79,6 +79,49 @@ module.exports = {
   expect(await readFile(join(target, 'lib/index.js'), 'utf8')).toContain('return 2')
 })
 
+test('loads a legacy Patch that declares ordered target file candidates', () => {
+  const target = join(root, 'legacy-files-target')
+  const provider = join(root, 'legacy-files-provider')
+  mkdirSync(join(target, 'lib'), { recursive: true })
+  mkdirSync(provider)
+  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'legacy-files-target' }))
+  writeFileSync(join(target, 'lib/index.js'), 'export const value = 1\n')
+  writeFileSync(join(provider, 'package.json'), JSON.stringify({
+    name: 'legacy-files-provider',
+    dsh: { harmony: { patches: ['./patch.cjs'] } },
+  }))
+  writeFileSync(join(provider, 'patch.cjs'), `
+module.exports = {
+  id: 'legacy-files',
+  target: { package: 'legacy-files-target', files: ['missing.js', 'lib/index.js'] },
+  select: 'NumericLiteral', expect: 1,
+  apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '2') },
+}
+`)
+
+  discoverPackage(provider)
+
+  expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 2')
+})
+
+test('rejects a Patch without a target file at the Provider boundary', () => {
+  const provider = join(root, 'invalid-target-provider')
+  mkdirSync(provider)
+  writeFileSync(join(provider, 'package.json'), JSON.stringify({
+    name: 'invalid-target-provider',
+    dsh: { harmony: { patches: ['./patch.cjs'] } },
+  }))
+  writeFileSync(join(provider, 'patch.cjs'), `
+module.exports = {
+  id: 'invalid-target', target: { package: 'target', files: [] },
+  select: 'SourceFile', apply() {},
+}
+`)
+
+  expect(() => discoverPackage(provider))
+    .toThrow('patch "invalid-target-provider/invalid-target" target.file must be a non-empty string')
+})
+
 test('bypasses package discovery for unrelated JavaScript reads', () => {
   const profile = join(root, 'target-index-profile')
   const provider = join(profile, 'node_modules', 'target-index-provider')
@@ -186,6 +229,34 @@ module.exports = [{
     matches: 2,
   })
   expect(getPatchStatuses().find(patch => patch.key === 'expect-provider/replace-two')).toMatchObject({ index: 1, state: 'bound' })
+})
+
+test('matches syntax introduced by the preceding Source Patch', () => {
+  const target = join(root, 'incremental-ast-target')
+  const provider = join(root, 'incremental-ast-provider')
+  mkdirSync(target)
+  mkdirSync(provider)
+  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'incremental-ast-target' }))
+  writeFileSync(join(target, 'index.js'), 'export const value = marker\n')
+  writeFileSync(join(provider, 'package.json'), JSON.stringify({
+    name: 'incremental-ast-provider',
+    dsh: { harmony: { patches: ['./patch.cjs'] } },
+  }))
+  writeFileSync(join(provider, 'patch.cjs'), `
+module.exports = [{
+  id: 'introduce', target: { package: 'incremental-ast-target', file: 'index.js' },
+  select: 'Identifier[name="marker"]', expect: 1,
+  apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '({ nested: 41 })') },
+}, {
+  id: 'consume', target: { package: 'incremental-ast-target', file: 'index.js' },
+  select: 'NumericLiteral[text="41"]', expect: 1,
+  apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '42') },
+}]
+`)
+
+  discoverPackage(provider)
+
+  expect(readFileSync(join(target, 'index.js'), 'utf8')).toContain('nested: 42')
 })
 
 test('uses provider constraints by default and lets a Patch override them', () => {

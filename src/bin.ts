@@ -2,35 +2,9 @@
 
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import {
-  discoverProfile,
-  currentProfile,
-  getPatchInspections,
-  getPatchOrderViolations,
-  getPatchStatuses,
-  inspectPatchTargets,
-  installModuleHooks,
-} from './runtime.js'
-import {
-  inspectHarmonyRuntime,
-  readHarmonyRuntime,
-  reloadHarmonyRuntime,
-  updateHarmonyProfile,
-  updateRuntimePatch,
-} from './control.js'
-import { createHarmonyProfileView, HARMONY_PLUGIN, pinHarmonyOrder } from './profile.js'
-import {
-  autoSortOrder,
-  autoSortPatchOrder,
-  orderViolations,
-  patchOrderViolations,
-  type HarmonyPatchOrderItem,
-} from './order.js'
-import { runHarmonyTui } from './tui.js'
 import { terminalLocale, terminalText } from './locale.js'
 import type { HarmonyInspection, HarmonyProfileUpdateResult } from './index.js'
-import { configuredProfileCandidates, initProfile, PROFILE_TEMPLATES, resolveProfileDir } from './dsh.js'
-import { launchDsh } from './launcher.js'
+import type { HarmonyPatchOrderItem } from './order.js'
 
 const locale = terminalLocale()
 const text = (english: string, chinese: string): string => terminalText(locale, english, chinese)
@@ -86,18 +60,8 @@ const declaredProfile = profileOption === -1
 const profile = args[0] === 'web' || isHarmonyCommand && declaredProfile === undefined
   ? 'web'
   : declaredProfile
-const profileDir = profile === undefined ? undefined : resolveProfileDir(profile)
 
 if (isHarmonyCommand) {
-  if (!existsSync(join(profileDir!, 'package.json')) && PROFILE_TEMPLATES[profile!] !== undefined) {
-    initProfile(profileDir!, PROFILE_TEMPLATES[profile!])
-  }
-  if (!existsSync(join(profileDir!, 'package.json'))) {
-    fail(text(
-      `profile ${JSON.stringify(profile)} does not exist; create it with dsh plugin --profile ${profile} add <package>`,
-      `profile ${JSON.stringify(profile)} 不存在；请使用 dsh plugin --profile ${profile} add <package> 创建`,
-    ))
-  }
   const harmonyArgs = []
   for (let index = 1; index < args.length; index += 1) {
     if (args[index] === '--profile') {
@@ -108,15 +72,58 @@ if (isHarmonyCommand) {
   }
   const command = harmonyArgs[0]
   const json = harmonyArgs.includes('--json')
+  if (command === '--help' || command === '-h' || command === 'help') {
+    if (harmonyArgs.length !== 1) fail(text('help takes no arguments', 'help 不接受参数'))
+    await writeStdout(HARMONY_HELP)
+    process.exit(0)
+  }
+  const [{ configuredProfileCandidates, initProfile, PROFILE_TEMPLATES, resolveProfileDir }, {
+    inspectHarmonyRuntime,
+    readHarmonyRuntime,
+    reloadHarmonyRuntime,
+    updateHarmonyProfile,
+    updateRuntimePatch,
+  }, {
+    createHarmonyProfileView,
+    HARMONY_PLUGIN,
+    pinHarmonyOrder,
+  }, {
+    autoSortOrder,
+    autoSortPatchOrder,
+    orderViolations,
+    patchOrderViolations,
+  }] = await Promise.all([
+    import('./dsh.js'),
+    import('./control.js'),
+    import('./profile.js'),
+    import('./order.js'),
+  ])
+  const profileDir = resolveProfileDir(profile!)
+  if (!existsSync(join(profileDir!, 'package.json')) && PROFILE_TEMPLATES[profile!] !== undefined) {
+    initProfile(profileDir!, PROFILE_TEMPLATES[profile!])
+  }
+  if (!existsSync(join(profileDir!, 'package.json'))) {
+    fail(text(
+      `profile ${JSON.stringify(profile)} does not exist; create it with dsh plugin --profile ${profile} add <package>`,
+      `profile ${JSON.stringify(profile)} 不存在；请使用 dsh plugin --profile ${profile} add <package> 创建`,
+    ))
+  }
   const offlineCandidates = configuredProfileCandidates(profile!, profileDir!)
-  const discoverOfflineProfile = (): void => discoverProfile(
-    profileDir!,
-    false,
-    offlineCandidates,
-  )
-  const offlineInspection = (): { mode: 'offline'; profile: ReturnType<typeof createHarmonyProfileView> } & HarmonyInspection => {
+  const offlineInspection = async (): Promise<{
+    mode: 'offline'
+    profile: ReturnType<typeof createHarmonyProfileView>
+  } & HarmonyInspection> => {
+    const {
+      currentProfile,
+      discoverProfile,
+      getPatchInspections,
+      getPatchOrderViolations,
+      getPatchStatuses,
+      inspectPatchTargets,
+      installModuleHooks,
+    } = await import('./runtime.js')
     installModuleHooks()
-    discoverOfflineProfile()
+    discoverProfile(profileDir!, false, offlineCandidates)
     inspectPatchTargets()
     const patches = getPatchStatuses()
     const patchCounts = new Map(currentProfile().plugins.map(plugin => [plugin.name, 0]))
@@ -136,23 +143,15 @@ if (isHarmonyCommand) {
     ...(patch.after === undefined ? {} : { after: patch.after }),
   }))
 
-  if (command === '--help' || command === '-h' || command === 'help') {
-    if (harmonyArgs.length !== 1) fail(text('help takes no arguments', 'help 不接受参数'))
-    await writeStdout(HARMONY_HELP)
-    process.exit(0)
-  }
-
   if (command === 'status') {
     if (harmonyArgs.some((arg, index) => index > 0 && arg !== '--json')) {
       fail(text('status accepts only --json', 'status 只接受 --json'))
     }
     const live = await readHarmonyRuntime(profileDir!)
-    const status = live === undefined
-      ? (() => {
-          const offline = offlineInspection()
-          return { mode: 'offline' as const, profile: offline.profile, patches: offline.patches }
-        })()
-      : { mode: 'live' as const, ...live }
+    const offline = live === undefined ? await offlineInspection() : undefined
+    const status = offline === undefined
+      ? { mode: 'live' as const, ...live! }
+      : { mode: 'offline' as const, profile: offline.profile, patches: offline.patches }
     if (json) {
       await writeStdout(`${JSON.stringify(status, null, 2)}\n`)
     } else {
@@ -235,11 +234,12 @@ if (isHarmonyCommand) {
       packageName = argument
     }
     const live = await inspectHarmonyRuntime(profileDir!, packageName, file)
-    const inspected = live ?? (() => {
-      const offline = offlineInspection()
+    const inspected = live ?? await (async () => {
+      const offline = await offlineInspection()
       return {
         patches: offline.patches,
-        targets: getPatchInspections(packageName, file),
+        targets: offline.targets.filter(target => (packageName === undefined || target.package === packageName)
+          && (file === undefined || target.file === file)),
       }
     })()
     if (patchKey !== undefined && !inspected.patches.some(patch => patch.key === patchKey)) {
@@ -319,7 +319,7 @@ if (isHarmonyCommand) {
       result = live.result
       patches = live.patches
     } else {
-      const offline = offlineInspection()
+      const offline = await offlineInspection()
       const matches = provider
         ? offline.patches.filter(patch => patch.owner === target)
         : offline.patches.filter(patch => patch.key === target)
@@ -336,7 +336,7 @@ if (isHarmonyCommand) {
         else disabled.add(target)
       }
       result = await updateHarmonyProfile(profileDir!, { disabled: [...disabled] }, offlineCandidates)
-      patches = offlineInspection().patches
+      patches = (await offlineInspection()).patches
     }
     if (json) await writeStdout(`${JSON.stringify({ result, patches }, null, 2)}\n`)
     else await writeStdout(text(
@@ -352,7 +352,7 @@ if (isHarmonyCommand) {
       fail(text('patch-order requires one of show, move, or auto', 'patch-order 需要 show、move 或 auto'))
     }
     const live = await readHarmonyRuntime(profileDir!)
-    const status = live ?? offlineInspection()
+    const status = live ?? await offlineInspection()
     const items = patchOrderItems(status.patches)
     const violationsOf = (order: string[]) => patchOrderViolations(order, items, status.profile.plugins)
 
@@ -423,7 +423,7 @@ if (isHarmonyCommand) {
       fail(text('provider-order requires one of show, move, or auto', 'provider-order 需要 show、move 或 auto'))
     }
     const live = await readHarmonyRuntime(profileDir!)
-    const status = live ?? offlineInspection()
+    const status = live ?? await offlineInspection()
     const violationsOf = (order: string[]) => orderViolations(order, status.profile.plugins)
 
     if (action === 'show') {
@@ -494,12 +494,17 @@ if (isHarmonyCommand) {
     `未知 harmony 命令 ${JSON.stringify(command)}\n${HARMONY_HELP}`,
   ))
   const live = await readHarmonyRuntime(profileDir!)
+  const { runHarmonyTui } = await import('./tui.js')
   if (live === undefined) {
+    const { discoverProfile, installModuleHooks } = await import('./runtime.js')
     installModuleHooks()
-    discoverOfflineProfile()
+    discoverProfile(profileDir!, false, offlineCandidates)
   }
   await runHarmonyTui(profileDir!, process.stdin, process.stdout, locale, offlineCandidates)
   process.exit(0)
 }
 
+const { resolveProfileDir } = await import('./dsh.js')
+const profileDir = profile === undefined ? undefined : resolveProfileDir(profile)
+const { launchDsh } = await import('./launcher.js')
 await launchDsh(args, profile, profileDir)

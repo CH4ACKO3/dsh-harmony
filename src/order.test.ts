@@ -3,6 +3,7 @@ import {
   autoSortOrder,
   autoSortPatchOrder,
   orderViolations,
+  patchOrderInsertionIndex,
   patchOrderViolations,
   type HarmonyPatchOrderItem,
   type HarmonyProvider,
@@ -93,4 +94,49 @@ test('reports developer constraints without changing a user Patch order', () => 
   expect(patchOrderViolations(['b/patch', 'a/patch'], patches, providers)).toEqual([{
     before: 'a/patch', after: 'b/patch', declaredBy: 'a',
   }])
+})
+
+test('incremental Patch insertion matches exhaustive placement', () => {
+  const providers: HarmonyProvider[] = [
+    { name: 'a', before: ['b'], after: ['d'] },
+    { name: 'b', before: ['c'], after: [] },
+    { name: 'c', before: [], after: ['a'] },
+    { name: 'd', before: ['c'], after: [] },
+  ]
+  const patches: HarmonyPatchOrderItem[] = [
+    { key: 'patch-0', owner: 'a', index: 0 },
+    { key: 'patch-1', owner: 'a', index: 1, after: ['c'] },
+    { key: 'patch-2', owner: 'b', index: 0 },
+    { key: 'patch-3', owner: 'b', index: 1, before: ['d'] },
+    { key: 'patch-4', owner: 'c', index: 0 },
+    { key: 'patch-5', owner: 'c', index: 1, before: ['a'] },
+    { key: 'patch-6', owner: 'd', index: 0 },
+    { key: 'patch-7', owner: 'd', index: 1 },
+  ]
+  const defaults = patches.map(patch => patch.key)
+  const defaultRank = new Map(defaults.map((key, index) => [key, index]))
+  const inversionCount = (candidate: string[]): number => {
+    let count = 0
+    for (let left = 0; left < candidate.length; left += 1) {
+      for (let right = left + 1; right < candidate.length; right += 1) {
+        if (defaultRank.get(candidate[left]!)! > defaultRank.get(candidate[right]!)!) count += 1
+      }
+    }
+    return count
+  }
+
+  for (const key of defaults) {
+    const order = ['patch-6', 'patch-0', 'patch-4', 'patch-2'].filter(item => item !== key)
+    const exhaustive = Array.from({ length: order.length + 1 }, (_, index) => ({
+      index,
+      candidate: [...order.slice(0, index), key, ...order.slice(index)],
+    })).sort((left, right) =>
+      patchOrderViolations(left.candidate, patches, providers).length
+        - patchOrderViolations(right.candidate, patches, providers).length
+      || inversionCount(left.candidate) - inversionCount(right.candidate)
+      || left.index - right.index)[0]!
+
+    expect(patchOrderInsertionIndex(order, key, patches, providers, defaultRank))
+      .toBe(exhaustive.index)
+  }
 })

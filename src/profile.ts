@@ -181,7 +181,7 @@ function readState(profileDir: string): HarmonyState {
   const state = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>
   return {
     order: stringList(state.order, 'order'),
-    patchOrder: stringList(state.patchOrder, 'patchOrder'),
+    patchOrder: stringList(state.patchOrder ?? [], 'patchOrder'),
     disabled: stringList(state.disabled, 'disabled'),
   }
 }
@@ -270,9 +270,22 @@ function patchOrder(current: string[], input: unknown): string[] {
 }
 
 export function groupHarmonyPatchOrder(order: string[], current: string[]): string[] {
-  const owners = [...order].sort((left, right) => right.length - left.length)
-  const ownerOf = (key: string): string | undefined => owners.find(owner => key.startsWith(`${owner}/`))
-  return order.flatMap(owner => current.filter(key => ownerOf(key) === owner))
+  const owners = new Set(order)
+  const grouped = new Map<string, string[]>()
+  for (const key of current) {
+    let separator = key.lastIndexOf('/')
+    while (separator >= 0) {
+      const owner = key.slice(0, separator)
+      if (owners.has(owner)) {
+        const patches = grouped.get(owner) ?? []
+        patches.push(key)
+        grouped.set(owner, patches)
+        break
+      }
+      separator = key.lastIndexOf('/', separator - 1)
+    }
+  }
+  return order.flatMap(owner => grouped.get(owner) ?? [])
 }
 
 export function prepareHarmonyProfileUpdate(profile: HarmonyProfile, input: HarmonyProfileUpdate): HarmonyProfile {
