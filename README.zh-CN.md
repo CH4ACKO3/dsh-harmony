@@ -30,6 +30,11 @@
   [简体中文](README.zh-CN.md) / [English](README.md)
 </div>
 
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="assets/harmony-preview-light.webp">
+  <img alt="Harmony 设置界面" src="assets/harmony-preview.webp">
+</picture>
+
 ## 使用
 
 在用 Vibe Coding 开发 DSH 插件时，只需输入 *“如果使用 dsh-harmony 呢”*。
