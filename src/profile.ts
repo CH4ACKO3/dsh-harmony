@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { findPackageJSON } from 'node:module'
-import { dirname, join } from 'node:path'
+import { dirname, isAbsolute, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import {
@@ -106,9 +106,9 @@ function installedPlugins(profileDir: string, requested?: string[], additional: 
   for (const dependency of candidates) {
     let manifestPath: string | undefined
     try {
-      manifestPath = dependency === 'dsh-harmony'
-        ? fileURLToPath(new URL('../package.json', import.meta.url))
-        : findPackageJSON(dependency, pathToFileURL(profilePath))
+      if (isAbsolute(dependency)) manifestPath = dependency
+      else if (dependency === 'dsh-harmony') manifestPath = fileURLToPath(new URL('../package.json', import.meta.url))
+      else manifestPath = findPackageJSON(dependency, pathToFileURL(profilePath))
     } catch {
       continue
     }
