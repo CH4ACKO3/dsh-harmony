@@ -19,6 +19,10 @@ import type {
 import { autoSortPatchOrder, patchOrderViolations, type HarmonyPatchOrderItem } from './order.js'
 import { schedulePatchBatches } from './scheduler.js'
 import {
+  evaluatePluginCompatibility,
+  type HarmonyActivePlugin,
+} from './compatibility.js'
+import {
   HARMONY_STATE_FILE,
   groupHarmonyPatchOrder,
   pinHarmonyOrder,
@@ -26,7 +30,6 @@ import {
   synchronizeHarmonyProfile,
 } from './profile.js'
 import type { HarmonyProfile } from './profile.js'
-import type { HarmonyActivePlugin } from './compatibility.js'
 import { installNodeFileTransforms, installNodeModuleHooks } from './hooks.js'
 import {
   applySourcePatch,
@@ -99,6 +102,14 @@ export interface ProfileTransaction {
 
 export type PatchTargets = Map<string, Set<string>>
 
+export interface HarmonyStartupPerformance {
+  started: bigint
+  prepareMs: number
+  transformMs: number
+  targetPackages: number
+  targetFiles: number
+}
+
 const providers = new Map<string, ProviderRecord>()
 const loadedPatchFiles = new Set<string>()
 const loadingPatchFiles = new Set<string>()
@@ -123,11 +134,23 @@ const generationStates = new Map<number, GenerationState>([[0, {
   providers: [], order: [], patchOrder: [], disabled: new Set(), targetFileSuffixes: new Set(),
 }]])
 let activeProfileDir: string | undefined
+let profileSnapshot: HarmonyProfile | undefined
 let providerOrder: string[] = []
 let patchOrder: string[] = []
 let disabledPatchKeys = new Set<string>()
 let activePlugins: HarmonyActivePlugin[] = []
 let refreshWatchedFiles: (() => void) | undefined
+let startupPerformance: HarmonyStartupPerformance | undefined
+
+export function recordStartupPerformance(value: HarmonyStartupPerformance): void {
+  startupPerformance = value
+}
+
+export function consumeStartupPerformance(): HarmonyStartupPerformance | undefined {
+  const value = startupPerformance
+  startupPerformance = undefined
+  return value
+}
 
 const pluginUrl = new URL('./plugin.js', import.meta.url).href
 const indexUrl = new URL('./index.js', import.meta.url).href
@@ -553,21 +576,21 @@ export function synchronizeProfile(
       saveHarmonyState(profileDir, { order: providerOrder, patchOrder, disabled: profile.disabled })
     }
     if (registryChanged || orderChanged || patchOrderChanged || disabledChanged) notify(changedTargets)
-    return { ...profile, patchOrder: [...patchOrder] }
+    profileSnapshot = { ...profile, patchOrder: [...patchOrder] }
+    return profileSnapshot
   } finally {
     refreshWatchedFiles?.()
   }
 }
 
 export function currentProfile(): HarmonyProfile {
-  const profile = synchronizeHarmonyProfile(activeProfileDir!, undefined, false, activePlugins)
-  const disabled = [...disabledPatchKeys]
+  if (profileSnapshot === undefined) throw new Error('dsh-harmony: profile is not initialized')
   return {
-    ...profile,
+    ...profileSnapshot,
     order: [...providerOrder],
     patchOrder: [...patchOrder],
-    disabled,
-    compatibility: profile.compatibility,
+    disabled: [...disabledPatchKeys],
+    compatibility: evaluatePluginCompatibility(profileSnapshot.plugins, activePlugins),
   }
 }
 
@@ -637,7 +660,10 @@ export function beginPluginUpdate(
       generation,
       profile: nextProfile,
       targets: new Map(),
-      commit() { activePlugins = enabledPlugins },
+      commit() {
+        activePlugins = enabledPlugins
+        profileSnapshot = nextProfile
+      },
       rollback() {},
     }
   }
@@ -685,6 +711,7 @@ export function beginPluginUpdate(
         disabled: profile.disabled,
       })
       activePlugins = enabledPlugins
+      profileSnapshot = nextProfile
       refreshWatchedFiles?.()
       stagedProviderCaches.clear()
       retainGeneration(candidateGeneration)

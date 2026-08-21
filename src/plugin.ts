@@ -16,6 +16,7 @@ import { createHarmonyProfileView, prepareHarmonyProfileUpdate } from './profile
 import {
   beginProfileUpdate,
   beginPluginUpdate,
+  consumeStartupPerformance,
   currentProfile,
   getPatchInspections,
   getPatchOrderViolations,
@@ -72,6 +73,8 @@ interface HarmonyLoadProbe {
   transformMs: number
   hostReloadMs: number
   clientRebuildMs: number
+  targetPackages?: number
+  targetFiles?: number
 }
 
 const loadPerformanceChannel = channel('dsh-harmony:load')
@@ -210,7 +213,6 @@ export async function apply(ctx: Context): Promise<void> {
   let clientModules: ClientModuleRegistry | undefined
   let queued = false
   let syncQueued = false
-  let initialSync = true
   let initializing = true
   let updateTail = Promise.resolve()
   const reloadingEntries = new Set<object>()
@@ -221,14 +223,17 @@ export async function apply(ctx: Context): Promise<void> {
   const logPerformance = process.env.DSH_HARMONY_PERF === '1'
 
   const startLoadProbe = (operation: HarmonyLoadProbe['operation']): HarmonyLoadProbe | undefined => {
+    const startup = operation === 'startup' ? consumeStartupPerformance() : undefined
     if (!logPerformance && !loadPerformanceChannel.hasSubscribers) return undefined
     return {
       operation,
-      started: process.hrtime.bigint(),
-      prepareMs: 0,
-      transformMs: 0,
+      started: startup?.started ?? process.hrtime.bigint(),
+      prepareMs: startup?.prepareMs ?? 0,
+      transformMs: startup?.transformMs ?? 0,
       hostReloadMs: 0,
       clientRebuildMs: 0,
+      targetPackages: startup?.targetPackages,
+      targetFiles: startup?.targetFiles,
     }
   }
 
@@ -243,10 +248,10 @@ export async function apply(ctx: Context): Promise<void> {
       operation: probe.operation,
       generation: transaction?.generation,
       status,
-      targetPackages: transaction?.targets.size ?? 0,
-      targetFiles: transaction === undefined
+      targetPackages: probe.targetPackages ?? transaction?.targets.size ?? 0,
+      targetFiles: probe.targetFiles ?? (transaction === undefined
         ? 0
-        : [...transaction.targets.values()].reduce((count, files) => count + files.size, 0),
+        : [...transaction.targets.values()].reduce((count, files) => count + files.size, 0)),
       prepareMs: probe.prepareMs,
       transformMs: probe.transformMs,
       hostReloadMs: probe.hostReloadMs,
@@ -255,7 +260,7 @@ export async function apply(ctx: Context): Promise<void> {
       ...(error === undefined ? {} : { error: error instanceof Error ? error.message : String(error) }),
     }
     loadPerformanceChannel.publish(record)
-    if (logPerformance) ctx.logger.info?.(`dsh-harmony: performance ${JSON.stringify(record)}`)
+    if (logPerformance) process.stderr.write(`dsh-harmony: performance ${JSON.stringify(record)}\n`)
   }
 
   registerActiveRuntimeRoute(ctx, () => reloadStatus)
@@ -332,11 +337,17 @@ export async function apply(ctx: Context): Promise<void> {
     const modules = clientModules
     let failure: unknown
     try {
+      if (transaction.targets.size === 0) {
+        transaction.commit()
+        warnCompatibility(transaction.profile)
+        warnPatchFailures()
+        return
+      }
       const transformStarted = probe === undefined ? undefined : process.hrtime.bigint()
       try {
         inspectPatchTargets()
       } finally {
-        if (probe !== undefined && transformStarted !== undefined) probe.transformMs = elapsedMilliseconds(transformStarted)
+        if (probe !== undefined && transformStarted !== undefined) probe.transformMs += elapsedMilliseconds(transformStarted)
       }
       const hostReloadStarted = probe === undefined ? undefined : process.hrtime.bigint()
       try {
@@ -396,11 +407,11 @@ export async function apply(ctx: Context): Promise<void> {
     try {
       transaction = prepare()
     } catch (error) {
-      if (probe !== undefined && prepareStarted !== undefined) probe.prepareMs = elapsedMilliseconds(prepareStarted)
+      if (probe !== undefined && prepareStarted !== undefined) probe.prepareMs += elapsedMilliseconds(prepareStarted)
       finishLoadProbe(probe, undefined, 'failed', error)
       throw error
     }
-    if (probe !== undefined && prepareStarted !== undefined) probe.prepareMs = elapsedMilliseconds(prepareStarted)
+    if (probe !== undefined && prepareStarted !== undefined) probe.prepareMs += elapsedMilliseconds(prepareStarted)
     await applyTransaction(transaction, probe)
     return transaction
   }
@@ -630,9 +641,7 @@ export async function apply(ctx: Context): Promise<void> {
     syncQueued = true
     setImmediate(() => {
       syncQueued = false
-      const force = initialSync
-      initialSync = false
-      void refreshPatches(force).catch(error => ctx.logger.error(error)).finally(() => {
+      void refreshPatches(false).catch(error => ctx.logger.error(error)).finally(() => {
         initializing = false
       })
     })

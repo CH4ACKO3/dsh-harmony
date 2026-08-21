@@ -6,7 +6,7 @@ import { join } from 'node:path'
 
 const home = mkdtempSync(join(tmpdir(), 'dsh-harmony-first-boot-'))
 const child = spawn(process.execPath, ['lib/bin.js', 'web', '--port', '0', '--no-open'], {
-  env: { ...process.env, DSH_HOME: home },
+  env: { ...process.env, DSH_HOME: home, DSH_HARMONY_PERF: '1' },
   stdio: ['ignore', 'pipe', 'pipe'],
 })
 let output = ''
@@ -15,7 +15,7 @@ try {
     const timer = setTimeout(() => reject(new Error(`first boot timed out:\n${output}`)), 30_000)
     const read = (chunk: Buffer) => {
       output += chunk
-      if (!output.includes('dsh web: http://127.0.0.1:')) return
+      if (!output.includes('dsh web: http://127.0.0.1:') || !output.includes('dsh-harmony: performance ')) return
       clearTimeout(timer)
       resolve()
     }
@@ -28,6 +28,29 @@ try {
   })
 
   assert.match(output, /dsh web: http:\/\/127\.0\.0\.1:/)
+  const performanceRecord = output.match(/dsh-harmony: performance (\{[^\n]+\})/)
+  assert.ok(performanceRecord)
+  const performance = JSON.parse(performanceRecord[1]) as {
+    operation: string
+    targetPackages: number
+    targetFiles: number
+    prepareMs: number
+    transformMs: number
+  }
+  assert.equal(performance.operation, 'startup')
+  assert.equal(performance.targetPackages, 0)
+  assert.equal(performance.targetFiles, 0)
+  assert.ok(performance.prepareMs >= 0)
+  assert.ok(performance.transformMs >= 0)
+
+  const url = output.match(/dsh web: (http:\/\/127\.0\.0\.1:\d+)/)?.[1]
+  assert.ok(url)
+  const inspection = await fetch(`${url}/dsh-harmony/inspect`).then(response => response.json() as Promise<{
+    inspections: Array<{ package: string; file: string }>
+  }>)
+  assert.deepEqual(inspection.inspections.map(item => `${item.package}/${item.file}`), [
+    '@deepseek-ai/dsh-client-ui-settings-general/lib/client.js',
+  ])
 } finally {
   if (child.exitCode === null) {
     const exited = new Promise(resolve => child.once('exit', resolve))

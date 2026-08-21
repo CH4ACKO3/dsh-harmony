@@ -851,6 +851,26 @@ test('publishes active plugin compatibility only when a plugin update commits', 
   })])
 })
 
+test('serves the active profile from its synchronized snapshot', () => {
+  const profile = join(root, 'profile-snapshot')
+  const plugin = join(profile, 'node_modules', 'snapshot-plugin')
+  mkdirSync(plugin, { recursive: true })
+  writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: { 'snapshot-plugin': '1' } }))
+  const writeManifest = (version: string) => writeFileSync(join(plugin, 'package.json'), JSON.stringify({
+    name: 'snapshot-plugin', version,
+  }))
+  writeManifest('1.0.0')
+
+  synchronizeProfile(profile)
+  expect(currentProfile().plugins.find(item => item.name === 'snapshot-plugin')?.version).toBe('1.0.0')
+
+  writeManifest('2.0.0')
+  expect(currentProfile().plugins.find(item => item.name === 'snapshot-plugin')?.version).toBe('1.0.0')
+
+  synchronizeProfile(profile)
+  expect(currentProfile().plugins.find(item => item.name === 'snapshot-plugin')?.version).toBe('2.0.0')
+})
+
 test('provides harmony and reloads a newly patched loader entry', async () => {
   const provider = join(root, 'live-provider')
   const laterProvider = join(root, 'later-live-provider')
@@ -1692,12 +1712,16 @@ test('controls a running profile without a Web server', async () => {
 module.exports = {
   id: 'non-web',
   target: { package: 'non-web-target', file: 'lib/index.js' },
-  select: 'NumericLiteral', expect: 1, apply() {},
+  select: 'NumericLiteral', expect: 1,
+  apply() { globalThis.__nonWebStartupApplications = (globalThis.__nonWebStartupApplications ?? 0) + 1 },
 }
 `)
   writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'non-web-target', version: '1.0.0' }))
   writeFileSync(join(target, 'lib/index.js'), 'export const value = 1\n')
   synchronizeProfile(profile)
+  ;(globalThis as any).__nonWebStartupApplications = 0
+  inspectPatchTargets()
+  expect((globalThis as any).__nonWebStartupApplications).toBe(1)
 
   const disposers: Array<() => void | Promise<void>> = []
   const performanceRecords: unknown[] = []
@@ -1737,6 +1761,7 @@ module.exports = {
     clientRebuildMs: expect.any(Number),
     totalMs: expect.any(Number),
   }))
+  expect((globalThis as any).__nonWebStartupApplications).toBe(1)
 
   const addressFile = join(profile, '.dsh-harmony-runtime.json')
   const address = JSON.parse(readFileSync(addressFile, 'utf8')) as { url: string }
@@ -1763,6 +1788,7 @@ module.exports = {
   await expect(reloadHarmonyRuntime(profile, 'missing-plugin')).rejects.toThrow('unknown plugin')
 
   for (const dispose of disposers.reverse()) await dispose()
+  delete (globalThis as any).__nonWebStartupApplications
   expect(await reloadHarmonyRuntime(profile)).toBeUndefined()
 })
 
