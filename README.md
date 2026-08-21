@@ -31,11 +31,6 @@
   [简体中文](README.zh-CN.md) / [English](README.md)
 </div>
 
-<picture>
-  <source media="(prefers-color-scheme: light)" srcset="assets/harmony-preview-light.webp">
-  <img alt="Harmony settings interface" src="assets/harmony-preview.webp">
-</picture>
-
 ## Usage
 
 Just type *"What about we use dsh-harmony"* when vibe coding your DSH plugin.
