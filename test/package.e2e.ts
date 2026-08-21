@@ -16,7 +16,8 @@ const manifest = JSON.parse(readFileSync('package.json', 'utf8')) as {
   peerDependencies: Record<string, string>
 }
 const tarball = join(root, `${manifest.name}-${manifest.version}.tgz`)
-const dshVersion = manifest.peerDependencies['@deepseek-ai/dsh']!
+const dshRange = manifest.peerDependencies['@deepseek-ai/dsh']!
+const dshVersion = dshRange.split(/\s*\|\|\s*/).at(-1)!
 
 function run(command: string, args: string[], env: NodeJS.ProcessEnv = process.env): string {
   const result = spawnSync(command, args, { cwd: resolve('.'), encoding: 'utf8', env })
