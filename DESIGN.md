@@ -121,9 +121,9 @@ components:
   harmony-badge:
     backgroundColor: "{colors.code-navy}"
     textColor: "#f2f6fc"
-    rounded: "6px"
+    rounded: "5px"
     padding: "0"
-    height: "24px"
+    height: "20px"
     typography: "{typography.directory-code}"
 ---
 
@@ -249,7 +249,7 @@ The same directory component has two densities. The homepage shows a randomized 
 
 ### Powered by Harmony Badge
 
-The reusable 96px by 24px badge uses a Code Navy field, the existing Harmony icon asset, and a single light Harmony wordmark. It links to the documentation homepage and is distributed as one stable SVG URL with a copyable Markdown embed. The badge stays compact and does not introduce a second logo or promotional palette.
+The reusable 96px by 20px badge follows the standard README badge height. It uses a Code Navy field, the existing Harmony icon asset, and a single light Harmony wordmark. It links to the documentation homepage and is distributed as one stable SVG URL with a copyable Markdown embed. The badge stays compact and does not introduce a second logo or promotional palette.
 
 ### Code And Data
 
