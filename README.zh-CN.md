@@ -181,6 +181,16 @@ npm install dsh-harmony-react
 | Studio 预览 | [Studio 集成](https://memorax-ai.github.io/dsh-harmony/zh/integrations/studio) |
 | 命令、限制与故障 | [CLI](https://memorax-ai.github.io/dsh-harmony/zh/reference/cli) · [限制](https://memorax-ai.github.io/dsh-harmony/zh/reference/limitations) · [故障排查](https://memorax-ai.github.io/dsh-harmony/zh/help/troubleshooting) |
 
+## Powered by Harmony
+
+如果你的插件使用 Harmony，欢迎使用这枚徽章来表达支持！
+
+[![Powered by Harmony](https://memorax-ai.github.io/dsh-harmony/harmony-powered.svg)](https://memorax-ai.github.io/dsh-harmony/)
+
+```md
+[![Powered by Harmony](https://memorax-ai.github.io/dsh-harmony/harmony-powered.svg)](https://memorax-ai.github.io/dsh-harmony/)
+```
+
 ## 开发
 
 所有维护中的实现源码均使用 TypeScript。用于发布的编译产物由构建生成，不纳入 Git 跟踪。
