@@ -25,6 +25,7 @@
     <a href="https://www.npmjs.com/package/dsh-harmony"><img alt="npm version" src="https://img.shields.io/npm/v/dsh-harmony.svg?style=flat&amp;color=0b63f6"></a>
     <a href="https://github.com/memorax-ai/dsh-harmony/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/memorax-ai/dsh-harmony?style=flat&amp;color=0b63f6"></a>
     <a href="https://awesome-dsh-plugin.com"><img alt="Awesome DSH Plugin" src="https://awesome-dsh-plugin.com/badge.svg"></a>
+    <a href="https://memorax-ai.github.io/dsh-harmony/"><img alt="Harmony" src="https://memorax-ai.github.io/dsh-harmony/harmony-powered.svg"></a>
   </p>
 
   [简体中文](README.zh-CN.md) / [English](README.md)
