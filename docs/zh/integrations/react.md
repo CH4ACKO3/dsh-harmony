@@ -43,8 +43,8 @@ module.exports = element({
   id: 'custom-sidebar-brand',
   target: {
     package: '@deepseek-ai/dsh-client-ui-sidebar',
-    version: '0.1.0-rc.6',
-    files: ['lib/client.js'],
+    version: '0.1.0-rc.8',
+    file: 'lib/client.js',
   },
   select: { component: 'BrandWordmark' },
   expect: 1,
@@ -78,8 +78,8 @@ module.exports = component({
   id: 'decorate-button',
   target: {
     package: '@deepseek-ai/dsh-client-ui-buttons',
-    version: '0.1.0-rc.6',
-    files: ['lib/client.js'],
+    version: '0.1.0-rc.8',
+    file: 'lib/client.js',
   },
   select: { name: 'Button' },
   expect: 1,

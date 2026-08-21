@@ -5,7 +5,7 @@
 | 组件 | 支持版本 |
 | --- | --- |
 | Node.js | `^22.22.3` 或 `>=24.11.1` |
-| DeepSeek Harness | `@deepseek-ai/dsh@0.1.0-rc.6` |
+| DeepSeek Harness | `@deepseek-ai/dsh@0.1.0-rc.8` |
 | 操作系统 | Windows、macOS 或 Linux |
 
 安装前检查 Node：
@@ -20,7 +20,7 @@ npm --version
 先安装受支持的官方 CLI，再安装 Harmony：
 
 ```sh
-npm install -g @deepseek-ai/dsh@0.1.0-rc.6
+npm install -g @deepseek-ai/dsh@0.1.0-rc.8
 npm install -g dsh-harmony
 dsh web
 ```
@@ -95,6 +95,8 @@ dsh harmony inspect target-plugin --file lib/index.js --profile tui
 ```
 
 每个 profile 都会在 `$DSH_HOME/profiles/<name>/harmony.json` 中保存自己的 Provider `order`、全局 `patchOrder` 和已停用 Patch 键。
+
+Settings、TUI 与 profile API 都会在文件锁内写入完整 profile，并以原子替换提交。过期的 WebUI 草稿会被拒绝并刷新；多个 Host 共用 profile 时，最后完成的写入成为当前文件，与 DSH Settings 的行为一致。
 
 ## 更新
 

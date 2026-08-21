@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-08-17T01:14:52Z",
+  "generatedAt": "2026-08-21T04:33:52Z",
   "title": "Design System: dsh-harmony Documentation",
   "extensions": {
     "colorMeta": {
@@ -22,6 +22,12 @@
         "canonical": "#0c47b2",
         "tonalRamp": ["oklch(15% 0.12 258)", "oklch(26% 0.12 258)", "oklch(38% 0.12 258)", "oklch(50% 0.12 258)", "oklch(62% 0.12 258)", "oklch(74% 0.12 258)", "oklch(86% 0.12 258)", "oklch(95% 0.12 258)"]
       },
+      "cobalt-soft": {
+        "role": "primary",
+        "displayName": "Soft Cobalt State",
+        "canonical": "rgba(7, 95, 247, 0.12)",
+        "tonalRamp": ["oklch(15% 0.12 258 / 0.12)", "oklch(26% 0.12 258 / 0.12)", "oklch(38% 0.12 258 / 0.12)", "oklch(50% 0.12 258 / 0.12)", "oklch(62% 0.12 258 / 0.12)", "oklch(74% 0.12 258 / 0.12)", "oklch(86% 0.12 258 / 0.12)", "oklch(95% 0.12 258 / 0.12)"]
+      },
       "cool-paper": {
         "role": "neutral",
         "displayName": "Cool Paper",
@@ -39,6 +45,12 @@
         "displayName": "Cool Surface",
         "canonical": "#edf3fc",
         "tonalRamp": ["oklch(15% 0.018 250)", "oklch(26% 0.018 250)", "oklch(38% 0.018 250)", "oklch(50% 0.018 250)", "oklch(62% 0.018 250)", "oklch(74% 0.018 250)", "oklch(86% 0.018 250)", "oklch(95% 0.018 250)"]
+      },
+      "cool-divider": {
+        "role": "neutral",
+        "displayName": "Cool Divider",
+        "canonical": "rgba(20, 59, 112, 0.16)",
+        "tonalRamp": ["oklch(15% 0.045 255 / 0.16)", "oklch(26% 0.045 255 / 0.16)", "oklch(38% 0.045 255 / 0.16)", "oklch(50% 0.045 255 / 0.16)", "oklch(62% 0.045 255 / 0.16)", "oklch(74% 0.045 255 / 0.16)", "oklch(86% 0.045 255 / 0.16)", "oklch(95% 0.045 255 / 0.16)"]
       },
       "quiet-control": {
         "role": "neutral",
@@ -93,16 +105,22 @@
       "display": { "displayName": "Compact Brand and Document Title", "purpose": "Document titles and the homepage brand statement." },
       "headline": { "displayName": "Section Heading", "purpose": "Technical document sections." },
       "body": { "displayName": "Technical Reading", "purpose": "Long-form guides, capability descriptions, tables, and supporting copy." },
-      "mono": { "displayName": "Runtime Mono", "purpose": "Commands, code, file paths, provider IDs, and generations." }
+      "mono": { "displayName": "Runtime Mono", "purpose": "Commands, code, file paths, provider IDs, and generations." },
+      "directory-code": { "displayName": "Directory Code", "purpose": "Twelve-pixel ecosystem counts, package names, and install commands." },
+      "directory-label": { "displayName": "Directory Label", "purpose": "Thirteen-pixel ecosystem categories and target metadata." },
+      "directory-control": { "displayName": "Directory Control", "purpose": "Fourteen-pixel ecosystem filter labels." },
+      "directory-action": { "displayName": "Directory Action", "purpose": "Fourteen-pixel source and directory actions." },
+      "directory-title": { "displayName": "Directory Title", "purpose": "Nineteen-pixel ecosystem entry names." }
     },
     "shadows": [
       { "name": "brand-mark-separation", "value": "0 18px 22px rgba(12, 71, 178, 0.18)", "purpose": "Separates only the homepage Harmony mark from its pale two-ellipse halo." }
     ],
     "motion": [
-      { "name": "state-color", "value": "color 0.25s, border-color 0.25s, background-color 0.25s", "purpose": "Restrained hover feedback for links, actions, and capability panels; never an entrance or decorative animation." }
+      { "name": "state-color", "value": "color 0.25s, border-color 0.25s, background-color 0.25s", "purpose": "Restrained hover feedback for links, actions, capability panels, and ecosystem filters; never an entrance or decorative animation." }
     ],
     "breakpoints": [
       { "name": "compact", "value": "640px" },
+      { "name": "ecosystem-stack", "value": "760px" },
       { "name": "document-shell", "value": "768px" },
       { "name": "wide", "value": "960px" }
     ]
@@ -111,8 +129,8 @@
     {
       "name": "Documentation Navigation",
       "kind": "nav",
-      "description": "Compact access to the guide, API, React integration, and package registry.",
-      "html": "<nav class=\"ds-nav\"><a href=\"#\">Guide</a><a href=\"#\">Patch API</a><a href=\"#\">React</a><a href=\"#\">npm ↗</a></nav>",
+      "description": "Compact access to the guide, API, ecosystem, React integration, and package registry.",
+      "html": "<nav class=\"ds-nav\"><a href=\"#\">Guide</a><a href=\"#\">Patch API</a><a href=\"#\">Ecosystem</a><a href=\"#\">React</a><a href=\"#\">npm ↗</a></nav>",
       "css": ".ds-nav { display: flex; gap: 24px; align-items: center; font: 650 14px/1.2 'Atkinson Hyperlegible Next Variable', sans-serif; } .ds-nav a { color: #10233f; text-decoration: none; transition: color 0.25s; } .ds-nav a:hover { color: #075ff7; } .ds-nav a:focus-visible { outline: 3px solid rgba(7, 95, 247, 0.62); outline-offset: 3px; }"
     },
     {
@@ -147,6 +165,22 @@
       "css": ".ds-capability { display: flex; flex-direction: column; min-height: 176px; border: 1px solid rgba(20, 59, 112, 0.16); border-radius: 10px; padding: 24px; color: #10233f; background: #edf3fc; font-family: 'Atkinson Hyperlegible Next Variable', sans-serif; text-decoration: none; transition: border-color 0.25s; } .ds-capability:hover { border-color: color-mix(in srgb, #075ff7 44%, rgba(20, 59, 112, 0.16)); } .ds-capability:focus-visible { outline: 3px solid rgba(7, 95, 247, 0.62); outline-offset: 3px; } .ds-capability strong { font-size: 16px; font-weight: 600; line-height: 24px; letter-spacing: -0.015em; } .ds-capability span { flex: 1; padding-top: 8px; color: #40536d; font-size: 14px; font-weight: 500; line-height: 24px; } .ds-capability em { padding-top: 8px; color: #075ff7; font-size: 14px; font-style: normal; font-weight: 500; }"
     },
     {
+      "name": "Selected Ecosystem Filter",
+      "kind": "chip",
+      "refersTo": "ecosystem-filter-selected",
+      "description": "The cobalt selected state within the wrapping full-directory category controls.",
+      "html": "<button class=\"ds-ecosystem-filter\" type=\"button\" aria-pressed=\"true\">Interface <span>1</span></button>",
+      "css": ".ds-ecosystem-filter { display: inline-flex; align-items: baseline; gap: 8px; min-height: 36px; padding: 6px 12px; border: 1px solid #075ff7; border-radius: 8px; color: #075ff7; background: rgba(7, 95, 247, 0.12); font: 460 14px/1.5 'Atkinson Hyperlegible Next Variable', sans-serif; cursor: pointer; transition: color 0.25s, border-color 0.25s, background-color 0.25s; } .ds-ecosystem-filter span { color: #63738a; font: 460 12px/1.55 'Source Code Pro Variable', monospace; font-variant-numeric: tabular-nums; } .ds-ecosystem-filter:hover { color: #075ff7; border-color: #075ff7; background: rgba(7, 95, 247, 0.12); } .ds-ecosystem-filter:focus-visible { outline: 3px solid rgba(7, 95, 247, 0.62); outline-offset: 3px; }"
+    },
+    {
+      "name": "Ecosystem Directory Entry",
+      "kind": "custom",
+      "refersTo": "ecosystem-entry",
+      "description": "A flat three-part discovery row that stacks into one column at 760px without becoming a card.",
+      "html": "<ul class=\"ds-ecosystem-list\"><li class=\"ds-ecosystem-entry\"><div class=\"ds-ecosystem-identity\"><span class=\"ds-ecosystem-category\">Interface</span><h3><a href=\"#\">Turn Fold</a></h3><code>@ch4acko3/dsh-turn-fold</code></div><div class=\"ds-ecosystem-body\"><p>Collapse each completed turn's agent activity into a summary bar while keeping the final answer visible.</p><p class=\"ds-ecosystem-targets\"><span>Targets</span> Conversation WebUI</p></div><div class=\"ds-ecosystem-actions\"><code>dsh plugin --profile web add @ch4acko3/dsh-turn-fold</code><a href=\"#\">Source</a></div></li></ul>",
+      "css": ".ds-ecosystem-list { width: min(980px, calc(100vw - 64px)); margin: 0; padding: 0; list-style: none; border-top: 1px solid rgba(20, 59, 112, 0.16); color: #10233f; font-family: 'Atkinson Hyperlegible Next Variable', sans-serif; } .ds-ecosystem-entry { display: grid; grid-template-columns: minmax(160px, 0.72fr) minmax(240px, 1.45fr) minmax(210px, 0.9fr); gap: 28px; align-items: start; padding: 26px 0; border-bottom: 1px solid rgba(20, 59, 112, 0.16); } .ds-ecosystem-identity h3 { margin: 7px 0 3px; font-size: 19px; font-weight: 600; line-height: 1.25; } .ds-ecosystem-identity h3 a { color: #10233f; text-decoration: none; transition: color 0.25s; } .ds-ecosystem-identity h3 a:hover { color: #075ff7; } .ds-ecosystem-category { color: #075ff7; font-size: 13px; font-weight: 650; } .ds-ecosystem-identity code, .ds-ecosystem-actions code { color: #63738a; background: transparent; font: 460 12px/1.55 'Source Code Pro Variable', monospace; } .ds-ecosystem-body p { max-width: 62ch; margin: 0; color: #40536d; font-size: 17px; line-height: 1.58; } .ds-ecosystem-body .ds-ecosystem-targets { margin-top: 12px; color: #63738a; font-size: 13px; } .ds-ecosystem-targets span { margin-right: 8px; color: #40536d; font-weight: 620; } .ds-ecosystem-actions { min-width: 0; } .ds-ecosystem-actions code { display: block; padding: 8px 0 10px; overflow-wrap: anywhere; white-space: normal; } .ds-ecosystem-actions a { display: inline-block; margin-top: 5px; color: #075ff7; font-size: 14px; font-weight: 620; text-underline-offset: 0.18em; } .ds-ecosystem-entry a:focus-visible { outline: 3px solid rgba(7, 95, 247, 0.62); outline-offset: 3px; } @media (max-width: 760px) { .ds-ecosystem-list { width: auto; } .ds-ecosystem-entry { grid-template-columns: 1fr; gap: 14px; padding: 22px 0; } .ds-ecosystem-actions code { padding-top: 2px; } }"
+    },
+    {
       "name": "Code Block",
       "kind": "card",
       "refersTo": "code-block-light",
@@ -164,26 +198,31 @@
   ],
   "narrative": {
     "northStar": "Layered Tracing Film",
-    "overview": "The documentation behaves like a precise service manual. The original plugin remains conceptually visible while each Patch adds a controlled, reversible layer. The result feels native to DeepSeek Harness: calm, exact, and built for sustained technical reading.\n\nOrdinary pages let the standard documentation shell lead. The index is the controlled exception: a concise technical brand portal where readers identify Harmony, choose the Patch layer they need, and enter installation or authoring without crossing into a product-marketing page.\n\nExpression comes from the interlocked Harmony mark, cool paper surfaces, solid cobalt actions, flat capability panels, and unusually clear typography. Decoration never competes with instructions, source examples, or runtime state.",
+    "overview": "The documentation behaves like a precise service manual. The original plugin remains conceptually visible while each Patch adds a controlled, reversible layer. The result feels native to DeepSeek Harness: calm, exact, and built for sustained technical reading.\n\nOrdinary pages let the standard documentation shell lead. The index is the controlled exception: a concise technical brand portal where readers identify Harmony, choose the Patch layer they need, and enter installation or authoring without crossing into a product-marketing page. A compact randomized ecosystem sample follows the four capability panels, while the standalone ecosystem route opens into a wider directory for deliberate discovery.\n\nExpression comes from the interlocked Harmony mark, cool paper surfaces, solid cobalt actions, flat capability panels, open one-pixel-separated directory rows, and unusually clear typography. Decoration never competes with instructions, source examples, runtime state, or the independence of listed providers.",
     "keyCharacteristics": [
       "Cool white paper with cobalt reserved for actions, links, and brand emphasis.",
       "Compact headings paired with highly legible long-form text.",
-      "An asymmetric homepage brand block followed directly by a two-column capability index.",
+      "A restrained homepage brand block, four capability panels, and a compact randomized ecosystem directory.",
+      "A wider open ecosystem directory built from flat three-part rows rather than cards.",
       "Persistent navigation, page outline, tables, and copyable command blocks on ordinary documents.",
       "No promotional proof, decorative motion, or ornamental content systems."
     ],
     "rules": [
       { "name": "The One Accent Rule", "body": "Cobalt marks actionable links, focus, and brand identity; neutral surfaces carry everything else.", "section": "colors" },
       { "name": "The Whole-Word Rule", "body": "Technical nouns and key transformation terms must receive enough width to wrap between words, never inside them.", "section": "typography" },
+      { "name": "The Mono Scope Rule", "body": "Source Code Pro is reserved for packages, commands, counts, paths, identifiers, generations, and code; ecosystem names, categories, targets, filters, and prose stay in Atkinson Hyperlegible.", "section": "typography" },
       { "name": "The Homepage Exception Rule", "body": "Only the documentation index may use the compact brand Hero and four capability panels; ordinary documents retain the standard VitePress shell.", "section": "layout" },
+      { "name": "The Open Directory Rule", "body": "Ecosystem discovery may widen beyond the reading column, but it remains flat, line-separated, and structurally equivalent in English and Simplified Chinese.", "section": "layout" },
       { "name": "The Paper-First Rule", "body": "Documentation surfaces stay flat; hierarchy comes from type, spacing, and one-pixel boundaries.", "section": "elevation" },
       { "name": "The Halo Exception Rule", "body": "Only the homepage mark may sit over the broad, pale, slightly asymmetric two-ellipse halo; keep both ellipses diffuse and visibly weaker than the cobalt actions.", "section": "elevation" }
     ],
     "dos": [
       "Do preserve a 72ch maximum prose measure and clear heading hierarchy on ordinary documents.",
       "Do reserve the compact Hero and exactly four capability panels for the documentation index.",
+      "Do place the compact randomized ecosystem sample after those four panels, and use the open full directory only on the dedicated ecosystem route.",
       "Do pair the Harmony mark with the exact library definition and direct installation or authoring actions.",
-      "Do keep English and Simplified Chinese homepage structure equivalent.",
+      "Do keep English and Simplified Chinese homepage and ecosystem-directory structure equivalent.",
+      "Do use one-pixel separators and open rows for ecosystem entries, with cobalt limited to filter state and actionable emphasis.",
       "Do keep the two-ellipse homepage halo broad, pale, and slightly asymmetric.",
       "Do respect reduced-motion preferences and visible keyboard focus."
     ],
@@ -191,6 +230,8 @@
       "Don't expand the index into a full-size marketing landing page or product showcase.",
       "Don't add promotional proof, metrics, testimonials, screenshot walls, or benchmark claims.",
       "Don't add icons to turn the capability panels into generic feature cards.",
+      "Don't turn ecosystem entries into elevated or ornamental cards, or add a new elevation vocabulary around the directory.",
+      "Don't style catalog inclusion as certification, endorsement, security review, or compatibility guarantee.",
       "Don't intensify the halo, repeat it behind content, or use it as a general elevation effect.",
       "Don't use decorative motion, animated backgrounds, or attention-seeking transitions.",
       "Don't introduce dense dashboard styling or decorative game-mod motifs."

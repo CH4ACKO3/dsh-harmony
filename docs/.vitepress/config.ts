@@ -63,11 +63,11 @@ const chineseSidebar = [
 ]
 
 const designContract = `<!--
-THESIS: Harmony opens as a concise technical brand page: the runtime Patch model is immediately visible, while detailed guidance remains in the documentation hierarchy.
+THESIS: Harmony opens as a concise technical brand page: the runtime Patch model is immediately visible, while documentation and independent community providers remain easy to discover.
 OWN-WORLD: Cool paper, solid cobalt accents, flat capability panels, compact actions, and typography optimized for sustained technical reading.
-STORY: Readers identify Harmony, choose the Patch layer they need, and enter installation or authoring without crossing a product-marketing page.
+STORY: Readers identify Harmony, choose the Patch layer they need, then enter installation, authoring, or the independently maintained provider ecosystem.
 FIRST VIEWPORT: A left-led brand block pairs the Harmony mark with its exact library definition and two documentation actions; a two-column capability index follows directly.
-FORM: Short technical documentation portal derived from the established layered service manual, seed be380533.
+FORM: Short technical documentation portal and open directory derived from the established layered service manual, seed be380533.
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
 -->`
 
@@ -104,6 +104,7 @@ export default defineConfig({
         nav: [
           { text: '指南', link: '/zh/guide/introduction' },
           { text: 'Patch API', link: '/zh/patches/authoring' },
+          { text: '生态', link: '/zh/ecosystem' },
           { text: 'React', link: '/zh/integrations/react' },
           { text: 'npm', link: 'https://www.npmjs.com/package/dsh-harmony' },
         ],
@@ -123,6 +124,7 @@ export default defineConfig({
     nav: [
       { text: 'Guide', link: '/guide/introduction' },
       { text: 'Patch API', link: '/patches/authoring' },
+      { text: 'Ecosystem', link: '/ecosystem' },
       { text: 'React', link: '/integrations/react' },
       { text: 'npm', link: 'https://www.npmjs.com/package/dsh-harmony' },
     ],

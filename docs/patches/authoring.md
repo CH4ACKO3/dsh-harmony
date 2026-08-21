@@ -10,11 +10,17 @@ Add Harmony metadata to the provider's `package.json`:
 {
   "name": "my-dsh-plugin",
   "dsh": {
+    "plugin": {
+      "compatibility": {
+        "requires": { "base-plugin": "^2.0.0" },
+        "conflicts": { "legacy-patches": "*" },
+        "integrates": { "optional-renderer": "^1.0.0" }
+      }
+    },
     "harmony": {
       "patches": ["./patches/answer.patch.cjs"],
       "after": ["base-patches"],
-      "before": ["ui-patches"],
-      "conflicts": ["legacy-patches"]
+      "before": ["ui-patches"]
     }
   }
 }
@@ -43,10 +49,11 @@ Source Patches select TypeScript AST nodes and edit the current source through M
 /** @type {import('dsh-harmony').HarmonyPatch} */
 module.exports = {
   id: 'answer-value',
+  description: 'Changes answer() to return 42.',
   target: {
     package: 'some-dsh-plugin',
     version: '^1.2.0',
-    files: ['lib/index.js'],
+    file: 'lib/index.js',
   },
   select: 'FunctionDeclaration[name.name="answer"] NumericLiteral',
   expect: 1,
@@ -68,7 +75,7 @@ module.exports = {
 | `edit` | [MagicString](https://github.com/Rich-Harris/magic-string) editor for the current source |
 | `ts` | TypeScript namespace |
 
-Positions passed to `edit` refer to the source received by this Patch. `files` contains alternative package-relative targets; Harmony selects the first existing file. `version` is a semver range, and `expect` requires an exact match count.
+Positions passed to `edit` refer to the source received by this Patch. `file` is one exact package-relative target. `version` is a semver range, and `expect` requires an exact match count.
 
 Each Source Patch parses the source left by earlier Patches before running its selector. Harmony does not run every selector against the original AST first, because later selectors would then see stale nodes and offsets.
 
@@ -83,7 +90,7 @@ module.exports = {
   target: {
     package: 'typescript-only-plugin',
     version: '^1.0.0',
-    files: ['index.ts'],
+    file: 'index.ts',
   },
   loader: 'typescript',
 }
@@ -103,7 +110,7 @@ module.exports = {
   target: {
     package: 'some-dsh-plugin',
     version: '^1.2.0',
-    files: ['lib/index.js'],
+    file: 'lib/index.js',
     function: 'answer',
   },
   operation: 'after',
@@ -135,7 +142,7 @@ module.exports = {
   patches: [
     {
       id: 'host-part',
-      target: { package: 'target-plugin', version: '^1.0.0', files: ['lib/index.js'] },
+      target: { package: 'target-plugin', version: '^1.0.0', file: 'lib/index.js' },
       select: 'StringLiteral[text="old"]',
       expect: 1,
       apply({ node, sourceFile, edit }) {
@@ -144,7 +151,7 @@ module.exports = {
     },
     {
       id: 'client-part',
-      target: { package: 'target-plugin', version: '^1.0.0', files: ['lib/client.js'] },
+      target: { package: 'target-plugin', version: '^1.0.0', file: 'lib/client.js' },
       select: 'StringLiteral[text="old"]',
       expect: 1,
       apply({ node, sourceFile, edit }) {
@@ -170,11 +177,11 @@ The user's order wins. Automatic sorting looks for the fewest violated rules and
 
 Moving a provider puts its Patches back together. Editing `patchOrder` keeps the chosen cross-provider placement. In either case, each Source Patch reads the output of the previous one.
 
-## Provider conflicts
+## Plugin compatibility
 
-`conflicts` declares provider incompatibilities. A one-sided declaration is enough. Harmony shows the warning only when both packages are enabled Patch providers in the current Loader Tree.
+Any DSH plugin may describe package relationships under `dsh.plugin.compatibility`, whether or not it provides Harmony Patches. `requires` reports a missing, inactive, or incompatible dependency; `conflicts` reports an incompatible active pair; and `integrates` reports an available optional integration. Keys are package names and values are semver ranges.
 
-The warning does not block installation, startup, application, ordering, or reload. Disabling either provider with `<provider>/*` removes it.
+These declarations report facts but never install, enable, disable, or block plugins. Live reports use plugins active in Loader; offline reports treat installed profile packages as active because no Loader state exists. Disabling a Patch does not disable its owning plugin.
 
 ## Minimal WebUI example
 
@@ -185,10 +192,11 @@ const headline = 'Harmony is All You Need'
 
 module.exports = {
   id: 'home-banner',
+  description: 'Replaces the new-session headline.',
   target: {
     package: '@deepseek-ai/dsh-client-ui-conversation',
-    version: '0.1.0-rc.6',
-    files: ['lib/client.js'],
+    version: '0.1.0-rc.8',
+    file: 'lib/client.js',
   },
   select: 'StringLiteral[text="探索未至之境"]',
   expect: 1,
@@ -207,16 +215,20 @@ Plugins can inject the `harmony` service:
 ```ts
 export const inject = ['harmony']
 
-export function apply(ctx) {
+export async function apply(ctx) {
+  const current = ctx.harmony.profile()
   const snapshot = ctx.harmony.inspect({ package: 'some-dsh-plugin' })
+  const result = await ctx.harmony.updateProfile({
+    order: current.order,
+    disabled: ['my-dsh-plugin/optional-patch'],
+  })
 }
 ```
 
 The service exposes:
 
-- `binEntry` and `profileDir` for the active runtime;
+- `profile()` for the committed profile snapshot;
+- `updateProfile(input)` for a checked live update and its reload result;
 - `inspect(input?)` for Patch status and transformed target snapshots;
-- `inspectDependencies(owner)` for relationships inferred between Patches;
-- `reloadPlugin(name)` for transactionally reloading one Loader plugin and its Patch declarations.
 
-The package also exports extension-discovery helpers and their TypeScript types. Preview and Draft lifecycle APIs come from WebUI Studio, not Harmony.
+For another local process, the package exports `readHarmonyProfile`, `preflightHarmonyProfileUpdate`, and `updateHarmonyProfile`. The last function uses the running Host transaction when the profile is live, or validates and atomically saves a stopped profile. Do not edit `harmony.json` directly while a profile is running. Preview and Draft lifecycle APIs come from WebUI Studio, not Harmony.

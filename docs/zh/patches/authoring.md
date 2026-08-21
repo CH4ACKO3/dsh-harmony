@@ -8,11 +8,17 @@ Patch Provider 是一个普通 DSH 插件，通过 `package.json` 声明一个�
 {
   "name": "my-dsh-plugin",
   "dsh": {
+    "plugin": {
+      "compatibility": {
+        "requires": { "base-plugin": "^2.0.0" },
+        "conflicts": { "legacy-patches": "*" },
+        "integrates": { "optional-renderer": "^1.0.0" }
+      }
+    },
     "harmony": {
       "patches": ["./patches/answer.patch.cjs"],
       "after": ["base-patches"],
-      "before": ["ui-patches"],
-      "conflicts": ["legacy-patches"]
+      "before": ["ui-patches"]
     }
   }
 }
@@ -41,10 +47,11 @@ export const inject = ['harmony']
 /** @type {import('dsh-harmony').HarmonyPatch} */
 module.exports = {
   id: 'answer-value',
+  description: '将 answer() 的返回值改为 42。',
   target: {
     package: 'some-dsh-plugin',
     version: '^1.2.0',
-    files: ['lib/index.js'],
+    file: 'lib/index.js',
   },
   select: 'FunctionDeclaration[name.name="answer"] NumericLiteral',
   expect: 1,
@@ -66,7 +73,7 @@ module.exports = {
 | `edit` | 针对当前源码的 [MagicString](https://github.com/Rich-Harris/magic-string) 编辑器 |
 | `ts` | TypeScript 命名空间 |
 
-传给 `edit` 的位置都以当前 Patch 收到的源码为准。`files` 是备选包内相对路径，Harmony 使用第一个存在的文件；`version` 是 SemVer 范围；`expect` 要求精确匹配数。
+传给 `edit` 的位置都以当前 Patch 收到的源码为准。`file` 是唯一、精确的包内相对路径；`version` 是 SemVer 范围；`expect` 要求精确匹配数。
 
 每个 Source Patch 都会先解析早期 Patch 留下的源码，再运行选择器。Harmony 不会让所有选择器预先查询同一棵原始 AST，否则后续选择器看到的节点和偏移量都会过时。
 
@@ -81,7 +88,7 @@ module.exports = {
   target: {
     package: 'typescript-only-plugin',
     version: '^1.0.0',
-    files: ['index.ts'],
+    file: 'index.ts',
   },
   loader: 'typescript',
 }
@@ -101,7 +108,7 @@ module.exports = {
   target: {
     package: 'some-dsh-plugin',
     version: '^1.2.0',
-    files: ['lib/index.js'],
+    file: 'lib/index.js',
     function: 'answer',
   },
   operation: 'after',
@@ -133,7 +140,7 @@ module.exports = {
   patches: [
     {
       id: 'host-part',
-      target: { package: 'target-plugin', version: '^1.0.0', files: ['lib/index.js'] },
+      target: { package: 'target-plugin', version: '^1.0.0', file: 'lib/index.js' },
       select: 'StringLiteral[text="old"]',
       expect: 1,
       apply({ node, sourceFile, edit }) {
@@ -142,7 +149,7 @@ module.exports = {
     },
     {
       id: 'client-part',
-      target: { package: 'target-plugin', version: '^1.0.0', files: ['lib/client.js'] },
+      target: { package: 'target-plugin', version: '^1.0.0', file: 'lib/client.js' },
       select: 'StringLiteral[text="old"]',
       expect: 1,
       apply({ node, sourceFile, edit }) {
@@ -168,11 +175,11 @@ module.exports = {
 
 移动 Provider 会把它的 Patch 重新放到一起；直接修改 `patchOrder` 则保留用户选择的跨 Provider 位置。无论哪种方式，Source Patch 都会读取前一个 Patch 的输出。
 
-## Provider 冲突
+## 插件兼容性
 
-`conflicts` 声明 Provider 不兼容关系，单侧声明即可。只有当前 Loader Tree 中两者都是启用状态的 Patch Provider 时才显示警告。
+任何 DSH 插件都可以在 `dsh.plugin.compatibility` 下描述包关系，无论它是否提供 Harmony Patch。`requires` 报告缺失、未激活或版本不兼容的依赖；`conflicts` 报告同时激活的不兼容组合；`integrates` 报告当前可用的可选联动。键是包名，值是 SemVer 范围。
 
-该警告不会阻止安装、启动、应用、排序或重载。停用任一 Provider 的 `<provider>/*` 后警告消失。
+这些声明只报告事实，不会安装、启用、停用或阻止插件。在线报告使用 Loader 中实际激活的插件；离线时没有 Loader 状态，因此把 profile 中已安装的包视为激活。停用 Patch 不等于停用其所属插件。
 
 ## 最小 WebUI 示例
 
@@ -183,10 +190,11 @@ const headline = 'Harmony is All You Need'
 
 module.exports = {
   id: 'home-banner',
+  description: '替换新会话页标题。',
   target: {
     package: '@deepseek-ai/dsh-client-ui-conversation',
-    version: '0.1.0-rc.6',
-    files: ['lib/client.js'],
+    version: '0.1.0-rc.8',
+    file: 'lib/client.js',
   },
   select: 'StringLiteral[text="探索未至之境"]',
   expect: 1,
@@ -205,16 +213,20 @@ module.exports = {
 ```ts
 export const inject = ['harmony']
 
-export function apply(ctx) {
+export async function apply(ctx) {
+  const current = ctx.harmony.profile()
   const snapshot = ctx.harmony.inspect({ package: 'some-dsh-plugin' })
+  const result = await ctx.harmony.updateProfile({
+    order: current.order,
+    disabled: ['my-dsh-plugin/optional-patch'],
+  })
 }
 ```
 
 服务提供：
 
-- `binEntry` 和 `profileDir`：当前运行时的入口与 profile 目录；
+- `profile()`：读取已提交的 profile 快照；
+- `updateProfile(input)`：检查并提交在线更新，返回重载结果；
 - `inspect(input?)`：Patch 状态和修改后的目标快照；
-- `inspectDependencies(owner)`：从 Patch 结果中推断出的依赖关系；
-- `reloadPlugin(name)`：重载一个 Loader 插件及其 Patch 声明。
 
-包还导出扩展发现工具及其 TypeScript 类型。Preview 和 Draft 生命周期 API 由 WebUI Studio 提供，不属于 Harmony。
+其他本地进程可以使用包导出的 `readHarmonyProfile`、`preflightHarmonyProfileUpdate` 和 `updateHarmonyProfile`。最后一个函数会在 profile 运行时使用 Host 事务，或在 profile 停止时完成校验和原子保存。Profile 运行期间不要直接编辑 `harmony.json`。Preview 和 Draft 生命周期 API 由 WebUI Studio 提供，不属于 Harmony。

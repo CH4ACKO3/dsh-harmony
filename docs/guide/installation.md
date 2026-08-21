@@ -5,7 +5,7 @@
 | Component | Supported version |
 | --- | --- |
 | Node.js | `^22.22.3` or `>=24.11.1` |
-| DeepSeek Harness | `@deepseek-ai/dsh@0.1.0-rc.6` |
+| DeepSeek Harness | `@deepseek-ai/dsh@0.1.0-rc.8` |
 | Operating system | Windows, macOS, or Linux |
 
 Check Node before installing:
@@ -20,7 +20,7 @@ npm --version
 Install the supported official CLI, followed by Harmony:
 
 ```sh
-npm install -g @deepseek-ai/dsh@0.1.0-rc.6
+npm install -g @deepseek-ai/dsh@0.1.0-rc.8
 npm install -g dsh-harmony
 dsh web
 ```
@@ -95,6 +95,8 @@ dsh harmony inspect target-plugin --file lib/index.js --profile tui
 ```
 
 Each profile stores its provider `order`, global `patchOrder`, and disabled Patch keys in `$DSH_HOME/profiles/<name>/harmony.json`.
+
+Settings, the TUI, and the profile API write the whole profile under a file lock and replace it atomically. A stale WebUI draft is rejected and refreshed. If several Hosts share one profile, the last completed write becomes the current file, matching DSH Settings behavior.
 
 ## Updating
 

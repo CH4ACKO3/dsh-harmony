@@ -45,7 +45,7 @@ Harmony installs its CommonJS and ESM transform hooks, then forwards the origina
 - **Composite Patches** group ordinary Patches into one ordered, toggleable transaction across all resolved files.
 - **Transactions** preflight provider changes, order changes, and enablement before committing a reload.
 - **Inspection** exposes original source, each intermediate Patch result, and final runtime source.
-- **Tooling APIs** let plugins and build tools query status or transactionally reload a plugin and its Patch declarations.
+- **Tooling APIs** let plugins and local tools read, preflight, inspect, and transactionally update a profile.
 
 Harmony has no numeric priority. A provider only declares the ordering relationships it knows, and the user can resolve anything left over by moving a provider or a single Patch. For execution, Harmony takes the Patches that affect each file from the global list. Unrelated files can run in parallel. A Patch that touches several files waits until it is next for all of them, so every result still follows the saved order.
 

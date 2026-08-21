@@ -34,7 +34,11 @@ Source selector 依赖目标包的编译结构。升级可能改变名称、嵌�
 
 `before` 和 `after` 是针对 Provider 包名的相对关系，不是数值优先级。互相矛盾的约束可能没有完美顺序；自动排序只最小化违规，不覆盖手动 Provider 或 Patch 列表。
 
-`conflicts` 只产生警告，不阻止安装或运行。
+`dsh.plugin.compatibility` 会报告依赖、冲突和可选联动，但不会安装依赖、改变插件状态或阻止启动。
+
+## 运行时图变化
+
+启动器会在目标模块执行前确定 Provider 图。冷启动检查会直接提交该图，不会热重载仍在启动中的 Loader Tree。如果在线更新要求 Harmony 在自身 Host 内热重载自己，Harmony 会拒绝该更新；请重启 DSH，以安全应用这类结构变化。
 
 ## React Component 声明
 

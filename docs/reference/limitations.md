@@ -34,7 +34,11 @@ Only the first enabled semantic `replace` Patch in global Patch order may target
 
 `before` and `after` are relationships over provider package names, not numeric priorities. Contradictory constraints may have no perfect order; automatic sorting minimizes violations but does not override the manual provider or Patch list.
 
-`conflicts` produces a warning, not an installation or runtime block.
+`dsh.plugin.compatibility` reports requirements, conflicts and optional integrations. It does not install dependencies, change plugin state or block startup.
+
+## Runtime graph changes
+
+The launcher fixes the Provider graph before target modules execute. Cold-start inspection commits that graph without hot-reloading the Loader Tree that is still starting. If a live update would require Harmony to hot-reload its own Host entry, Harmony refuses the update; restart DSH to apply that structural change safely.
 
 ## React Component declarations
 

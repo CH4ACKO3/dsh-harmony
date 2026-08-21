@@ -4,7 +4,7 @@ WebUI 和终端修改同一份 profile。它既保存用于整体移动的 Provi
 
 ## 在 WebUI 中排序 Patch
 
-启动 WebUI，打开 **设置 → Harmony → 插件顺序**：
+启动 WebUI，打开 **设置 → Harmony → 应用顺序**：
 
 ```sh
 dsh web
@@ -16,9 +16,11 @@ Harmony 只保存一份扁平的 `patchOrder`。UI 会把连续且属于同一 P
 - 拖动折叠堆会一起移动其中连续的 Patch；拖动单个 Patch 则可以插入其他 Provider。蓝线标出插入位置。拖动时在折叠堆上停留片刻会将其展开，鼠标滚轮仍可滚动列表。
 - 长按卡片或堆叠但不移动，会把该 Provider 的所有 Patch 收回当前位置，并恢复声明顺序。
 - 点击单个 Patch 可查看目标与状态。选中后，其 Provider 保持完整宽度，其它 Provider 缩窄；状态颜色不会被悬浮或选中颜色覆盖。
-- **撤回**恢复到上一次保存的 Patch 顺序；**保存**会先预检完整排列，再提交并重载。
+- 插件详情提供**停用插件 Patch**或**启用插件 Patch**，Patch 详情提供对应的单项操作。启停与排序一样先保留为草稿：**撤回**恢复已保存状态，**保存**则先预检完整顺序与启停变更，再提交并重载。
 
 禁用卡为灰色，警告为橙黄色，失败为淡红色。折叠封面会汇总活动成员状态；禁用 Patch 不参与封面健康度计算，全部禁用的 Provider 完全变灰。
+
+插件级停用是独立的 `provider/*` 标志，不会修改各个 Patch 已保存的标志。因此重新启用插件时，原本单独停用的 Patch 仍保持停用。
 
 Provider 增加 Patch 后，Harmony 会按 Provider 顺序插入新条目；已经不存在的 Patch 会从列表移除。`dsh-harmony` 本身不会显示为 Patch 卡。
 
@@ -30,17 +32,22 @@ dsh harmony
 
 使用 `dsh harmony --profile <name>` 选择其他 profile。
 
+按 `Tab` 在 Provider 与 Patch 视图之间切换。
+
 | 按键 | 操作 |
 | --- | --- |
-| 上 / 下或 `k` / `j` | 选择插件 |
-| `u` / `d` | 移动当前插件 |
+| 上 / 下或 `k` / `j` | 选择 Provider 或 Patch |
+| `u` / `d` | 移动当前项目 |
+| Space | 启用或停用当前 Patch |
+| `p` | 启用或停用其 Provider，不改变单 Patch 标志 |
 | `a` | 计算违反约束最少的顺序 |
-| `r` | 与已安装依赖同步 |
+| `i` | 检查当前 Patch |
+| `r` | 从在线 Host 重载 |
 | `q`、Escape 或 Ctrl+C | 退出 |
 
-终端只移动整个 Provider，不提供单 Patch 拖动。每次移动都会立即保存，并把该 Provider 的 Patch 在 `patchOrder` 中重新放到一起。Profile 正在运行时，TUI 会请求 Host 检查并热重载新顺序；profile 未运行时，则先在本地检查再写入 `harmony.json`。
+Provider 视图整体移动 Provider，并把其 Patch 重新聚合；Patch 视图控制单项位置与启停。每项操作都会检查并立即保存。Profile 正在运行时，TUI 请求 Host 提交并热重载；profile 未运行时，则在本地校验后写入 `harmony.json`。
 
-手动顺序优先。自动排序会寻找违反 Provider 级 `before` 和 `after` 规则最少的结果；如果有多个同样好的结果，就保留现有相对顺序。单 Patch 交错需要使用 WebUI。
+手动顺序优先。自动排序会寻找违反 `before` 和 `after` 规则最少的结果；如果有多个同样好的结果，就保留现有相对顺序。
 
 ## 声明顺序与用户顺序
 
@@ -69,7 +76,7 @@ dsh harmony status --profile tui
 | `disabled` | 在当前 profile 中停用 |
 | `failed` | 收集、解析、匹配或应用失败 |
 
-存在任何失败 Patch 时，`status` 以状态码 `1` 退出，因此可用于 CI 或发布检查。WebUI 的 **Patch 状态** 页面提供相同信息，并支持启停单个 Patch。
+存在任何失败 Patch 时，`status` 以状态码 `1` 退出，因此可用于 CI 或发布检查。WebUI 的 **Patch 状态** 页面是同一信息的只读监视器，其中 `bound` 显示为**已启用**；需要在**应用顺序**详情中修改启停状态。
 
 ## 检查变换后的源码
 
@@ -88,7 +95,7 @@ dsh harmony inspect
 
 ## 事务更新
 
-Harmony 监听 Loader profile、`harmony.json` 和 Provider 文件。Provider 增删、Patch 编辑、排序、启停和 Loader Tree 更新会逐个事务处理。
+Harmony 监听 Loader profile、`harmony.json` 和 Provider 文件。Provider 增删、Patch 编辑、排序、启停和 Loader Tree 更新会逐个事务处理。完整 profile 写入沿用 DSH Settings 的模型：文件锁串行提交，过期的 WebUI 草稿会被拒绝并刷新，并发进程采用最后完成写入者生效。
 
 提交前，Harmony 会按保存的顺序尝试修改所有受影响目标。独立 Patch 无法匹配或应用时会标记为 `failed` 并跳过，后续 Patch 和 Host 继续运行。组合 Patch 有成员失败时，整个组合都不应用。Provider 无法导入或目标无法重载时，Harmony 会保留原来的运行时和 profile 设置。事务按顺序执行，旧事务的回滚不会覆盖较新的更新。
 
@@ -105,7 +112,7 @@ Harmony 会报告以下冲突：
 - 选择器匹配数与 `expect` 不同；
 - 两个语义 `replace` 同时指向同一函数；
 - 早期 Patch 移除了后续 Patch 的目标；
-- `conflicts` 声明的 Provider 同时启用；
+- `dsh.plugin.compatibility` 声明的依赖缺失或已激活插件不兼容；
 - 当前手动顺序违反了约束。
 
 警告会给出 Provider、稳定 Patch 键、目标包和文件。先用 `status` 定位被跳过的 Patch，再用 `inspect` 比较当前 Patch 输入与早期 Provider 输出。只要存在 `failed` Patch，`status` 仍以状态码 `1` 退出，但 Host 可以继续运行。
