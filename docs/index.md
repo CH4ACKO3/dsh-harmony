@@ -51,10 +51,23 @@ installed source (unchanged)
 
 Read [how Harmony fits into the runtime](/guide/introduction), then follow the [installation guide](/guide/installation). The project is inspired by Andreas Pardeike and contributors' C# project [Harmony](https://harmony.pardeike.net/).
 
-## From the ecosystem
-
-Harmony providers stay independent: this directory only makes compatible work easier to find. The selection changes on each visit.
-
-<EcosystemShowcase mode="compact" locale="en" :limit="2" />
+<EcosystemShowcase
+  mode="compact"
+  locale="en"
+  :limit="5"
+  heading="Plugin ecosystem"
+  intro="Harmony helps these plugins bring their great ideas to life."
+  refresh-label="Show me more"
+/>
 
 [Explore the ecosystem](/ecosystem) · [Submit a project](https://github.com/memorax-ai/dsh-harmony/edit/docs/docs/.vitepress/ecosystem.ts)
+
+## Powered by Harmony
+
+If your plugin uses Harmony, you’re welcome to use this badge to show your support!
+
+[![Powered by Harmony](/harmony-powered.svg)](https://memorax-ai.github.io/dsh-harmony/)
+
+```md
+[![Powered by Harmony](https://memorax-ai.github.io/dsh-harmony/harmony-powered.svg)](https://memorax-ai.github.io/dsh-harmony/)
+```

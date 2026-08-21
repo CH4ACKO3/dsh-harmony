@@ -92,6 +92,16 @@ Use `element()` to change selected compiled `jsx` / `jsxs` calls. Use `component
 | Studio previews | [Studio integration](https://memorax-ai.github.io/dsh-harmony/integrations/studio) |
 | Commands, limitations, and failures | [CLI](https://memorax-ai.github.io/dsh-harmony/reference/cli) · [Limitations](https://memorax-ai.github.io/dsh-harmony/reference/limitations) · [Troubleshooting](https://memorax-ai.github.io/dsh-harmony/help/troubleshooting) |
 
+## Powered by Harmony
+
+If your plugin uses Harmony, you’re welcome to use this badge to show your support!
+
+[![Powered by Harmony](https://memorax-ai.github.io/dsh-harmony/harmony-powered.svg)](https://memorax-ai.github.io/dsh-harmony/)
+
+```md
+[![Powered by Harmony](https://memorax-ai.github.io/dsh-harmony/harmony-powered.svg)](https://memorax-ai.github.io/dsh-harmony/)
+```
+
 ## Development
 
 All maintained implementation code uses TypeScript. Build artifacts are generated for packaging and are not tracked by Git.

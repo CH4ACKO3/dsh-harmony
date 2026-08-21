@@ -51,10 +51,23 @@ Harmony 按一份全局顺序运行 Source Patch，后一个 Patch 会读取前�
 
 先阅读 [Harmony 在运行时中的位置](/zh/guide/introduction)，再按照[安装指南](/zh/guide/installation)操作。本项目的灵感来自 Andreas Pardeike 和其他贡献者创作的 C# 项目 [Harmony](https://harmony.pardeike.net/)。
 
-## 来自生态
-
-Harmony Provider 保持彼此独立；这个目录只让兼容的作品更容易被发现。每次进入页面都会随机展示一组项目。
-
-<EcosystemShowcase mode="compact" locale="zh" :limit="2" />
+<EcosystemShowcase
+  mode="compact"
+  locale="zh"
+  :limit="5"
+  heading="插件生态"
+  intro="Harmony 帮助这些插件实现它们伟大的想法。"
+  refresh-label="再来一些"
+/>
 
 [浏览完整生态](/zh/ecosystem) · [提交项目](https://github.com/memorax-ai/dsh-harmony/edit/docs/docs/.vitepress/ecosystem.ts)
+
+## Powered by Harmony
+
+如果你的插件使用 Harmony，欢迎使用这枚徽章来表达支持！
+
+[![Powered by Harmony](/harmony-powered.svg)](https://memorax-ai.github.io/dsh-harmony/)
+
+```md
+[![Powered by Harmony](https://memorax-ai.github.io/dsh-harmony/harmony-powered.svg)](https://memorax-ai.github.io/dsh-harmony/)
+```

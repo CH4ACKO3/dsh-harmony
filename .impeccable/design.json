@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-08-21T04:33:52Z",
+  "generatedAt": "2026-08-21T05:50:33Z",
   "title": "Design System: dsh-harmony Documentation",
   "extensions": {
     "colorMeta": {
@@ -107,9 +107,9 @@
       "body": { "displayName": "Technical Reading", "purpose": "Long-form guides, capability descriptions, tables, and supporting copy." },
       "mono": { "displayName": "Runtime Mono", "purpose": "Commands, code, file paths, provider IDs, and generations." },
       "directory-code": { "displayName": "Directory Code", "purpose": "Twelve-pixel ecosystem counts, package names, and install commands." },
-      "directory-label": { "displayName": "Directory Label", "purpose": "Thirteen-pixel ecosystem categories and target metadata." },
+      "directory-label": { "displayName": "Directory Label", "purpose": "Thirteen-pixel ecosystem categories." },
       "directory-control": { "displayName": "Directory Control", "purpose": "Fourteen-pixel ecosystem filter labels." },
-      "directory-action": { "displayName": "Directory Action", "purpose": "Fourteen-pixel source and directory actions." },
+      "directory-action": { "displayName": "Directory Action", "purpose": "Fourteen-pixel refresh and directory actions." },
       "directory-title": { "displayName": "Directory Title", "purpose": "Nineteen-pixel ecosystem entry names." }
     },
     "shadows": [
@@ -176,9 +176,17 @@
       "name": "Ecosystem Directory Entry",
       "kind": "custom",
       "refersTo": "ecosystem-entry",
-      "description": "A flat three-part discovery row that stacks into one column at 760px without becoming a card.",
-      "html": "<ul class=\"ds-ecosystem-list\"><li class=\"ds-ecosystem-entry\"><div class=\"ds-ecosystem-identity\"><span class=\"ds-ecosystem-category\">Interface</span><h3><a href=\"#\">Turn Fold</a></h3><code>@ch4acko3/dsh-turn-fold</code></div><div class=\"ds-ecosystem-body\"><p>Collapse each completed turn's agent activity into a summary bar while keeping the final answer visible.</p><p class=\"ds-ecosystem-targets\"><span>Targets</span> Conversation WebUI</p></div><div class=\"ds-ecosystem-actions\"><code>dsh plugin --profile web add @ch4acko3/dsh-turn-fold</code><a href=\"#\">Source</a></div></li></ul>",
-      "css": ".ds-ecosystem-list { width: min(980px, calc(100vw - 64px)); margin: 0; padding: 0; list-style: none; border-top: 1px solid rgba(20, 59, 112, 0.16); color: #10233f; font-family: 'Atkinson Hyperlegible Next Variable', sans-serif; } .ds-ecosystem-entry { display: grid; grid-template-columns: minmax(160px, 0.72fr) minmax(240px, 1.45fr) minmax(210px, 0.9fr); gap: 28px; align-items: start; padding: 26px 0; border-bottom: 1px solid rgba(20, 59, 112, 0.16); } .ds-ecosystem-identity h3 { margin: 7px 0 3px; font-size: 19px; font-weight: 600; line-height: 1.25; } .ds-ecosystem-identity h3 a { color: #10233f; text-decoration: none; transition: color 0.25s; } .ds-ecosystem-identity h3 a:hover { color: #075ff7; } .ds-ecosystem-category { color: #075ff7; font-size: 13px; font-weight: 650; } .ds-ecosystem-identity code, .ds-ecosystem-actions code { color: #63738a; background: transparent; font: 460 12px/1.55 'Source Code Pro Variable', monospace; } .ds-ecosystem-body p { max-width: 62ch; margin: 0; color: #40536d; font-size: 17px; line-height: 1.58; } .ds-ecosystem-body .ds-ecosystem-targets { margin-top: 12px; color: #63738a; font-size: 13px; } .ds-ecosystem-targets span { margin-right: 8px; color: #40536d; font-weight: 620; } .ds-ecosystem-actions { min-width: 0; } .ds-ecosystem-actions code { display: block; padding: 8px 0 10px; overflow-wrap: anywhere; white-space: normal; } .ds-ecosystem-actions a { display: inline-block; margin-top: 5px; color: #075ff7; font-size: 14px; font-weight: 620; text-underline-offset: 0.18em; } .ds-ecosystem-entry a:focus-visible { outline: 3px solid rgba(7, 95, 247, 0.62); outline-offset: 3px; } @media (max-width: 760px) { .ds-ecosystem-list { width: auto; } .ds-ecosystem-entry { grid-template-columns: 1fr; gap: 14px; padding: 22px 0; } .ds-ecosystem-actions code { padding-top: 2px; } }"
+      "description": "A flat three-part discovery row—identity, description and install command—that stacks into one column at 760px without becoming a card.",
+      "html": "<ul class=\"ds-ecosystem-list\"><li class=\"ds-ecosystem-entry\"><div class=\"ds-ecosystem-identity\"><span class=\"ds-ecosystem-category\">Interface</span><h3><a href=\"#\">Turn Fold</a></h3><code>@ch4acko3/dsh-turn-fold</code></div><div class=\"ds-ecosystem-body\"><p>Collapse each completed turn's agent activity into a summary bar while keeping the final answer visible.</p></div><div class=\"ds-ecosystem-actions\"><code>dsh plugin --profile web add @ch4acko3/dsh-turn-fold</code></div></li></ul>",
+      "css": ".ds-ecosystem-list { width: min(980px, calc(100vw - 64px)); margin: 0; padding: 0; list-style: none; border-top: 1px solid rgba(20, 59, 112, 0.16); color: #10233f; font-family: 'Atkinson Hyperlegible Next Variable', sans-serif; } .ds-ecosystem-entry { display: grid; grid-template-columns: minmax(160px, 0.72fr) minmax(240px, 1.45fr) minmax(210px, 0.9fr); gap: 28px; align-items: start; padding: 26px 0; border-bottom: 1px solid rgba(20, 59, 112, 0.16); } .ds-ecosystem-identity h3 { margin: 7px 0 3px; font-size: 19px; font-weight: 600; line-height: 1.25; } .ds-ecosystem-identity h3 a { color: #10233f; text-decoration: none; transition: color 0.25s; } .ds-ecosystem-identity h3 a:hover { color: #075ff7; } .ds-ecosystem-category { color: #075ff7; font-size: 13px; font-weight: 650; } .ds-ecosystem-identity code { color: #63738a; background: transparent; font: 460 12px/1.55 'Source Code Pro Variable', monospace; } .ds-ecosystem-body p { max-width: 62ch; margin: 0; color: #40536d; font-size: 17px; line-height: 1.58; } .ds-ecosystem-actions { min-width: 0; } .ds-ecosystem-actions code { display: block; padding: 7px 9px; border-radius: 6px; color: #f2f6fc; background: #0b1f3a; overflow-wrap: anywhere; white-space: normal; font: 460 12px/1.55 'Source Code Pro Variable', monospace; } .ds-ecosystem-entry a:focus-visible { outline: 3px solid rgba(7, 95, 247, 0.62); outline-offset: 3px; } @media (max-width: 760px) { .ds-ecosystem-list { width: auto; } .ds-ecosystem-entry { grid-template-columns: 1fr; gap: 14px; padding: 22px 0; } }"
+    },
+    {
+      "name": "Powered by Harmony Badge",
+      "kind": "custom",
+      "refersTo": "harmony-badge",
+      "description": "The reusable 96px by 24px badge for Harmony-powered plugin READMEs, using the existing Harmony icon.",
+      "html": "<a class=\"ds-harmony-badge\" href=\"#\" aria-label=\"Harmony\"><svg width=\"96\" height=\"24\" viewBox=\"0 0 96 24\" role=\"img\"><rect width=\"96\" height=\"24\" rx=\"6\" fill=\"#0B1F3A\"/><image href=\"/dsh-harmony/harmony-icon.png\" x=\"8\" y=\"1\" width=\"22\" height=\"22\"/><text x=\"36\" y=\"15.8\" fill=\"#F2F6FC\" font-family=\"Arial, Helvetica, sans-serif\" font-size=\"12\" font-weight=\"700\">Harmony</text></svg></a>",
+      "css": ".ds-harmony-badge { display: inline-block; height: 24px; line-height: 0; } .ds-harmony-badge:focus-visible { outline: 3px solid rgba(7, 95, 247, 0.62); outline-offset: 3px; }"
     },
     {
       "name": "Code Block",
@@ -210,7 +218,7 @@
     "rules": [
       { "name": "The One Accent Rule", "body": "Cobalt marks actionable links, focus, and brand identity; neutral surfaces carry everything else.", "section": "colors" },
       { "name": "The Whole-Word Rule", "body": "Technical nouns and key transformation terms must receive enough width to wrap between words, never inside them.", "section": "typography" },
-      { "name": "The Mono Scope Rule", "body": "Source Code Pro is reserved for packages, commands, counts, paths, identifiers, generations, and code; ecosystem names, categories, targets, filters, and prose stay in Atkinson Hyperlegible.", "section": "typography" },
+      { "name": "The Mono Scope Rule", "body": "Source Code Pro is reserved for packages, commands, counts, paths, identifiers, generations, and code; ecosystem names, categories, filters, and prose stay in Atkinson Hyperlegible.", "section": "typography" },
       { "name": "The Homepage Exception Rule", "body": "Only the documentation index may use the compact brand Hero and four capability panels; ordinary documents retain the standard VitePress shell.", "section": "layout" },
       { "name": "The Open Directory Rule", "body": "Ecosystem discovery may widen beyond the reading column, but it remains flat, line-separated, and structurally equivalent in English and Simplified Chinese.", "section": "layout" },
       { "name": "The Paper-First Rule", "body": "Documentation surfaces stay flat; hierarchy comes from type, spacing, and one-pixel boundaries.", "section": "elevation" },

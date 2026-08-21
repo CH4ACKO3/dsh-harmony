@@ -14,9 +14,9 @@ Independent plugins can use Harmony where the official DSH extension points do n
 The catalog is maintained through pull requests. Edit [`docs/.vitepress/ecosystem.ts`](https://github.com/memorax-ai/dsh-harmony/edit/docs/docs/.vitepress/ecosystem.ts) and add one factual entry with:
 
 - a public source repository and published package;
-- at least one real `dsh.harmony` Patch declaration;
+- real use of Harmony, normally through a `dsh.harmony` Patch declaration or a documented Harmony integration;
 - one category from the existing Awesome DSH Plugin vocabulary;
 - a short English and Chinese description of what the plugin does;
-- its installation command and actual Host or WebUI targets.
+- a working installation command.
 
 Keep claims verifiable and descriptions concise. A listing helps discovery; it is not a security review, compatibility guarantee, certification, or endorsement by the Harmony maintainers.

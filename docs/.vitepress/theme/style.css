@@ -100,7 +100,7 @@ body { font-variation-settings: 'wght' 460; }
 .VPFeature .title { letter-spacing: -0.015em; }
 .VPFeature .details { color: var(--vp-c-text-2); line-height: 1.6; }
 .VPHome .VPHomeContent { padding-top: 24px; }
-.VPHome .VPDoc .container { max-width: 960px; }
+.VPHome > .vp-doc.container { max-width: 880px; }
 .VPHome .vp-doc h2 { border-top: 0; margin-top: 24px; }
 .vp-doc { font-size: 17px; line-height: 1.72; }
 .vp-doc p,
@@ -137,6 +137,48 @@ body { font-variation-settings: 'wght' 460; }
 }
 .ecosystem-directory--full {
   width: min(980px, calc(100vw - 64px));
+}
+.ecosystem-directory__header {
+  margin-bottom: 22px;
+}
+.ecosystem-directory__title {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+.ecosystem-directory__title h2 {
+  margin: 0;
+}
+.ecosystem-directory__title button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  padding: 2px 0;
+  color: var(--vp-c-brand-1);
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 620;
+  cursor: pointer;
+}
+.ecosystem-directory__title button svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+.ecosystem-directory__title button:hover {
+  color: var(--vp-c-brand-2);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+.ecosystem-directory__header p {
+  margin: 8px 0 0;
+  color: var(--vp-c-text-2);
 }
 .ecosystem-filters {
   display: flex;
@@ -198,11 +240,14 @@ body { font-variation-settings: 'wght' 460; }
   text-decoration: none;
 }
 .ecosystem-entry__identity h3 a:hover { color: var(--vp-c-brand-1); }
-.ecosystem-entry__identity code,
-.ecosystem-entry__actions code {
+.vp-doc .ecosystem-entry__identity code,
+.vp-doc .ecosystem-entry__actions code {
   background: transparent;
   color: var(--vp-c-text-3);
   font-size: 12px;
+}
+.vp-doc .ecosystem-entry__identity code {
+  padding: 0;
 }
 .ecosystem-entry__category {
   color: var(--vp-c-brand-1);
@@ -215,35 +260,43 @@ body { font-variation-settings: 'wght' 460; }
   color: var(--vp-c-text-2);
   line-height: 1.58;
 }
-.ecosystem-entry__body .ecosystem-entry__targets {
-  margin-top: 12px;
-  color: var(--vp-c-text-3);
-  font-size: 13px;
-}
-.ecosystem-entry__targets span {
-  margin-right: 8px;
-  color: var(--vp-c-text-2);
-  font-weight: 620;
-}
 .ecosystem-entry__actions {
   min-width: 0;
 }
-.ecosystem-entry__actions code {
+.vp-doc .ecosystem-entry__actions code {
   display: block;
-  padding: 8px 0 10px;
+  padding: 7px 9px;
+  border-radius: 6px;
+  color: #f2f6fc;
+  background: #0b1f3a;
   overflow-wrap: anywhere;
   white-space: normal;
 }
-.ecosystem-entry__actions a {
-  display: inline-block;
-  margin-top: 5px;
-  font-size: 14px;
-  font-weight: 620;
-}
 .ecosystem-directory--compact .ecosystem-entry {
-  grid-template-columns: minmax(160px, 0.75fr) minmax(260px, 1.5fr);
+  grid-template-columns: minmax(0, 1.45fr) minmax(190px, 0.85fr);
+  grid-template-rows: auto auto;
+  gap: 5px 28px;
+  padding: 16px 0;
 }
-.ecosystem-directory--compact .ecosystem-entry__actions { grid-column: 2; }
+.ecosystem-directory--compact .ecosystem-entry__identity {
+  display: flex;
+  grid-column: 1;
+  grid-row: 1;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 3px 10px;
+}
+.ecosystem-directory--compact .ecosystem-entry__identity h3 { margin: 0; }
+.ecosystem-directory--compact .ecosystem-entry__body {
+  grid-column: 1;
+  grid-row: 2;
+}
+.ecosystem-directory--compact .ecosystem-entry__actions {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+.ecosystem-directory--compact .ecosystem-entry__actions code { padding: 7px 9px; }
 
 @media (max-width: 760px) {
   .ecosystem-entry,
@@ -253,8 +306,14 @@ body { font-variation-settings: 'wght' 460; }
     padding: 22px 0;
   }
   .ecosystem-directory--full { width: auto; }
-  .ecosystem-directory--compact .ecosystem-entry__actions { grid-column: auto; }
-  .ecosystem-entry__actions code { padding-top: 2px; }
+  .ecosystem-directory--compact .ecosystem-entry__identity,
+  .ecosystem-directory--compact .ecosystem-entry__body,
+  .ecosystem-directory--compact .ecosystem-entry__actions {
+    display: block;
+    grid-column: auto;
+    grid-row: auto;
+  }
+  .ecosystem-directory--compact .ecosystem-entry__identity h3 { margin: 7px 0 3px; }
 }
 
 @media (min-width: 960px) {

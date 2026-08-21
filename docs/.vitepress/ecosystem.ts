@@ -28,7 +28,6 @@ export interface EcosystemEntry {
   repository: string
   install: string
   description: { en: string; zh: string }
-  targets: string[]
 }
 
 export const ecosystemCategories: Record<EcosystemCategory, { en: string; zh: string }> = {
@@ -68,7 +67,17 @@ export const ecosystemEntries: EcosystemEntry[] = [
       en: "Collapse each completed turn's agent activity into a summary bar while keeping the final answer visible.",
       zh: '将每个已完成 turn 的 Agent activity 折叠成摘要栏，同时保持最终答复可见。',
     },
-    targets: ['Conversation WebUI'],
+  },
+  {
+    name: 'Bites the DSH',
+    packageName: '@ch4acko3/bites-the-dsh',
+    category: 'session',
+    repository: 'https://github.com/CH4ACKO3/bites-the-dsh',
+    install: 'dsh plugin --profile web add @ch4acko3/bites-the-dsh',
+    description: {
+      en: 'Add fully read-only, scriptable history playback inside the native DSH conversation.',
+      zh: '在 DSH 原生会话内提供完全只读、可脚本控制的历史回放。',
+    },
   },
   {
     name: 'Patchouli',
@@ -80,7 +89,6 @@ export const ecosystemEntries: EcosystemEntry[] = [
       en: 'Route memory update, retrieval and subscription calls across compatible plugins, with an optional transactional Rust backend.',
       zh: '在兼容插件之间路由记忆更新、检索与订阅调用，并提供可选的事务化 Rust 后端。',
     },
-    targets: ['Host', 'WebUI'],
   },
   {
     name: 'The Binding of DSH',
@@ -92,6 +100,16 @@ export const ecosystemEntries: EcosystemEntry[] = [
       en: 'Enable bidirectional service calls through DSH Connection and Typert Gateway.',
       zh: '让 DSH Connection 与 Typert Gateway 支持双向服务调用。',
     },
-    targets: ['Host', 'Connection'],
+  },
+  {
+    name: 'DeepSeek WebUI Studio',
+    packageName: 'dsh-webui-studio',
+    category: 'dev',
+    repository: 'https://github.com/memorax-ai/dsh-webui-studio',
+    install: 'dsh plugin --profile web add dsh-webui-studio',
+    description: {
+      en: 'Build and test Harmony Patches against a live DSH WebUI preview.',
+      zh: '在真实 DSH WebUI 预览上构建和测试 Harmony Patch。',
+    },
   },
 ]

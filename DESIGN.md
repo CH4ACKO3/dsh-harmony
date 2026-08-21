@@ -118,6 +118,13 @@ components:
     textColor: "{colors.ink}"
     rounded: "0"
     padding: "26px 0"
+  harmony-badge:
+    backgroundColor: "{colors.code-navy}"
+    textColor: "#f2f6fc"
+    rounded: "6px"
+    padding: "0"
+    height: "24px"
+    typography: "{typography.directory-code}"
 ---
 
 # Design System: dsh-harmony Documentation
@@ -162,7 +169,7 @@ The palette is a cool technical neutral system with one solid cobalt action colo
 - **Service Ink** (`#10233f`): primary text and headings.
 - **Secondary Ink** (`#40536d`): descriptions and supporting copy.
 - **Cool Divider** (`rgba(20, 59, 112, 0.16)`): one-pixel directory rows, tables, and other quiet structural boundaries.
-- **Code Navy** (`#0b1f3a`): the dark-theme code surface.
+- **Code Navy** (`#0b1f3a`): the dark-theme code surface and compact terminal treatment for ecosystem install commands.
 
 **The One Accent Rule.** Cobalt marks actionable links, focus, and brand identity; neutral surfaces carry everything else.
 
@@ -181,22 +188,22 @@ The pairing prioritizes character recognition and durable reading over fashionab
 - **Body** (460, `17px`, 1.72): documentation prose and lists.
 - **Mono** (`0.82rem`): paths, provider identifiers, runtime generations, and code.
 - **Directory Code** (460, `12px`, 1.55): ecosystem counts, package names, and install commands only.
-- **Directory Label** (`13px`): ecosystem categories and target metadata; weight supplies local emphasis.
+- **Directory Label** (`13px`): ecosystem categories; weight supplies local emphasis.
 - **Directory Control** (`14px`): ecosystem filter labels.
-- **Directory Action** (620, `14px`): source and directory actions.
+- **Directory Action** (620, `14px`): refresh and directory actions.
 - **Directory Title** (600, `19px`, 1.25): ecosystem entry names.
 
 **The Whole-Word Rule.** Technical nouns and key transformation terms must receive enough width to wrap between words, never inside them.
 
-**The Mono Scope Rule.** Source Code Pro is reserved for packages, commands, counts, paths, identifiers, generations, and code; ecosystem names, categories, targets, filters, and prose stay in Atkinson Hyperlegible.
+**The Mono Scope Rule.** Source Code Pro is reserved for packages, commands, counts, paths, identifiers, generations, and code; ecosystem names, categories, filters, and prose stay in Atkinson Hyperlegible.
 
 ## Layout
 
 Ordinary content uses VitePress's standard documentation shell: persistent sidebar on desktop, page outline where space permits, and a reading column capped near 72 characters. Major sections use a consistent 48px interval; tables fit the content width, and code blocks scroll independently without widening the page.
 
-The index uses a compact asymmetric brand block within a 1040px container. On wide screens the Harmony mark leads from the left, a one-pixel rule separates it from the exact library definition and two documentation actions on the right, and four linked capability panels form a two-column technical index below. A compact randomized ecosystem sample follows within the reading flow. The brand block stacks below 960px, the rule disappears, and the capability index becomes one column below 640px; the mark reduces from 256px to 208px and then 168px.
+The index uses a compact asymmetric brand block within a 1040px container. On wide screens the Harmony mark leads from the left, a one-pixel rule separates it from the exact library definition and two documentation actions on the right, and four linked capability panels form a two-column technical index below. The remaining homepage reading flow is capped at 880px, visibly inset from the 960px capability grid. A compact randomized ecosystem sample of up to five entries follows it, with an inline refresh action. The brand block stacks below 960px, the rule disappears, and the capability index becomes one column below 640px; the mark reduces from 256px to 208px and then 168px.
 
-The standalone ecosystem directory deliberately exceeds the prose measure: its width is `min(980px, calc(100vw - 64px))`. At desktop widths, each entry is an open three-part row—identity, description and targets, then install and source actions—separated by one-pixel rules. At 760px and below, width returns to auto and every row becomes a single-column sequence with tighter gaps and vertical padding.
+The standalone ecosystem directory deliberately exceeds the prose measure: its width is `min(980px, calc(100vw - 64px))`. At desktop widths, each entry is an open three-part row—identity, description, then install command—separated by one-pixel rules. The plugin name is the sole link to its project homepage. At 760px and below, width returns to auto and every row becomes a single-column sequence with tighter gaps and vertical padding.
 
 **The Homepage Exception Rule.** Only the documentation index may use the compact brand Hero and four capability panels; ordinary documents retain the standard VitePress shell.
 
@@ -238,7 +245,11 @@ The full directory uses wrapping 36px-high controls with 8px corners, 6px by 12p
 
 ### Ecosystem Directory
 
-The same directory component has two densities. The homepage shows a compact randomized subset after the four capability panels; the full route shows every entry and exposes category filters. Full desktop entries use a flat three-part grid with 28px gaps and 26px vertical padding. Entry names are 19px Atkinson Hyperlegible; categories and target metadata use the 13px step; packages and install commands use 12px Source Code Pro; source actions use the 14px step. At 760px and below, entries stack in a single column with 14px gaps and 22px vertical padding. Listing structure and category order stay equivalent across English and Simplified Chinese, and inclusion communicates discovery rather than certification.
+The same directory component has two densities. The homepage shows a randomized subset of up to five entries after the four capability panels; its 880px container uses two columns, 16px vertical padding, and an inline refresh action. Identity and description share the first column while the install command occupies the second. The full route shows every entry and exposes category filters, using a flat three-part grid with 28px gaps and 26px vertical padding. Entry names are 19px Atkinson Hyperlegible; categories use the 13px step; packages and install commands use 12px Source Code Pro. Install commands use compact Code Navy terminal strips with light text, 6px corners, and 7px by 9px padding. At 760px and below, entries stack in a single column with 14px gaps and 22px vertical padding. Listing structure and category order stay equivalent across English and Simplified Chinese, and inclusion communicates discovery rather than certification.
+
+### Powered by Harmony Badge
+
+The reusable 96px by 24px badge uses a Code Navy field, the existing Harmony icon asset, and a single light Harmony wordmark. It links to the documentation homepage and is distributed as one stable SVG URL with a copyable Markdown embed. The badge stays compact and does not introduce a second logo or promotional palette.
 
 ### Code And Data
 

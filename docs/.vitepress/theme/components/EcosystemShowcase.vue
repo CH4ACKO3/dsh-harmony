@@ -10,10 +10,16 @@ const props = withDefaults(defineProps<{
   locale?: 'en' | 'zh'
   mode?: 'compact' | 'full'
   limit?: number
+  heading?: string
+  intro?: string
+  refreshLabel?: string
 }>(), {
   locale: 'en',
   mode: 'full',
   limit: 3,
+  heading: '',
+  intro: '',
+  refreshLabel: '',
 })
 
 const selected = ref<EcosystemCategory | 'all'>('all')
@@ -21,12 +27,8 @@ const shown = ref(ecosystemEntries.slice(0, props.limit))
 const categories = [...new Set(ecosystemEntries.map(entry => entry.category))]
 const copy = computed(() => props.locale === 'zh' ? {
   all: '全部',
-  repository: '源码',
-  target: '作用于',
 } : {
   all: 'All',
-  repository: 'Source',
-  target: 'Targets',
 })
 const entries = computed(() => props.mode === 'compact'
   ? shown.value
@@ -34,19 +36,39 @@ const entries = computed(() => props.mode === 'compact'
     ? ecosystemEntries
     : ecosystemEntries.filter(entry => entry.category === selected.value))
 
-onMounted(() => {
-  if (props.mode !== 'compact') return
+function refresh() {
   const shuffled = [...ecosystemEntries]
   for (let index = shuffled.length - 1; index > 0; index -= 1) {
     const other = Math.floor(Math.random() * (index + 1))
     ;[shuffled[index], shuffled[other]] = [shuffled[other]!, shuffled[index]!]
   }
-  shown.value = shuffled.slice(0, props.limit)
+  const next = shuffled.slice(0, props.limit)
+  const unchanged = next.length > 1
+    && next.every((entry, index) => entry.packageName === shown.value[index]?.packageName)
+  shown.value = unchanged ? [...next.slice(1), next[0]!] : next
+}
+
+onMounted(() => {
+  if (props.mode !== 'compact') return
+  refresh()
 })
 </script>
 
 <template>
   <section class="ecosystem-directory" :class="`ecosystem-directory--${mode}`">
+    <header v-if="mode === 'compact' && heading" class="ecosystem-directory__header">
+      <div class="ecosystem-directory__title">
+        <h2>{{ heading }}</h2>
+        <button v-if="refreshLabel" type="button" @click="refresh">
+          <span>{{ refreshLabel }}</span>
+          <svg aria-hidden="true" viewBox="0 0 16 16">
+            <path d="M13.4 4.8A6 6 0 1 0 14 8M13.4 4.8V1.9m0 2.9h-2.9" />
+          </svg>
+        </button>
+      </div>
+      <p v-if="intro">{{ intro }}</p>
+    </header>
+
     <nav v-if="mode === 'full'" class="ecosystem-filters" :aria-label="locale === 'zh' ? '按分类筛选' : 'Filter by category'">
       <button type="button" :aria-pressed="selected === 'all'" @click="selected = 'all'">
         {{ copy.all }} <span>{{ ecosystemEntries.length }}</span>
@@ -72,14 +94,9 @@ onMounted(() => {
         </div>
         <div class="ecosystem-entry__body">
           <p>{{ entry.description[locale] }}</p>
-          <p class="ecosystem-entry__targets">
-            <span>{{ copy.target }}</span>
-            {{ entry.targets.join(' · ') }}
-          </p>
         </div>
         <div class="ecosystem-entry__actions">
           <code>{{ entry.install }}</code>
-          <a :href="entry.repository">{{ copy.repository }}</a>
         </div>
       </li>
     </ul>
