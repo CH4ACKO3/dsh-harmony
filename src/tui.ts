@@ -485,8 +485,8 @@ export async function runHarmonyTui(
           const order = pinHarmonyOrder(autoSortOrder(profile.order, profile.plugins))
           const remaining = orderViolations(order, profile.plugins).length
           await persist({ order }, copy(locale,
-            `Auto-sort complete; at least ${remaining} constraints remain unsatisfied`,
-            `自动排序完成，最少仍有 ${remaining} 条约束无法满足`,
+            `Auto-sort complete; ${remaining} constraints remain unsatisfied`,
+            `自动排序完成，仍有 ${remaining} 条约束无法满足`,
           ))
         } else {
           const items = patches.map(patch => ({

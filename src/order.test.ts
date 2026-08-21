@@ -21,7 +21,7 @@ test('auto sort satisfies every acyclic before and after declaration', () => {
   expect(order).toEqual(['framework', 'ui', 'weather'])
 })
 
-test('auto sort returns an exact minimum for a cyclic component', () => {
+test('auto sort returns an exact minimum for a small cyclic component', () => {
   const providers: HarmonyProvider[] = [
     { name: 'a', before: ['b'], after: [] },
     { name: 'b', before: ['c'], after: [] },
@@ -32,6 +32,34 @@ test('auto sort returns an exact minimum for a cyclic component', () => {
 
   expect(orderViolations(order, providers)).toHaveLength(1)
   expect(order).toEqual(['a', 'b', 'c'])
+})
+
+test('auto sort handles a large cyclic component without exponential search', () => {
+  const names = Array.from({ length: 100 }, (_, index) => `provider-${index}`)
+  const providers = names.map((name, index): HarmonyProvider => ({
+    name,
+    before: [names[(index + 1) % names.length]!],
+    after: [],
+  }))
+
+  const order = autoSortOrder(names, providers)
+
+  expect(order).toEqual(names)
+  expect(orderViolations(order, providers)).toHaveLength(1)
+})
+
+test('auto sort keeps unrelated providers stable around a cyclic component', () => {
+  const providers: HarmonyProvider[] = [
+    { name: 'a', before: ['b'], after: [] },
+    { name: 'b', before: ['c'], after: [] },
+    { name: 'c', before: ['a'], after: [] },
+    { name: 'unrelated', before: [], after: [] },
+  ]
+
+  const order = autoSortOrder(['a', 'unrelated', 'b', 'c'], providers)
+
+  expect(order).toEqual(['a', 'unrelated', 'b', 'c'])
+  expect(orderViolations(order, providers)).toHaveLength(1)
 })
 
 test('Patch declarations override their provider-wide ordering rule', () => {
