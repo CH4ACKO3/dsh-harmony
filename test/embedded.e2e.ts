@@ -26,7 +26,13 @@ mkdirSync(join(officialPackage, 'lib'), { recursive: true })
 mkdirSync(appBoot, { recursive: true })
 cpSync(join(packageRoot, 'lib'), join(embeddedHarmony, 'lib'), { recursive: true })
 writeFileSync(join(embeddedHarmony, 'package.json'), JSON.stringify({ name: 'dsh-harmony', type: 'module' }))
-for (const dependency of ['@phenomnomnominal/tsquery', 'magic-string', 'semver', 'typescript']) {
+for (const dependency of [
+  '@deepseek-ai/dsh-atomic-write',
+  '@phenomnomnominal/tsquery',
+  'magic-string',
+  'semver',
+  'typescript',
+]) {
   const target = join(nodeModules, dependency)
   mkdirSync(dirname(target), { recursive: true })
   symlinkSync(join(packageRoot, 'node_modules', dependency), target, process.platform === 'win32' ? 'junction' : 'dir')

@@ -86,6 +86,8 @@ Open **Settings → Harmony** after starting the WebUI. For profiles, Desktop in
 
 Use the terminal UI or non-interactive commands against any profile. Commands contact a running Host transactionally and report `live`; stopped profiles are validated and updated atomically as `offline`.
 
+Multiple Hosts may use the same profile. Harmony follows DSH Settings' write model: whole-profile writes are serialized by a file lock and committed atomically; a stale UI save is rejected and refreshed, while concurrent processes use last-complete-write-wins semantics.
+
 ```sh
 dsh harmony --profile web
 dsh harmony status --json --profile web

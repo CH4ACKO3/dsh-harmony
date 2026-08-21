@@ -1,4 +1,13 @@
-import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import {
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmdirSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import type {
   HarmonyInspection,
@@ -11,7 +20,7 @@ import {
 } from './profile.js'
 import type { HarmonyReloadStatus } from './installer.js'
 
-const RUNTIME_FILE = '.dsh-harmony-runtime.json'
+const RUNTIME_DIRECTORY = '.dsh-harmony-runtimes'
 
 interface RuntimeAddress {
   pid: number
@@ -32,25 +41,59 @@ export interface HarmonyPatchUpdateResult {
 
 export type HarmonyRuntimeReloadResult = HarmonyRuntimeStatus
 
-function addressFile(profileDir: string): string {
-  return join(profileDir, RUNTIME_FILE)
+function addressDirectory(profileDir: string): string {
+  return join(profileDir, RUNTIME_DIRECTORY)
 }
 
 export function publishRuntimeAddress(profileDir: string, url: string, token: string): () => void {
-  const path = addressFile(profileDir)
-  const temporary = `${path}.${process.pid}.tmp`
+  const directory = addressDirectory(profileDir)
+  mkdirSync(directory, { recursive: true, mode: 0o700 })
+  const id = createHash('sha256').update(token).digest('hex')
+  const path = join(directory, `${process.pid}-${id}.json`)
+  const temporary = `${path}.tmp`
   const address: RuntimeAddress = {
     pid: process.pid,
     token,
     url,
   }
-  writeFileSync(temporary, `${JSON.stringify(address)}\n`, { mode: 0o600 })
+  writeFileSync(temporary, `${JSON.stringify(address)}\n`, { mode: 0o600, flag: 'wx' })
   renameSync(temporary, path)
   return () => {
-    if (!existsSync(path)) return
-    const current = JSON.parse(readFileSync(path, 'utf8')) as RuntimeAddress
-    if (current.pid === process.pid) unlinkSync(path)
+    try {
+      unlinkSync(path)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
+    try {
+      rmdirSync(directory)
+    } catch (error) {
+      if (!['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error
+    }
   }
+}
+
+function runtimeAddresses(profileDir: string): Array<{ address: RuntimeAddress; path: string }> {
+  const directory = addressDirectory(profileDir)
+  let files: string[]
+  try {
+    files = readdirSync(directory).filter(file => file.endsWith('.json')).sort()
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
+    throw error
+  }
+  const addresses: Array<{ address: RuntimeAddress; path: string }> = []
+  for (const file of files) {
+    const path = join(directory, file)
+    const address = JSON.parse(readFileSync(path, 'utf8')) as RuntimeAddress
+    try {
+      process.kill(address.pid, 0)
+      addresses.push({ address, path })
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error
+      unlinkSync(path)
+    }
+  }
+  return addresses
 }
 
 async function runtimeRequest(
@@ -58,29 +101,26 @@ async function runtimeRequest(
   path: string,
   init: RequestInit = {},
 ): Promise<Response | undefined> {
-  const filename = addressFile(profileDir)
-  if (!existsSync(filename)) return undefined
-  const address = JSON.parse(readFileSync(filename, 'utf8')) as RuntimeAddress
-  try {
-    process.kill(address.pid, 0)
-  } catch {
-    return undefined
-  }
-  try {
-    return await fetch(`${address.url}${path}`, {
-      ...init,
-      headers: {
-        ...init.headers,
-        authorization: `Bearer ${address.token}`,
-      },
-      signal: AbortSignal.timeout(30_000),
-    })
-  } catch (error) {
-    if (error instanceof Error && error.name === 'TimeoutError') {
-      throw new Error('dsh-harmony: running Harness did not finish the request within 30 seconds')
+  let failure: unknown
+  for (const { address } of runtimeAddresses(profileDir)) {
+    try {
+      return await fetch(`${address.url}${path}`, {
+        ...init,
+        headers: {
+          ...init.headers,
+          authorization: `Bearer ${address.token}`,
+        },
+        signal: AbortSignal.timeout(30_000),
+      })
+    } catch (error) {
+      failure = error
     }
-    throw new Error('dsh-harmony: could not contact the running Harness', { cause: error })
   }
+  if (failure instanceof Error && failure.name === 'TimeoutError') {
+    throw new Error('dsh-harmony: running Harness did not finish the request within 30 seconds')
+  }
+  if (failure !== undefined) throw new Error('dsh-harmony: could not contact the running Harness', { cause: failure })
+  return undefined
 }
 
 async function responseJson<T>(response: Response): Promise<T> {
@@ -161,9 +201,10 @@ export async function updateRuntimeProfile(
 export async function updateHarmonyProfile(
   profileDir: string,
   input: HarmonyProfileUpdate,
+  configured: string[] = [],
 ): Promise<HarmonyProfileUpdateResult> {
   return await updateRuntimeProfile(profileDir, input) ?? {
     mode: 'offline',
-    profile: updateStoppedHarmonyProfile(profileDir, input),
+    profile: await updateStoppedHarmonyProfile(profileDir, input, configured),
   }
 }

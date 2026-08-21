@@ -9,7 +9,7 @@ import {
 } from './index.js'
 import { synchronizeHarmonyProfile } from './profile.js'
 
-test('profile order appends installed providers and removes uninstalled providers', () => {
+test('profile discovery reconciles installed providers without writing', () => {
   const profile = mkdtempSync(join(tmpdir(), 'dsh-harmony-profile-'))
   mkdirSync(join(profile, 'node_modules', 'first'), { recursive: true })
   mkdirSync(join(profile, 'node_modules', 'second'), { recursive: true })
@@ -78,7 +78,7 @@ test('profile order appends installed providers and removes uninstalled provider
   rmSync(join(profile, 'node_modules', 'ordinary'), { recursive: true })
   expect(synchronizeHarmonyProfile(profile).order).toEqual(['first'])
   expect(JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8'))).toEqual({
-    order: ['first'], patchOrder: [], disabled: [],
+    order: ['second', 'first', 'ordinary'], patchOrder: [], disabled: [],
   })
   rmSync(profile, { recursive: true })
 })
@@ -104,13 +104,13 @@ test('detects compatibility between ordinary active plugins', () => {
     { name: 'ordinary-alpha', entryIds: ['alpha-entry'] },
     { name: 'ordinary-beta', entryIds: ['beta-entry'] },
   ]
-  expect(synchronizeHarmonyProfile(profile, undefined, false, active).compatibility).toEqual([{
+  expect(synchronizeHarmonyProfile(profile, undefined, active).compatibility).toEqual([{
     kind: 'conflict',
     left: { package: 'ordinary-alpha', version: '1.0.0', entryIds: ['alpha-entry'] },
     right: { package: 'ordinary-beta', version: '2.1.0', entryIds: ['beta-entry'] },
     declaredBy: ['ordinary-alpha'],
   }])
-  expect(synchronizeHarmonyProfile(profile, undefined, false, active.slice(0, 1)).compatibility).toEqual([])
+  expect(synchronizeHarmonyProfile(profile, undefined, active.slice(0, 1)).compatibility).toEqual([])
   rmSync(profile, { recursive: true })
 })
 
@@ -125,10 +125,36 @@ test('pins dsh-harmony above every installed plugin', () => {
 
   expect(synchronizeHarmonyProfile(profile, ['ordinary', 'dsh-harmony']).order).toEqual(['dsh-harmony', 'ordinary'])
   expect(JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8'))).toEqual({
-    order: ['dsh-harmony', 'ordinary'],
+    order: ['ordinary', 'dsh-harmony'],
     patchOrder: [],
     disabled: [],
   })
+  rmSync(profile, { recursive: true })
+})
+
+test('declares the built-in Settings Patch when its target plugin is present', () => {
+  const profile = mkdtempSync(join(tmpdir(), 'dsh-harmony-web-profile-'))
+  const settings = '@deepseek-ai/dsh-client-ui-settings-general'
+  const settingsDir = join(profile, 'node_modules', ...settings.split('/'))
+  const bundle = join(profile, 'node_modules', 'custom-web-bundle')
+  mkdirSync(settingsDir, { recursive: true })
+  mkdirSync(bundle, { recursive: true })
+  writeFileSync(join(settingsDir, 'package.json'), JSON.stringify({ name: settings }))
+  writeFileSync(join(bundle, 'package.json'), JSON.stringify({
+    name: 'custom-web-bundle', dependencies: { [settings]: '1' },
+  }))
+  const writeProfile = (dependencies: Record<string, string>, bundles: string[] = []): void => writeFileSync(join(profile, 'package.json'), JSON.stringify({
+    dependencies,
+    dsh: { profile: { bundles } },
+  }))
+
+  writeProfile({ 'dsh-harmony': '1' }, ['custom-web-bundle'])
+  expect(synchronizeHarmonyProfile(profile).plugins[0].patches)
+    .toEqual(['./lib/builtins/settings.patch.cjs'])
+
+  rmSync(settingsDir, { recursive: true })
+  writeFileSync(join(bundle, 'package.json'), JSON.stringify({ name: 'custom-web-bundle' }))
+  expect(synchronizeHarmonyProfile(profile, ['dsh-harmony']).plugins[0].patches).toEqual([])
   rmSync(profile, { recursive: true })
 })
 
@@ -207,5 +233,54 @@ test('reads, preflights, and atomically updates a stopped profile', async () => 
     patchOrder: ['second/only', 'first/b', 'first/a'],
     disabled: ['first/*'],
   })
+  rmSync(profile, { recursive: true })
+})
+
+test('preserves Providers discovered from the composed DSH configuration', async () => {
+  const profile = mkdtempSync(join(tmpdir(), 'dsh-harmony-configured-provider-'))
+  const provider = join(profile, 'node_modules', 'configured-provider')
+  mkdirSync(provider, { recursive: true })
+  writeFileSync(join(profile, 'package.json'), '{}')
+  writeFileSync(join(provider, 'package.json'), JSON.stringify({
+    name: 'configured-provider',
+    version: '1.0.0',
+    dsh: { harmony: { patches: ['./patch.cjs'] } },
+  }))
+  writeFileSync(join(provider, 'patch.cjs'), 'module.exports = []\n')
+  writeFileSync(join(profile, 'harmony.json'), JSON.stringify({
+    order: ['configured-provider'], patchOrder: [], disabled: [],
+  }))
+  const configured = [join(provider, 'package.json')]
+
+  expect(readHarmonyProfile(profile, configured).order).toEqual(['configured-provider'])
+  await updateHarmonyProfile(profile, { disabled: ['configured-provider/*'] }, configured)
+  expect(JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8'))).toEqual({
+    order: ['configured-provider'],
+    patchOrder: [],
+    disabled: ['configured-provider/*'],
+  })
+  rmSync(profile, { recursive: true })
+})
+
+test('serializes concurrent whole-profile writes without producing mixed state', async () => {
+  const profile = mkdtempSync(join(tmpdir(), 'dsh-harmony-concurrent-writers-'))
+  for (const name of ['first', 'second']) {
+    mkdirSync(join(profile, 'node_modules', name), { recursive: true })
+    writeFileSync(join(profile, 'node_modules', name, 'package.json'), JSON.stringify({ name }))
+  }
+  writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: { first: '1', second: '1' } }))
+  writeFileSync(join(profile, 'harmony.json'), JSON.stringify({
+    order: ['first', 'second'], patchOrder: [], disabled: [],
+  }))
+
+  await Promise.all([
+    updateHarmonyProfile(profile, { order: ['first', 'second'], disabled: ['first/*'] }),
+    updateHarmonyProfile(profile, { order: ['second', 'first'], disabled: ['second/*'] }),
+  ])
+  const state = JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8'))
+  expect([
+    { order: ['first', 'second'], patchOrder: [], disabled: ['first/*'] },
+    { order: ['second', 'first'], patchOrder: [], disabled: ['second/*'] },
+  ]).toContainEqual(state)
   rmSync(profile, { recursive: true })
 })

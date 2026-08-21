@@ -90,6 +90,8 @@ dsh web
 
 终端 TUI 和非交互命令可操作任意 profile。命令会事务连接正在运行的 Host 并报告 `live`；已停止的 profile 则在本地校验后原子更新并报告 `offline`。
 
+同一 profile 可以由多个 Host 使用。Harmony 沿用 DSH Settings 的写入模型：整份配置通过文件锁串行并原子提交；陈旧界面的保存会被拒绝并刷新，跨进程并发写则以后完成的完整配置为准。
+
 ```sh
 dsh harmony --profile web
 dsh harmony status --json --profile web

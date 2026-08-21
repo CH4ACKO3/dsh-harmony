@@ -39,7 +39,7 @@ type FetchInit = { method?: string; body?: string }
 let handleFetch = async (url: string, _init?: FetchInit): Promise<{ ok: boolean; json(): Promise<unknown> }> => ({
   ok: true,
   json: async () => url === '/dsh-harmony/profile'
-    ? { order: [], patchOrder: ['alpha/first', 'beta/only', 'alpha/last'], disabled: [], plugins: [{ name: 'alpha', harmony: true }, { name: 'beta', harmony: true }], orderViolations: [], patchOrderViolations: [], compatibility: [] }
+    ? { revision: 0, order: [], patchOrder: ['alpha/first', 'beta/only', 'alpha/last'], disabled: [], plugins: [{ name: 'alpha', harmony: true }, { name: 'beta', harmony: true }], orderViolations: [], patchOrderViolations: [], compatibility: [] }
     : { state: 'active' },
 })
 type FakeStyle = {
@@ -162,6 +162,7 @@ assert.equal(registrations.find(value => value.options.id === 'harmony-runtime')
 assert.equal(registrations.find(value => value.options.id === 'harmony-reload-notifications')?.options.name, 'shell.overlay')
 
 const profile = {
+  revision: 4,
   order: ['alpha'],
   patchOrder: ['alpha/first'],
   disabled: ['alpha/first'],
@@ -193,7 +194,7 @@ const patch = {
   targets: [{ package: 'target', file: 'lib/client.js' }], kind: 'source',
   state: 'disabled', matches: 0, generation: 1, declaration: 'patch.cjs',
 }
-const updates: Array<{ patchOrder: string[]; disabled: string[] }> = []
+const updates: Array<{ expectedRevision: number; patchOrder: string[]; disabled: string[] }> = []
 const highlighted: string[] = []
 let inspectLargeDiff = false
 const largeBefore = Array.from({ length: 1000 }, (_, index) => `const before${index} = ${index}`).join('\n')
@@ -225,10 +226,11 @@ handleFetch = async (url, init) => {
   }
   if (url !== '/dsh-harmony/profile') throw new Error(`unexpected request: ${url}`)
   if (init?.method === 'POST') {
-    const update = JSON.parse(init.body ?? '{}') as { patchOrder: string[]; disabled: string[] }
+    const update = JSON.parse(init.body ?? '{}') as { expectedRevision: number; patchOrder: string[]; disabled: string[] }
     updates.push(update)
     profile.patchOrder = [...update.patchOrder]
     profile.disabled = [...update.disabled]
+    profile.revision += 1
     patch.state = profile.disabled.includes(patch.key) ? 'disabled' : 'bound'
   }
   return { ok: true, json: async () => profile }
@@ -338,7 +340,7 @@ await testRenderer.act(async () => {
   ;(button('Save').props.onClick as () => void)()
   await new Promise(resolve => setImmediate(resolve))
 })
-assert.deepEqual(updates, [{ patchOrder: ['alpha/first'], disabled: [] }])
+assert.deepEqual(updates, [{ expectedRevision: 4, patchOrder: ['alpha/first'], disabled: [] }])
 assert.equal(button('Disable this Patch').type, 'button')
 assert.equal(button('Save').props.disabled, true)
 

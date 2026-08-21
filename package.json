@@ -101,6 +101,7 @@
   },
   "dependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-atomic-write": "^0.1.0-rc.8",
     "@phenomnomnominal/tsquery": "^6.2.0",
     "magic-string": "^0.30.21",
     "semver": "^7.8.5",

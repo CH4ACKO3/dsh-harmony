@@ -3,6 +3,7 @@ import { channel } from 'node:diagnostics_channel'
 import { readFileSync } from 'node:fs'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
+import { join } from 'node:path'
 import type { ClientModuleRegistry } from '@deepseek-ai/dsh-client-modules'
 import type { WebServer } from '@deepseek-ai/dsh-host-webserver'
 import type { Context, Fiber } from '@deepseek-ai/cordis'
@@ -12,16 +13,24 @@ import { readJson, RequestBodyTooLargeError } from './http.js'
 import { registerActiveRuntimeRoute, waitForRuntimeChoice } from './installer.js'
 import type { HarmonyReloadStatus } from './installer.js'
 import type { HarmonyProfileUpdate, HarmonyProfileView, HarmonyRuntimeProfileUpdateResult } from './index.js'
-import { createHarmonyProfileView, prepareHarmonyProfileUpdate } from './profile.js'
+import {
+  createHarmonyProfileView,
+  HARMONY_PLUGIN,
+  HARMONY_STATE_FILE,
+  HarmonyProfileConflictError,
+  prepareHarmonyProfileUpdate,
+} from './profile.js'
 import {
   beginProfileUpdate,
   beginPluginUpdate,
+  beginStartupUpdate,
   consumeStartupPerformance,
   currentProfile,
   getPatchInspections,
   getPatchOrderViolations,
   getPatchStatuses,
   inspectPatchTargets,
+  inspectUnresolvedPatchTargets,
   packageNameOf,
   prepareModuleReload,
   subscribe,
@@ -101,11 +110,16 @@ function loaderInventory(ctx: Context): { packages: string[]; active: HarmonyAct
   }
 }
 
-function profileView(): HarmonyProfileView {
+interface ReloadAction {
+  host: Set<string>
+  client: Set<string>
+}
+
+function profileView(revision = 0): HarmonyProfileView {
   const profile = currentProfile()
   const patchCounts = new Map(profile.plugins.map(plugin => [plugin.name, 0]))
   for (const patch of getPatchStatuses()) patchCounts.set(patch.owner, (patchCounts.get(patch.owner) ?? 0) + 1)
-  return createHarmonyProfileView(profile, patchCounts, getPatchOrderViolations())
+  return createHarmonyProfileView(profile, patchCounts, getPatchOrderViolations(), revision)
 }
 
 function sendJson(response: ServerResponse, value: unknown): void {
@@ -114,7 +128,9 @@ function sendJson(response: ServerResponse, value: unknown): void {
 }
 
 function sendError(response: ServerResponse, error: unknown): void {
-  response.writeHead(error instanceof RequestBodyTooLargeError ? 413 : 500, {
+  response.writeHead(error instanceof RequestBodyTooLargeError
+    ? 413
+    : error instanceof HarmonyProfileConflictError ? 409 : 500, {
     'content-type': 'application/json; charset=utf-8',
   })
   response.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }))
@@ -213,14 +229,36 @@ export async function apply(ctx: Context): Promise<void> {
   let clientModules: ClientModuleRegistry | undefined
   let queued = false
   let syncQueued = false
-  let initializing = true
+  let stopped = false
+  let syncImmediate: NodeJS.Immediate | undefined
+  let reloadImmediate: NodeJS.Immediate | undefined
   let updateTail = Promise.resolve()
   const reloadingEntries = new Set<object>()
+  const selfEntry = (ctx as Context & { fiber?: { entry?: object } }).fiber?.entry
+  const selfPackage = selfEntry === undefined
+    ? HARMONY_PLUGIN
+    : packageNameOf((selfEntry as ReloadableEntry).options.name) ?? HARMONY_PLUGIN
   let warnedCompatibility = new Set<string>()
   let patchFailures = new Map<string, string>()
   let reloadSequence = 0
   let reloadStatus: HarmonyReloadStatus = { sequence: 0, state: 'idle' }
+  let profileRevision = 0
+  let profileText: string | undefined
   const logPerformance = process.env.DSH_HARMONY_PERF === '1'
+  const readProfileText = (): string | undefined => {
+    try {
+      return readFileSync(join(profileDir, HARMONY_STATE_FILE), 'utf8')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+      throw error
+    }
+  }
+  const reconcileProfileRevision = (): void => {
+    const next = readProfileText()
+    if (next === profileText) return
+    profileText = next
+    profileRevision += 1
+  }
 
   const startLoadProbe = (operation: HarmonyLoadProbe['operation']): HarmonyLoadProbe | undefined => {
     const startup = operation === 'startup' ? consumeStartupPerformance() : undefined
@@ -263,8 +301,6 @@ export async function apply(ctx: Context): Promise<void> {
     if (logPerformance) process.stderr.write(`dsh-harmony: performance ${JSON.stringify(record)}\n`)
   }
 
-  registerActiveRuntimeRoute(ctx, () => reloadStatus)
-
   const warnCompatibility = (profile: ProfileTransaction['profile']): void => {
     const next = new Set<string>()
     for (const item of profile.compatibility) {
@@ -290,7 +326,9 @@ export async function apply(ctx: Context): Promise<void> {
   }
 
   const enqueueUpdate = <T>(task: () => Promise<T>): Promise<T> => {
+    if (stopped) return Promise.reject(new Error('dsh-harmony: runtime is stopping'))
     const result = updateTail.then(async () => {
+      if (stopped) throw new Error('dsh-harmony: runtime is stopping')
       const sequence = ++reloadSequence
       reloadStatus = { sequence, state: 'reloading' }
       try {
@@ -310,11 +348,18 @@ export async function apply(ctx: Context): Promise<void> {
     return result
   }
 
-  const hostEntries = (targets: PatchTargets): ReloadableEntry[] => [...ctx.loader.entries()].filter((entry) => {
+  const hostEntries = (targets: PatchTargets, action?: ReloadAction): ReloadableEntry[] => [...ctx.loader.entries()].filter((entry) => {
+    if (entry === selfEntry) return false
     const packageName = packageNameOf(entry.options.name)
-    return packageName !== undefined && targets.has(packageName)
-      && [...targets.get(packageName)!].some(file => file !== 'lib/client.js')
+    return packageName !== undefined && (action?.host.has(packageName) === true
+      || targets.has(packageName) && [...targets.get(packageName)!].some(file => file !== 'lib/client.js'))
   }) as unknown as ReloadableEntry[]
+  const assertNoSelfHostReload = (targets: PatchTargets, action?: ReloadAction): void => {
+    const files = targets.get(selfPackage)
+    if (action?.host.has(selfPackage) === true || files !== undefined && [...files].some(file => file !== 'lib/client.js')) {
+      throw new Error(`dsh-harmony: reloading ${JSON.stringify(selfPackage)} inside its own runtime is unsafe; restart DSH to apply this change`)
+    }
+  }
   const reload = async (entries: ReloadableEntry[], nextGeneration: number): Promise<() => Promise<void>> => {
     for (const entry of entries) reloadingEntries.add(entry)
     try {
@@ -331,18 +376,23 @@ export async function apply(ctx: Context): Promise<void> {
       for (const entry of entries) reloadingEntries.delete(entry)
     }
   }
-  const applyTransaction = async (transaction: ProfileTransaction, probe?: HarmonyLoadProbe): Promise<void> => {
+  const applyTransaction = async (
+    transaction: ProfileTransaction,
+    probe?: HarmonyLoadProbe,
+    action?: ReloadAction,
+  ): Promise<void> => {
     let restoreEntries: (() => Promise<void>) | undefined
     const rebuiltClients: string[] = []
     const modules = clientModules
     let failure: unknown
     try {
-      if (transaction.targets.size === 0) {
-        transaction.commit()
+      if (transaction.targets.size === 0 && action === undefined) {
+        await transaction.commit()
         warnCompatibility(transaction.profile)
         warnPatchFailures()
         return
       }
+      assertNoSelfHostReload(transaction.targets, action)
       const transformStarted = probe === undefined ? undefined : process.hrtime.bigint()
       try {
         inspectPatchTargets()
@@ -351,14 +401,18 @@ export async function apply(ctx: Context): Promise<void> {
       }
       const hostReloadStarted = probe === undefined ? undefined : process.hrtime.bigint()
       try {
-        restoreEntries = await reload(hostEntries(transaction.targets), transaction.generation)
+        restoreEntries = await reload(hostEntries(transaction.targets, action), transaction.generation)
       } finally {
         if (probe !== undefined && hostReloadStarted !== undefined) probe.hostReloadMs = elapsedMilliseconds(hostReloadStarted)
       }
       const clientRebuildStarted = probe === undefined ? undefined : process.hrtime.bigint()
       try {
+        const clientPackages = new Set(action?.client)
         for (const [packageName, files] of transaction.targets) {
-          if (!files.has('lib/client.js') || modules === undefined) continue
+          if (files.has('lib/client.js')) clientPackages.add(packageName)
+        }
+        for (const packageName of clientPackages) {
+          if (modules === undefined) continue
           modules.rebuilt(packageName)
           rebuiltClients.push(packageName)
         }
@@ -367,7 +421,7 @@ export async function apply(ctx: Context): Promise<void> {
           probe.clientRebuildMs = elapsedMilliseconds(clientRebuildStarted)
         }
       }
-      transaction.commit()
+      await transaction.commit()
       warnCompatibility(transaction.profile)
       warnPatchFailures()
     } catch (error) {
@@ -400,6 +454,7 @@ export async function apply(ctx: Context): Promise<void> {
   const runTransaction = async (
     operation: HarmonyLoadProbe['operation'],
     prepare: () => ProfileTransaction,
+    action?: ReloadAction,
   ): Promise<ProfileTransaction> => {
     const probe = startLoadProbe(operation)
     const prepareStarted = probe === undefined ? undefined : process.hrtime.bigint()
@@ -412,22 +467,50 @@ export async function apply(ctx: Context): Promise<void> {
       throw error
     }
     if (probe !== undefined && prepareStarted !== undefined) probe.prepareMs += elapsedMilliseconds(prepareStarted)
-    await applyTransaction(transaction, probe)
+    await applyTransaction(transaction, probe, action)
     return transaction
   }
 
   const refreshPatches = (force = true, reload?: string): Promise<void> => enqueueUpdate(async () => {
-    await runTransaction(reload !== undefined ? 'manual-reload' : initializing ? 'startup' : 'plugin-update', () => {
-      const inventory = loaderInventory(ctx)
-      const transaction = beginPluginUpdate(inventory.packages, force, inventory.active)
-      if (reload !== undefined) {
-        const files = transaction.targets.get(reload) ?? new Set<string>()
-        files.add('lib/index.js')
-        files.add('lib/client.js')
-        transaction.targets.set(reload, files)
+    const action = reload === undefined ? undefined : {
+      host: new Set([reload]),
+      client: new Set([reload]),
+    }
+    const inventory = loaderInventory(ctx)
+    await runTransaction(reload === undefined ? 'plugin-update' : 'manual-reload', () => (
+      beginPluginUpdate(force, inventory.active, inventory.packages)
+    ), action)
+    reconcileProfileRevision()
+  })
+
+  const reconcileStartup = (): Promise<void> => enqueueUpdate(async () => {
+    const probe = startLoadProbe('startup')
+    const prepareStarted = probe === undefined ? undefined : process.hrtime.bigint()
+    let transaction: ProfileTransaction | undefined
+    let failure: unknown
+    try {
+      transaction = beginStartupUpdate(loaderInventory(ctx).active)
+      if (probe !== undefined && prepareStarted !== undefined) probe.prepareMs += elapsedMilliseconds(prepareStarted)
+      const transformStarted = probe === undefined ? undefined : process.hrtime.bigint()
+      const inspections = inspectUnresolvedPatchTargets()
+      if (probe !== undefined) {
+        if (transformStarted !== undefined) probe.transformMs += elapsedMilliseconds(transformStarted)
+        probe.targetPackages = new Set(inspections.map(item => item.package)).size
+        probe.targetFiles = inspections.length
       }
-      return transaction
-    })
+      await transaction.commit()
+      warnCompatibility(transaction.profile)
+      warnPatchFailures()
+    } catch (error) {
+      failure = error
+      if (probe !== undefined && prepareStarted !== undefined && transaction === undefined) {
+        probe.prepareMs += elapsedMilliseconds(prepareStarted)
+      }
+      transaction?.rollback()
+      throw error
+    } finally {
+      finishLoadProbe(probe, transaction, failure === undefined ? 'succeeded' : 'failed', failure)
+    }
   })
 
   const updateProfile = async (input: () => HarmonyProfileUpdate): Promise<HarmonyRuntimeProfileUpdateResult> => {
@@ -435,17 +518,21 @@ export async function apply(ctx: Context): Promise<void> {
       const transaction = await runTransaction('profile-update', () => {
         const requested = input()
         const candidate = prepareHarmonyProfileUpdate(currentProfile(), requested)
+        if (requested.expectedRevision !== undefined && requested.expectedRevision !== profileRevision) {
+          throw new HarmonyProfileConflictError(requested.expectedRevision, profileRevision)
+        }
         return beginProfileUpdate({
           ...(requested.order === undefined ? {} : { order: candidate.order }),
           ...(requested.patchOrder === undefined ? {} : { patchOrder: candidate.patchOrder }),
           ...(requested.disabled === undefined ? {} : { disabled: candidate.disabled }),
         })
       })
+      reconcileProfileRevision()
       return transaction.generation
     })
     return {
       mode: 'live',
-      profile: profileView(),
+      profile: profileView(profileRevision),
       generation,
       reload: { ...reloadStatus },
     }
@@ -480,7 +567,7 @@ export async function apply(ctx: Context): Promise<void> {
 
   const operations = {
     status: () => ({
-      profile: profileView(),
+      profile: profileView(profileRevision),
       patches: getPatchStatuses(),
       reload: { ...reloadStatus },
     }),
@@ -491,7 +578,10 @@ export async function apply(ctx: Context): Promise<void> {
       targets: getPatchInspections(input.package, input.file),
     }),
     reload: async (provider?: string) => {
-      if (provider !== undefined && !loaderInventory(ctx).packages.includes(provider)) {
+      if (provider === selfPackage) {
+        throw new Error(`dsh-harmony: reloading ${JSON.stringify(selfPackage)} inside its own runtime is unsafe; restart DSH instead`)
+      }
+      if (provider !== undefined && !currentProfile().plugins.some(plugin => plugin.name === provider)) {
         throw new Error(`dsh-harmony: unknown plugin ${JSON.stringify(provider)}`)
       }
       await refreshPatches(true, provider)
@@ -499,13 +589,29 @@ export async function apply(ctx: Context): Promise<void> {
     },
   }
 
+  await reconcileStartup()
+  profileText = readProfileText()
+  ctx.effect(() => async () => {
+    stopped = true
+    if (syncImmediate !== undefined) clearImmediate(syncImmediate)
+    if (reloadImmediate !== undefined) clearImmediate(reloadImmediate)
+    syncImmediate = undefined
+    reloadImmediate = undefined
+    syncQueued = false
+    queued = false
+    pendingClient.clear()
+    pendingHost.clear()
+    await updateTail
+  }, 'dsh-harmony: runtime updates')
+  registerActiveRuntimeRoute(ctx, () => reloadStatus)
+
   ctx.inject(['clientModules'], (clientCtx) => {
     clientModules = clientCtx.clientModules
     return () => { clientModules = undefined }
   })
 
   ctx.provide('harmony', {
-    profile: profileView,
+    profile: () => profileView(profileRevision),
     updateProfile: operations.updateProfile,
     inspect: operations.inspect,
   })
@@ -557,9 +663,13 @@ export async function apply(ctx: Context): Promise<void> {
     controlServer.once('error', reject)
     controlServer.listen(0, '127.0.0.1', () => {
       controlServer.off('error', reject)
-      const port = (controlServer.address() as AddressInfo).port
-      disposeRuntimeAddress = publishRuntimeAddress(profileDir, `http://127.0.0.1:${port}`, controlToken)
-      resolve()
+      try {
+        const port = (controlServer.address() as AddressInfo).port
+        disposeRuntimeAddress = publishRuntimeAddress(profileDir, `http://127.0.0.1:${port}`, controlToken)
+        resolve()
+      } catch (error) {
+        reject(error)
+      }
     })
   })
   ctx.effect(() => async () => {
@@ -573,7 +683,7 @@ export async function apply(ctx: Context): Promise<void> {
       kind: 'exact',
       path: '/dsh-harmony/profile',
       async handler(request: IncomingMessage, response: ServerResponse) {
-        if (request.method === 'GET') return sendJson(response, profileView())
+        if (request.method === 'GET') return sendJson(response, profileView(profileRevision))
         if (request.method === 'POST') {
           try {
             const input = await readJson(request) as HarmonyProfileUpdate
@@ -637,13 +747,13 @@ export async function apply(ctx: Context): Promise<void> {
   })
 
   const synchronizeLoader = (): void => {
-    if (syncQueued) return
+    if (stopped || syncQueued) return
     syncQueued = true
-    setImmediate(() => {
+    syncImmediate = setImmediate(() => {
+      syncImmediate = undefined
       syncQueued = false
-      void refreshPatches(false).catch(error => ctx.logger.error(error)).finally(() => {
-        initializing = false
-      })
+      if (stopped) return
+      void refreshPatches(false).catch(error => ctx.logger.error(error))
     })
   }
   ctx.effect(() => watchProfile(synchronizeLoader, (error) => ctx.logger.error(error)), 'dsh-harmony: profile order watch')
@@ -654,7 +764,7 @@ export async function apply(ctx: Context): Promise<void> {
   })
 
   ctx.effect(() => subscribe((targets, generation) => {
-    if (initializing) return
+    if (stopped) return
     pendingGeneration = generation
     for (const [target, files] of targets) {
       if (files.has('lib/client.js')) pendingClient.add(target)
@@ -662,7 +772,9 @@ export async function apply(ctx: Context): Promise<void> {
     }
     if (queued) return
     queued = true
-    setImmediate(() => {
+    reloadImmediate = setImmediate(() => {
+      reloadImmediate = undefined
+      if (stopped) return
       void enqueueUpdate(async () => {
         queued = false
         const clientTargets = [...pendingClient]
@@ -670,7 +782,11 @@ export async function apply(ctx: Context): Promise<void> {
         const generation = pendingGeneration
         pendingClient.clear()
         pendingHost.clear()
+        if (hostTargets.has(selfPackage)) {
+          throw new Error(`dsh-harmony: reloading ${JSON.stringify(selfPackage)} inside its own runtime is unsafe; restart DSH to apply this change`)
+        }
         const entries = [...ctx.loader.entries()].filter((entry) => {
+          if (entry === selfEntry) return false
           const packageName = packageNameOf(entry.options.name)
           return packageName !== undefined && hostTargets.has(packageName)
         }) as unknown as ReloadableEntry[]
@@ -679,7 +795,6 @@ export async function apply(ctx: Context): Promise<void> {
       }).catch(error => ctx.logger.error(error))
     })
   }), 'dsh-harmony: patch reload')
-  synchronizeLoader()
   await controlReady
 }
 

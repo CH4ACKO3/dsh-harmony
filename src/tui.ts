@@ -256,13 +256,21 @@ export function renderHarmonyPatchTui(
   return [...header, ...visible, ...footer].slice(0, limit).join('\n')
 }
 
-export async function saveHarmonyTuiOrder(profileDir: string, order: string[]): Promise<HarmonyProfileUpdateResult> {
+export async function saveHarmonyTuiOrder(
+  profileDir: string,
+  order: string[],
+  configured: string[] = [],
+): Promise<HarmonyProfileUpdateResult> {
   order = pinHarmonyOrder(order)
-  return updateHarmonyProfile(profileDir, { order })
+  return updateHarmonyProfile(profileDir, { order }, configured)
 }
 
-export async function saveHarmonyTuiPatchOrder(profileDir: string, patchOrder: string[]): Promise<HarmonyProfileUpdateResult> {
-  return updateHarmonyProfile(profileDir, { patchOrder })
+export async function saveHarmonyTuiPatchOrder(
+  profileDir: string,
+  patchOrder: string[],
+  configured: string[] = [],
+): Promise<HarmonyProfileUpdateResult> {
+  return updateHarmonyProfile(profileDir, { patchOrder }, configured)
 }
 
 function updateMessage(result: HarmonyProfileUpdateResult, action: string, locale: HarmonyLocale): string {
@@ -282,6 +290,7 @@ export async function runHarmonyTui(
   input: ReadStream = process.stdin,
   output: WriteStream = process.stdout,
   locale: HarmonyLocale = terminalLocale(),
+  configured: string[] = [],
 ): Promise<void> {
   if (!input.isTTY || !output.isTTY) throw new Error(copy(locale,
     'dsh harmony requires an interactive terminal',
@@ -289,7 +298,7 @@ export async function runHarmonyTui(
   ))
   const offlineState = () => {
     installModuleHooks()
-    discoverProfile(profileDir)
+    discoverProfile(profileDir, false, configured)
     inspectPatchTargets()
     const patches = getPatchStatuses()
     const patchCounts = new Map(currentProfile().plugins.map(plugin => [plugin.name, 0]))
@@ -312,6 +321,13 @@ export async function runHarmonyTui(
   let patchSelected = 0
   let message = ''
   let saving = false
+  const acceptState = (next: Awaited<ReturnType<typeof readState>>): void => {
+    state = next
+    profile = next.profile
+    patches = next.patches
+    providerSelected = Math.min(providerSelected, Math.max(0, profile.order.length - 1))
+    patchSelected = Math.min(patchSelected, Math.max(0, profile.patchOrder.length - 1))
+  }
   const draw = (): void => {
     const view = page === 'providers'
       ? renderHarmonyTui(profile, providerSelected, message, output.rows, locale)
@@ -323,15 +339,17 @@ export async function runHarmonyTui(
     message = copy(locale, 'Validating and applying settings…', '正在预检并应用设置…')
     draw()
     try {
-      const result = await updateHarmonyProfile(profileDir, input)
-      state = await readState()
-      profile = state.profile
-      patches = state.patches
-      providerSelected = Math.min(providerSelected, Math.max(0, profile.order.length - 1))
-      patchSelected = Math.min(patchSelected, Math.max(0, profile.patchOrder.length - 1))
+      const result = await updateHarmonyProfile(profileDir, {
+        ...input,
+        expectedRevision: profile.revision,
+      }, configured)
+      acceptState(await readState())
       message = updateMessage(result, action, locale)
       return true
     } catch (error) {
+      try {
+        acceptState(await readState())
+      } catch {}
       message = copy(locale,
         `Save failed: ${error instanceof Error ? error.message : String(error)}`,
         `保存失败：${error instanceof Error ? error.message : String(error)}`,

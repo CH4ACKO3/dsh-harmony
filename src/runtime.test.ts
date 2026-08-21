@@ -1,5 +1,5 @@
 import { channel } from 'node:diagnostics_channel'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -10,11 +10,14 @@ import { pathToFileURL } from 'node:url'
 import { afterAll, beforeAll, expect, test } from 'vitest'
 import type { HarmonyService } from './index.js'
 import { readHarmonyRuntime, reloadHarmonyRuntime, updateHarmonyProfile } from './control.js'
+import { configuredProfileCandidates } from './dsh.js'
 import {
   beginProfileUpdate,
   beginPluginUpdate,
+  beginStartupUpdate,
   currentProfile,
   discoverPackage,
+  discoverProfile,
   getPatchInspections,
   getPatchStatuses,
   inspectPatchTargets,
@@ -256,7 +259,7 @@ module.exports = {
   delete (globalThis as any).__expectedPatchOrder
 })
 
-test('applies a complete user Patch order across provider boundaries', () => {
+test('applies a complete user Patch order across provider boundaries', async () => {
   const profile = join(root, 'manual-patch-order-profile')
   const target = join(profile, 'node_modules', 'manual-patch-order-target')
   const first = join(profile, 'node_modules', 'manual-first-provider')
@@ -289,7 +292,7 @@ module.exports = ${JSON.stringify(ids)}.map(id => ({
     'manual-second-provider/d',
   ]
   const transaction = beginProfileUpdate({ patchOrder: desired })
-  transaction.commit()
+  await transaction.commit()
 
   ;(globalThis as any).__manualPatchOrder = []
   readFileSync(join(target, 'index.js'), 'utf8')
@@ -357,7 +360,7 @@ module.exports = [{
   delete (globalThis as any).__failedCompositeCalls
 })
 
-test('toggles and reports a successful composite Patch as one unit', () => {
+test('toggles and reports a successful composite Patch as one unit', async () => {
   const profile = join(root, 'successful-composite-profile')
   const provider = join(profile, 'node_modules', 'successful-composite-provider')
   const target = join(profile, 'node_modules', 'successful-composite-target')
@@ -391,7 +394,7 @@ module.exports = { id: 'atomic', patches: [
   })
 
   const transaction = beginProfileUpdate({ disabled: ['successful-composite-provider/atomic'] })
-  transaction.commit()
+  await transaction.commit()
   expect(readFileSync(join(target, 'a.js'), 'utf8')).toContain('a = 1')
   expect(readFileSync(join(target, 'b.js'), 'utf8')).toContain('b = 3')
   expect(getPatchStatuses().find(patch => patch.key === 'successful-composite-provider/atomic')).toMatchObject({ state: 'disabled' })
@@ -699,7 +702,7 @@ module.exports = ['first', 'second'].map(id => ({
   })
 })
 
-test('stages disabled patches and restores runtime and disk state on rollback', () => {
+test('stages disabled patches and restores runtime and disk state on rollback', async () => {
   const profile = join(root, 'disabled-profile')
   const provider = join(profile, 'node_modules', 'toggle-provider')
   const target = join(profile, 'node_modules', 'toggle-target')
@@ -724,6 +727,11 @@ module.exports = {
   writeFileSync(join(target, 'lib/index.js'), 'export const value = 1\n')
   synchronizeProfile(profile)
   expect(retainedGenerationCount()).toBe(1)
+  writeFileSync(join(profile, 'harmony.json'), JSON.stringify({
+    order: currentProfile().order,
+    patchOrder: currentProfile().patchOrder,
+    disabled: currentProfile().disabled,
+  }))
 
   expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 2')
   const state = readFileSync(join(profile, 'harmony.json'), 'utf8')
@@ -741,7 +749,7 @@ module.exports = {
   expect(retainedGenerationCount()).toBe(1)
 
   const committed = beginProfileUpdate({ disabled: ['toggle-provider/toggle'] })
-  committed.commit()
+  await committed.commit()
   expect(retainedGenerationCount()).toBe(1)
   expect(getPatchStatuses().find(patch => patch.key === 'toggle-provider/toggle')?.state).toBe('disabled')
   expect(JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8')).disabled).toEqual(['toggle-provider/toggle'])
@@ -749,7 +757,7 @@ module.exports = {
   for (let index = 0; index < 32; index += 1) {
     const update = beginProfileUpdate({ disabled: index % 2 === 0 ? [] : ['toggle-provider/toggle'] })
     expect(retainedGenerationCount()).toBe(2)
-    update.commit()
+    await update.commit()
     expect(retainedGenerationCount()).toBe(1)
   }
 })
@@ -812,7 +820,7 @@ module.exports = {
   }])
 })
 
-test('publishes active plugin compatibility only when a plugin update commits', () => {
+test('publishes active plugin compatibility only when a plugin update commits', async () => {
   const profile = join(root, 'compatibility-transaction-profile')
   const alpha = join(profile, 'node_modules', 'compatibility-alpha')
   const beta = join(profile, 'node_modules', 'compatibility-beta')
@@ -837,7 +845,7 @@ test('publishes active plugin compatibility only when a plugin update commits', 
   synchronizeProfile(profile, installed, both)
   expect(currentProfile().compatibility).toEqual([expect.objectContaining({ kind: 'integration' })])
 
-  const pending = beginPluginUpdate(installed, false, both.slice(0, 1))
+  const pending = beginPluginUpdate(false, both.slice(0, 1))
   expect(pending.profile.compatibility).toEqual([expect.objectContaining({
     kind: 'requirement', reason: 'inactive',
   })])
@@ -845,7 +853,7 @@ test('publishes active plugin compatibility only when a plugin update commits', 
   pending.rollback()
   expect(currentProfile().compatibility).toEqual([expect.objectContaining({ kind: 'integration' })])
 
-  beginPluginUpdate(installed, false, both.slice(0, 1)).commit()
+  await beginPluginUpdate(false, both.slice(0, 1)).commit()
   expect(currentProfile().compatibility).toEqual([expect.objectContaining({
     kind: 'requirement', reason: 'inactive',
   })])
@@ -872,6 +880,7 @@ test('serves the active profile from its synchronized snapshot', () => {
 })
 
 test('provides harmony and reloads a newly patched loader entry', async () => {
+  const profile = join(root, 'live-provider-profile')
   const provider = join(root, 'live-provider')
   const laterProvider = join(root, 'later-live-provider')
   mkdirSync(provider)
@@ -900,6 +909,9 @@ module.exports = {
   apply() {},
 }
 `)
+  mkdirSync(profile)
+  writeFileSync(join(profile, 'package.json'), '{}')
+  synchronizeProfile(profile)
 
   const previousPlugin = () => {}
   const nextPlugin = () => {}
@@ -919,7 +931,7 @@ module.exports = {
   } as any
   const provided: string[] = []
   const disposers: (() => void)[] = []
-  applyHarmonyPlugin({
+  await applyHarmonyPlugin({
     provide(name: string) { provided.push(name) },
     logger: { error() {} },
     on() {},
@@ -933,8 +945,6 @@ module.exports = {
     loader: { *entries() { yield entry } },
   })
 
-  await new Promise<void>(resolve => setImmediate(resolve))
-  await new Promise<void>(resolve => setImmediate(resolve))
   discoverPackage(provider)
   discoverPackage(laterProvider)
   const latestGeneration = getPatchStatuses().find(patch => patch.owner === 'later-live-provider')!.generation
@@ -952,7 +962,7 @@ test('reconciles the existing Loader tree when Harmony activates', async () => {
   const provider = join(profile, 'node_modules', 'initial-loader-provider')
   const incompatible = join(profile, 'node_modules', 'incompatible-loader-provider')
   const disabled = join(profile, 'node_modules', 'disabled-loader-plugin')
-  const target = join(root, 'initial-loader-target')
+  const target = join(profile, 'node_modules', 'initial-loader-target')
   mkdirSync(provider, { recursive: true })
   mkdirSync(incompatible, { recursive: true })
   mkdirSync(disabled, { recursive: true })
@@ -960,6 +970,7 @@ test('reconciles the existing Loader tree when Harmony activates', async () => {
   writeFileSync(join(profile, 'package.json'), JSON.stringify({
     dependencies: {
       'initial-loader-provider': '1',
+      'initial-loader-target': '1',
       'incompatible-loader-provider': '1',
       'disabled-loader-plugin': '1',
     },
@@ -1028,7 +1039,7 @@ module.exports = [{
   ]
   const disposers: (() => void)[] = []
   const warnings: string[] = []
-  applyHarmonyPlugin({
+  await applyHarmonyPlugin({
     provide() {},
     logger: { error() {}, warn(message: string) { warnings.push(message) } },
     on() {},
@@ -1042,9 +1053,10 @@ module.exports = [{
     loader: { *entries() { yield* entries } },
   })
 
-  await new Promise<void>(resolve => setImmediate(resolve))
-  await new Promise<void>(resolve => setImmediate(resolve))
-  expect(started).toEqual([nextPlugin])
+  expect(started).toEqual([])
+  expect(targetEntry.fiber.runtime.callback).toBe(previousPlugin)
+  await expect(reloadHarmonyRuntime(profile, 'dsh-harmony'))
+    .rejects.toThrow('reloading "dsh-harmony" inside its own runtime is unsafe')
   expect(warnings[0]).toBe('dsh-harmony: incompatible-loader-provider@2.0.0 conflicts with initial-loader-provider@0.0.0; both remain enabled')
   expect(warnings[1]).toContain('skipped Patch "initial-loader-provider/wrong-count"')
   expect(warnings[1]).toContain('expected 2 match(es)')
@@ -1053,7 +1065,47 @@ module.exports = [{
   for (const dispose of disposers) dispose()
 })
 
+test('cancels a queued Loader synchronization when the Harmony fiber stops', async () => {
+  const profile = join(root, 'stopped-runtime-profile')
+  mkdirSync(profile)
+  writeFileSync(join(profile, 'package.json'), '{}')
+  synchronizeProfile(profile)
+
+  let configUpdate = (): void => {}
+  const effects = new Map<string, () => void | Promise<void>>()
+  const records: Array<{ operation?: string }> = []
+  const performanceChannel = channel('dsh-harmony:load')
+  const capture = (message: unknown): void => { records.push(message as { operation?: string }) }
+  performanceChannel.subscribe(capture)
+  try {
+    await applyHarmonyPlugin({
+      provide() {},
+      logger: { error() {} },
+      on(event: string, listener: () => void) {
+        if (event === 'loader/config-update') configUpdate = listener
+      },
+      effect(start: () => unknown, label?: string) {
+        const dispose = start()
+        if (typeof dispose === 'function' && label !== undefined) effects.set(label, dispose as () => void | Promise<void>)
+      },
+      inject() {},
+      loader: { *entries() {} },
+    } as any)
+    records.length = 0
+    configUpdate()
+    await effects.get('dsh-harmony: runtime updates')!()
+    await new Promise<void>(resolve => setImmediate(resolve))
+    expect(records.some(record => record.operation === 'plugin-update')).toBe(false)
+  } finally {
+    performanceChannel.unsubscribe(capture)
+    for (const [label, dispose] of [...effects].reverse()) {
+      if (label !== 'dsh-harmony: runtime updates') await dispose()
+    }
+  }
+})
+
 test('sends client bundle changes through the official client HMR path', async () => {
+  const profile = join(root, 'client-live-profile')
   const provider = join(root, 'client-provider')
   mkdirSync(provider)
   writeFileSync(join(provider, 'package.json'), JSON.stringify({
@@ -1068,6 +1120,9 @@ module.exports = {
   apply() {},
 }
 `)
+  mkdirSync(profile)
+  writeFileSync(join(profile, 'package.json'), '{}')
+  synchronizeProfile(profile)
 
   const entry = { options: { id: 'web', name: 'web-target' } } as any
   const updates: any[][] = []
@@ -1078,7 +1133,7 @@ module.exports = {
   entry.parent = group
   const rebuilt: string[] = []
   const disposers: (() => void)[] = []
-  applyHarmonyPlugin({
+  await applyHarmonyPlugin({
     provide() {},
     logger: { error() {} },
     on() {},
@@ -1101,6 +1156,7 @@ module.exports = {
 })
 
 test('keeps the previous loader fiber when a patched replacement fails', async () => {
+  const profile = join(root, 'failing-live-profile')
   const provider = join(root, 'failing-live-provider')
   mkdirSync(provider)
   writeFileSync(join(provider, 'package.json'), JSON.stringify({
@@ -1115,6 +1171,9 @@ module.exports = {
   apply() {},
 }
 `)
+  mkdirSync(profile)
+  writeFileSync(join(profile, 'package.json'), '{}')
+  synchronizeProfile(profile)
 
   const previousPlugin = () => {}
   const nextPlugin = () => {}
@@ -1132,7 +1191,7 @@ module.exports = {
     },
   } as any
   const disposers: (() => void)[] = []
-  applyHarmonyPlugin({
+  await applyHarmonyPlugin({
     provide() {},
     logger: { error(error: unknown) { errors.push(error) } },
     on() {},
@@ -1208,7 +1267,7 @@ module.exports = {
 
   synchronizeProfile(profile)
   const errors: unknown[] = []
-  const stop = watchProfile(() => { beginPluginUpdate(['watched-provider']).commit() }, error => errors.push(error))
+  const stop = watchProfile(() => beginPluginUpdate().commit(), error => errors.push(error))
   try {
     await delay(WATCH_READY_DELAY)
     expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 2')
@@ -1225,7 +1284,124 @@ module.exports = {
   }
 })
 
-test('reloads a provider whose patch target changes', () => {
+test('retries a newly configured Provider after only its failed helper is fixed', async () => {
+  const profile = join(root, 'watched-new-provider-profile')
+  const provider = join(profile, 'node_modules', 'watched-new-provider')
+  const target = join(profile, 'node_modules', 'watched-new-target')
+  mkdirSync(provider, { recursive: true })
+  mkdirSync(join(target, 'lib'), { recursive: true })
+  writeFileSync(join(profile, 'package.json'), '{}')
+  writeFileSync(join(provider, 'package.json'), JSON.stringify({
+    name: 'watched-new-provider',
+    dsh: { harmony: { patches: ['./patch.cjs'] } },
+  }))
+  const patchFile = join(provider, 'patch.cjs')
+  const helperFile = join(provider, 'helper.cjs')
+  writeFileSync(patchFile, `
+const value = require('./helper.cjs')
+module.exports = {
+  id: 'recovered',
+  target: { package: 'watched-new-target', file: 'lib/index.js' },
+  select: 'NumericLiteral', expect: 1,
+  apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), String(value)) },
+}
+`)
+  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'watched-new-target' }))
+  writeFileSync(join(target, 'lib/index.js'), 'export const value = 1\n')
+
+  synchronizeProfile(profile)
+  const errors: unknown[] = []
+  const stop = watchProfile(() => beginPluginUpdate().commit(), error => errors.push(error))
+  try {
+    await delay(WATCH_READY_DELAY)
+    writeFileSync(join(profile, 'package.json'), JSON.stringify({
+      dependencies: { 'watched-new-provider': '1' },
+    }))
+    await expect.poll(() => errors.length, { timeout: 5000 }).toBeGreaterThan(0)
+    expect(currentProfile().plugins.some(plugin => plugin.name === 'watched-new-provider')).toBe(false)
+    expect(existsSync(helperFile)).toBe(false)
+
+    writeFileSync(helperFile, 'module.exports = 2\n')
+    await expect.poll(
+      () => currentProfile().plugins.some(plugin => plugin.name === 'watched-new-provider'),
+      { timeout: 5000 },
+    ).toBe(true)
+    expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 2')
+  } finally {
+    stop()
+  }
+})
+
+test('discovers a configured Provider that is absent from profile dependencies', async () => {
+  const profile = join(root, 'configured-provider-profile')
+  const provider = join(profile, 'node_modules', 'configured-provider')
+  const target = join(profile, 'node_modules', 'configured-target')
+  mkdirSync(provider, { recursive: true })
+  mkdirSync(join(target, 'lib'), { recursive: true })
+  writeFileSync(join(profile, 'package.json'), '{}')
+  writeFileSync(join(provider, 'package.json'), JSON.stringify({
+    name: 'configured-provider',
+    dsh: { harmony: { patches: ['./patch.cjs'] } },
+  }))
+  writeFileSync(join(provider, 'patch.cjs'), `
+module.exports = {
+  id: 'configured',
+  target: { package: 'configured-target', file: 'lib/index.js' },
+  select: 'NumericLiteral', expect: 1,
+  apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '2') },
+}
+`)
+  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'configured-target' }))
+  writeFileSync(join(target, 'lib/index.js'), 'export const value = 1\n')
+
+  synchronizeProfile(profile)
+  expect(currentProfile().plugins.some(plugin => plugin.name === 'configured-provider')).toBe(false)
+  const transaction = beginPluginUpdate(
+    false,
+    [{ name: 'configured-provider', entryIds: ['configured-entry'] }],
+    ['configured-provider'],
+  )
+  expect(transaction.profile.plugins.find(plugin => plugin.name === 'configured-provider')?.patches)
+    .toEqual(['./patch.cjs'])
+  await transaction.commit()
+  expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 2')
+
+  const removed = beginPluginUpdate(false, [], [])
+  expect([...removed.targets].map(([name, files]) => [name, [...files]])).toEqual([
+    ['configured-target', ['lib/index.js']],
+  ])
+  await removed.commit()
+  expect(currentProfile().plugins.some(plugin => plugin.name === 'configured-provider')).toBe(false)
+  expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 1')
+  expect(JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8')).order).toEqual([])
+})
+
+test('derives startup Provider candidates from the composed DSH profile', async () => {
+  const home = join(root, 'composed-profile-home')
+  const profile = join(home, 'profiles', 'custom')
+  const provider = join(profile, 'node_modules', 'composed-provider')
+  mkdirSync(provider, { recursive: true })
+  writeFileSync(join(profile, 'package.json'), JSON.stringify({
+    name: 'dsh-profile-custom',
+    dsh: { profile: { bundles: [] } },
+  }))
+  writeFileSync(join(profile, 'cordis.patch.yml'), `
+- insert:
+    - id: composed-provider
+      name: composed-provider
+`)
+  writeFileSync(join(provider, 'package.json'), JSON.stringify({ name: 'composed-provider' }))
+
+  const configured = configuredProfileCandidates('custom', profile)
+  expect(configured).toContain(join(provider, 'package.json'))
+  expect(existsSync(join(home, 'profiles', 'node_modules'))).toBe(false)
+  discoverProfile(profile, false, configured)
+  expect(currentProfile().plugins.map(plugin => plugin.name)).toContain('composed-provider')
+  await expect(beginStartupUpdate([{ name: 'composed-provider', entryIds: ['composed-provider'] }]).commit())
+    .resolves.toBeUndefined()
+})
+
+test('reloads a provider whose patch target changes', async () => {
   const profile = join(root, 'retarget-profile')
   const provider = join(profile, 'node_modules', 'retargeter')
   const firstTarget = join(root, 'retarget-first')
@@ -1256,12 +1432,49 @@ module.exports = {
   expect(readFileSync(join(firstTarget, 'lib/index.js'), 'utf8')).toContain('value = 2')
 
   writePatch('retarget-second', 3)
-  synchronizeProfile(profile)
+  const transaction = beginPluginUpdate()
+  expect([...transaction.targets].map(([name, files]) => [name, [...files]])).toEqual([
+    ['retarget-first', ['lib/index.js']],
+    ['retarget-second', ['lib/index.js']],
+  ])
+  await transaction.commit()
   expect(readFileSync(join(firstTarget, 'lib/index.js'), 'utf8')).toContain('value = 1')
   expect(readFileSync(join(secondTarget, 'lib/index.js'), 'utf8')).toContain('value = 3')
 })
 
-test('reloads a provider when its local CommonJS helper changes', () => {
+test('rejects a Patch graph change during plugin startup without advancing the generation', () => {
+  const profile = join(root, 'startup-graph-drift-profile')
+  const provider = join(profile, 'node_modules', 'startup-graph-provider')
+  const target = join(profile, 'node_modules', 'startup-graph-target')
+  mkdirSync(provider, { recursive: true })
+  mkdirSync(join(target, 'lib'), { recursive: true })
+  writeFileSync(join(profile, 'package.json'), JSON.stringify({
+    dependencies: { 'startup-graph-provider': '1', 'startup-graph-target': '1' },
+  }))
+  writeFileSync(join(provider, 'package.json'), JSON.stringify({
+    name: 'startup-graph-provider', dsh: { harmony: { patches: ['./patch.cjs'] } },
+  }))
+  const writePatch = (value: number): void => writeFileSync(join(provider, 'patch.cjs'), `
+module.exports = {
+  id: 'startup-graph', target: { package: 'startup-graph-target', file: 'lib/index.js' },
+  select: 'NumericLiteral', expect: 1,
+  apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '${value}') },
+}
+`)
+  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'startup-graph-target', version: '1.0.0' }))
+  writeFileSync(join(target, 'lib/index.js'), 'export const value = 1\n')
+  writePatch(2)
+  synchronizeProfile(profile)
+  const generationBefore = getPatchStatuses()[0].generation
+
+  writePatch(3)
+  expect(() => beginStartupUpdate([{ name: 'startup-graph-provider', entryIds: ['provider'] }]))
+    .toThrow('Patch graph changed during startup; restart is required')
+  expect(getPatchStatuses()[0].generation).toBe(generationBefore)
+  expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 2')
+})
+
+test('reloads a provider when its local CommonJS helper changes', async () => {
   const profile = join(root, 'provider-helper-profile')
   const provider = join(profile, 'node_modules', 'provider-helper')
   const target = join(profile, 'node_modules', 'provider-helper-target')
@@ -1290,7 +1503,7 @@ module.exports = {
 
   writeManifest('2.0.0')
   writeFileSync(join(provider, 'value.cjs'), 'module.exports = 3\n')
-  beginPluginUpdate(['provider-helper', 'provider-helper-target'], true).commit()
+  await beginPluginUpdate(true).commit()
   expect(readFileSync(join(target, 'lib/index.js'), 'utf8')).toContain('value = 3')
 })
 
@@ -1321,7 +1534,7 @@ test('restores the CommonJS module cache when a reload fails', async () => {
   expect(require(entryFile).value).toBe(2)
 })
 
-test('ignores plugin lifecycle events emitted by Harmony reloads', async () => {
+test('does not reload a Provider entry when only its Patch graph changes', async () => {
   const profile = join(root, 'provider-retry-profile')
   const provider = join(profile, 'node_modules', 'provider-retry')
   const target = join(profile, 'node_modules', 'provider-retry-target')
@@ -1402,7 +1615,7 @@ module.exports = {
   writeFileSync(join(provider, 'shared.cjs'), 'module.exports = { value: 2 }\n')
   notifyPlugin({})
   for (let index = 0; index < 8; index += 1) await new Promise<void>(resolve => setImmediate(resolve))
-  expect(candidateStarts).toBe(1)
+  expect(candidateStarts).toBe(0)
   expect(providerEntry.fiber.runtime.callback).toBe(runningProvider)
   for (const dispose of disposers.reverse()) dispose()
 })
@@ -1515,7 +1728,18 @@ module.exports = [{
   writeFileSync(join(clientTarget, 'lib/client.js'), 'export const value = 1\n')
   writeFileSync(join(secondClientTarget, 'package.json'), JSON.stringify({ name: 'web-transaction-client-b', version: '1.0.0' }))
   writeFileSync(join(secondClientTarget, 'lib/client.js'), 'export const value = 1\n')
-  synchronizeProfile(profile)
+  synchronizeProfile(profile, [
+    'dsh-harmony',
+    'web-transaction-provider',
+    'web-transaction-target',
+    'web-transaction-client',
+    'web-transaction-client-b',
+  ])
+  writeFileSync(join(profile, 'harmony.json'), JSON.stringify({
+    order: currentProfile().order,
+    patchOrder: currentProfile().patchOrder,
+    disabled: currentProfile().disabled,
+  }))
 
   const previousPlugin = () => {}
   const nextPlugin = () => {}
@@ -1592,16 +1816,35 @@ module.exports = [{
     await routes.get('/dsh-harmony/runtime')({ method: 'GET' }, result)
     return JSON.parse(result.body).reload
   }
-  const desired = ['dsh-harmony', 'web-transaction-target', 'web-transaction-provider']
+  const desired = [
+    'dsh-harmony',
+    'web-transaction-target',
+    'web-transaction-provider',
+    'web-transaction-client',
+    'web-transaction-client-b',
+  ]
   expect(harmony.profile()).toMatchObject({
+    revision: 0,
     dir: profile,
-    order: ['dsh-harmony', 'web-transaction-provider', 'web-transaction-target'],
+    order: [
+      'dsh-harmony',
+      'web-transaction-provider',
+      'web-transaction-target',
+      'web-transaction-client',
+      'web-transaction-client-b',
+    ],
     plugins: expect.arrayContaining([
       expect.objectContaining({ name: 'web-transaction-provider', patchCount: 3, patches: ['./patch.cjs'] }),
     ]),
   })
-  await expect(harmony.updateProfile({ order: desired.slice(0, -1) }))
+  await expect(harmony.updateProfile({ order: desired.filter(name => name !== 'web-transaction-provider') }))
     .rejects.toThrow('omits installed package "web-transaction-provider"')
+  expect(readFileSync(join(profile, 'harmony.json'), 'utf8')).toBe(stateBefore)
+
+  const stale = response()
+  await routes.get('/dsh-harmony/profile')(jsonRequest({ expectedRevision: 1, order: desired }), stale)
+  expect(stale.status).toBe(409)
+  expect(JSON.parse(stale.body).error).toContain('expected revision 1, now 0')
   expect(readFileSync(join(profile, 'harmony.json'), 'utf8')).toBe(stateBefore)
 
   failNext = true
@@ -1610,7 +1853,7 @@ module.exports = [{
   expect(failed.status).toBe(500)
   expect(await runtimeStatus()).toMatchObject({ state: 'failed', error: 'transaction reload failed' })
   expect(readFileSync(join(profile, 'harmony.json'), 'utf8')).toBe(stateBefore)
-  expect(entry.fiber.runtime.callback).toBe(nextPlugin)
+  expect(entry.fiber.runtime.callback).toBe(previousPlugin)
 
   const succeeded = response()
   await routes.get('/dsh-harmony/profile')(request(desired), succeeded)
@@ -1763,7 +2006,8 @@ module.exports = {
   }))
   expect((globalThis as any).__nonWebStartupApplications).toBe(1)
 
-  const addressFile = join(profile, '.dsh-harmony-runtime.json')
+  const addressDirectory = join(profile, '.dsh-harmony-runtimes')
+  const addressFile = join(addressDirectory, readdirSync(addressDirectory)[0]!)
   const address = JSON.parse(readFileSync(addressFile, 'utf8')) as { url: string }
   if (process.platform !== 'win32') expect(statSync(addressFile).mode & 0o777).toBe(0o600)
   expect((await fetch(`${address.url}/dsh-harmony/status`)).status).toBe(401)

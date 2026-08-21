@@ -29,7 +29,7 @@ import {
 import { runHarmonyTui } from './tui.js'
 import { terminalLocale, terminalText } from './locale.js'
 import type { HarmonyInspection, HarmonyProfileUpdateResult } from './index.js'
-import { initProfile, PROFILE_TEMPLATES, resolveProfileDir } from './dsh.js'
+import { configuredProfileCandidates, initProfile, PROFILE_TEMPLATES, resolveProfileDir } from './dsh.js'
 import { launchDsh } from './launcher.js'
 
 const locale = terminalLocale()
@@ -108,9 +108,15 @@ if (isHarmonyCommand) {
   }
   const command = harmonyArgs[0]
   const json = harmonyArgs.includes('--json')
+  const offlineCandidates = configuredProfileCandidates(profile!, profileDir!)
+  const discoverOfflineProfile = (): void => discoverProfile(
+    profileDir!,
+    false,
+    offlineCandidates,
+  )
   const offlineInspection = (): { mode: 'offline'; profile: ReturnType<typeof createHarmonyProfileView> } & HarmonyInspection => {
     installModuleHooks()
-    discoverProfile(profileDir!)
+    discoverOfflineProfile()
     inspectPatchTargets()
     const patches = getPatchStatuses()
     const patchCounts = new Map(currentProfile().plugins.map(plugin => [plugin.name, 0]))
@@ -329,7 +335,7 @@ if (isHarmonyCommand) {
         if (enabled) disabled.delete(target)
         else disabled.add(target)
       }
-      result = await updateHarmonyProfile(profileDir!, { disabled: [...disabled] })
+      result = await updateHarmonyProfile(profileDir!, { disabled: [...disabled] }, offlineCandidates)
       patches = offlineInspection().patches
     }
     if (json) await writeStdout(`${JSON.stringify({ result, patches }, null, 2)}\n`)
@@ -398,7 +404,7 @@ if (isHarmonyCommand) {
       next.splice(referenceIndex + (relation === '--before' ? 0 : 1), 0, key)
     }
 
-    const result = await updateHarmonyProfile(profileDir!, { patchOrder: next })
+    const result = await updateHarmonyProfile(profileDir!, { patchOrder: next }, offlineCandidates)
     const violations = violationsOf(next)
     if (json) {
       await writeStdout(`${JSON.stringify({ result, patchOrder: next, violations }, null, 2)}\n`)
@@ -473,7 +479,7 @@ if (isHarmonyCommand) {
       next = pinHarmonyOrder(next)
     }
 
-    const result = await updateHarmonyProfile(profileDir!, { order: next })
+    const result = await updateHarmonyProfile(profileDir!, { order: next }, offlineCandidates)
     const violations = violationsOf(next)
     if (json) await writeStdout(`${JSON.stringify({ result, order: next, violations }, null, 2)}\n`)
     else await writeStdout(text(
@@ -490,9 +496,9 @@ if (isHarmonyCommand) {
   const live = await readHarmonyRuntime(profileDir!)
   if (live === undefined) {
     installModuleHooks()
-    discoverProfile(profileDir!)
+    discoverOfflineProfile()
   }
-  await runHarmonyTui(profileDir!)
+  await runHarmonyTui(profileDir!, process.stdin, process.stdout, locale, offlineCandidates)
   process.exit(0)
 }
 

@@ -38,8 +38,8 @@ try {
     transformMs: number
   }
   assert.equal(performance.operation, 'startup')
-  assert.equal(performance.targetPackages, 0)
-  assert.equal(performance.targetFiles, 0)
+  assert.equal(performance.targetPackages, 1)
+  assert.equal(performance.targetFiles, 1)
   assert.ok(performance.prepareMs >= 0)
   assert.ok(performance.transformMs >= 0)
 

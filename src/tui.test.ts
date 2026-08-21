@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { EventEmitter } from 'node:events'
 import type { AddressInfo } from 'node:net'
@@ -223,9 +223,26 @@ test('the unified profile API sends live updates through the published runtime a
   await expect(updateRuntimeProfile(profile, { order: ['b'] })).rejects.toThrow('does not match')
   mismatch = false
   dispose()
-  expect(existsSync(join(profile, '.dsh-harmony-runtime.json'))).toBe(false)
+  expect(existsSync(join(profile, '.dsh-harmony-runtimes'))).toBe(false)
   expect(await updateRuntimeProfile(profile, { order: ['a'] })).toBeUndefined()
 
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+  rmSync(profile, { recursive: true })
+})
+
+test('each runtime owns an independent address record', () => {
+  const profile = mkdtempSync(join(tmpdir(), 'dsh-harmony-control-address-'))
+  const first = publishRuntimeAddress(profile, 'http://127.0.0.1:1001', 'first-token')
+  const second = publishRuntimeAddress(profile, 'http://127.0.0.1:1002', 'second-token')
+  const directory = join(profile, '.dsh-harmony-runtimes')
+
+  expect(readdirSync(directory)).toHaveLength(2)
+  second()
+  expect(readdirSync(directory)).toHaveLength(1)
+  expect(JSON.parse(readFileSync(join(directory, readdirSync(directory)[0]!), 'utf8'))).toMatchObject({
+    token: 'first-token', url: 'http://127.0.0.1:1001',
+  })
+  first()
+  expect(existsSync(directory)).toBe(false)
   rmSync(profile, { recursive: true })
 })

@@ -744,6 +744,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
     }
 
     interface ProfileView {
+      revision: number
       order: string[]
       patchOrder: string[]
       disabled: string[]
@@ -1490,6 +1491,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       }
 
       const save = async () => {
+        if (view === null) return
         setSaving(true)
         setError('')
         try {
@@ -1498,10 +1500,13 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
           const response = await fetch('/dsh-harmony/profile', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ patchOrder, disabled }),
+            body: JSON.stringify({ expectedRevision: view.revision, patchOrder, disabled }),
           })
           const next = await response.json() as ProfileView & { error?: string }
-          if (!response.ok) throw new Error(next.error ?? `${response.status}`)
+          if (!response.ok) {
+            if (response.status === 409) await load()
+            throw new Error(next.error ?? `${response.status}`)
+          }
           applyPatchStyleOrder(next)
           setView(next)
           setSavedPatchOrder(next.patchOrder)

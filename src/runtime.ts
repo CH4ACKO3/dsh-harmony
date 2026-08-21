@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, realpathSync, watchFile, unwatchFile } from 'node:fs'
 import { createRequire, findPackageJSON } from 'node:module'
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { dirname, extname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL, URL } from 'node:url'
 import semver from 'semver'
 import ts from 'typescript'
@@ -23,6 +23,7 @@ import {
   type HarmonyActivePlugin,
 } from './compatibility.js'
 import {
+  HARMONY_PLUGIN,
   HARMONY_STATE_FILE,
   groupHarmonyPatchOrder,
   pinHarmonyOrder,
@@ -96,7 +97,7 @@ export interface ProfileTransaction {
   generation: number
   profile: HarmonyProfile
   targets: PatchTargets
-  commit(): void
+  commit(): Promise<void>
   rollback(): void
 }
 
@@ -134,6 +135,8 @@ const generationStates = new Map<number, GenerationState>([[0, {
   providers: [], order: [], patchOrder: [], disabled: new Set(), targetFileSuffixes: new Set(),
 }]])
 let activeProfileDir: string | undefined
+let requestedProfilePackages: string[] | undefined
+let additionalProfilePackages: string[] = []
 let profileSnapshot: HarmonyProfile | undefined
 let providerOrder: string[] = []
 let patchOrder: string[] = []
@@ -419,16 +422,28 @@ function beginCommonJSCacheUpdate(matches: (filename: string) => boolean): () =>
   }
 }
 
-function providerFiles(declaredFiles: string[], directory: string): string[] {
+function providerFiles(declaredFiles: string[], directory: string, observed?: Set<string>): string[] {
   const files = new Set<string>()
+  const observeDependencyCandidates = (filename: string, request: string): void => {
+    if (observed === undefined) return
+    const candidate = resolve(dirname(filename), request)
+    if (!insideDirectory(directory, candidate)) return
+    observed.add(candidate)
+    if (extname(candidate) !== '') return
+    for (const suffix of ['.js', '.json', '.node']) observed.add(`${candidate}${suffix}`)
+    observed.add(join(candidate, 'package.json'))
+    for (const name of ['index.js', 'index.json', 'index.node']) observed.add(join(candidate, name))
+  }
   const visitFile = (filename: string): void => {
     if (files.has(filename)) return
     files.add(filename)
+    observed?.add(filename)
     if (!isJavaScript(filename)) return
     const sourceFile = parseSource(filename, nativeReadFileSync(filename, 'utf8'))
     const visitNode = (node: ts.Node): void => {
       if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'require'
         && node.arguments.length === 1 && ts.isStringLiteral(node.arguments[0]) && node.arguments[0].text.startsWith('.')) {
+        observeDependencyCandidates(filename, node.arguments[0].text)
         const dependency = createRequire(filename).resolve(node.arguments[0].text)
         if (insideDirectory(directory, dependency)) visitFile(dependency)
       }
@@ -440,10 +455,15 @@ function providerFiles(declaredFiles: string[], directory: string): string[] {
   return [...files]
 }
 
-function prepareProvider(info: PackageInfo, current?: ProviderRecord, stage = false): ProviderRecord | undefined {
+function prepareProvider(
+  info: PackageInfo,
+  current?: ProviderRecord,
+  stage = false,
+  observed?: Set<string>,
+): ProviderRecord | undefined {
   if (info.harmony?.patches === undefined) return undefined
   const declaredFiles = info.harmony.patches.map(declared => realpathSync(join(info.dir, declared)))
-  const files = providerFiles(declaredFiles, info.dir)
+  const files = providerFiles(declaredFiles, info.dir, observed)
   const signature = providerSignature(info, files)
   if (current?.signature === signature) return current
   const registered: RegisteredPatch[] = []
@@ -514,11 +534,6 @@ export function discoverPackage(packageDir: string): void {
     providerOrder.push(info.name)
   }
   patchOrder = reconcilePatchOrder(patchOrder, providerOrder, providers.values())
-  if (activeProfileDir !== undefined) saveHarmonyState(activeProfileDir, {
-    order: providerOrder,
-    patchOrder,
-    disabled: [...disabledPatchKeys],
-  })
   notify(targets)
 }
 
@@ -526,13 +541,14 @@ export function synchronizeProfile(
   profileDir: string,
   installed?: string[],
   enabledPlugins?: HarmonyActivePlugin[],
+  additional: string[] = [],
 ): HarmonyProfile {
   packageCache.clear()
   const previousTargets = allTargets()
   const previousOrder = providerOrder
   const previousPatchOrder = patchOrder
   const previousDisabled = disabledPatchKeys
-  const profile = synchronizeHarmonyProfile(profileDir, installed, false, enabledPlugins)
+  const profile = synchronizeHarmonyProfile(profileDir, installed, enabledPlugins, additional)
   const harmonyProviders = profile.plugins.filter(plugin => plugin.patches.length > 0)
   declaredProviderFiles = new Set([
     ...profile.plugins.map(plugin => join(plugin.dir, 'package.json')),
@@ -556,7 +572,6 @@ export function synchronizeProfile(
     mergeTargets(changedTargets, previousTargets)
     mergeTargets(changedTargets, currentTargets)
 
-    synchronizeHarmonyProfile(profileDir, installed, true, enabledPlugins)
     providers.clear()
     for (const [name, record] of nextProviders) providers.set(name, record)
     loadedPatchFiles.clear()
@@ -565,16 +580,14 @@ export function synchronizeProfile(
       for (const filename of record.files) loadedPatchFiles.add(filename)
     }
     activeProfileDir = profileDir
+    requestedProfilePackages = installed === undefined ? undefined : [...installed]
+    additionalProfilePackages = [...additional]
     activePlugins = enabledPlugins ?? profile.plugins.map(plugin => ({ name: plugin.name, entryIds: [] }))
     providerOrder = profile.order
     patchOrder = reconcilePatchOrder(profile.patchOrder, providerOrder, nextProviders.values())
     disabledPatchKeys = new Set(profile.disabled)
     const patchOrderChanged = previousPatchOrder.length !== patchOrder.length
       || previousPatchOrder.some((key, index) => key !== patchOrder[index])
-    if (profile.patchOrder.length !== patchOrder.length
-      || profile.patchOrder.some((key, index) => key !== patchOrder[index])) {
-      saveHarmonyState(profileDir, { order: providerOrder, patchOrder, disabled: profile.disabled })
-    }
     if (registryChanged || orderChanged || patchOrderChanged || disabledChanged) notify(changedTargets)
     profileSnapshot = { ...profile, patchOrder: [...patchOrder] }
     return profileSnapshot
@@ -608,33 +621,108 @@ function replaceProviders(next: Map<string, ProviderRecord>): void {
   }
 }
 
-export function beginPluginUpdate(
-  installed: string[],
-  force = false,
-  enabledPlugins: HarmonyActivePlugin[] = installed.map(name => ({ name, entryIds: [] })),
-): ProfileTransaction {
+function preparePluginProfile(
+  enabledPlugins: HarmonyActivePlugin[],
+  additional: string[] = additionalProfilePackages,
+): {
+  profile: HarmonyProfile
+  providers: Map<string, ProviderRecord>
+  declared: Set<string>
+  patchOrder: string[]
+} {
   packageCache.clear()
-  const profile = synchronizeHarmonyProfile(activeProfileDir!, installed, false, enabledPlugins)
+  const profile = synchronizeHarmonyProfile(
+    activeProfileDir!,
+    requestedProfilePackages,
+    enabledPlugins,
+    additional,
+  )
   const harmonyProviders = profile.plugins.filter(plugin => plugin.patches.length > 0)
-  const nextDeclared = new Set([
+  const declared = new Set([
     ...profile.plugins.map(plugin => join(plugin.dir, 'package.json')),
     ...harmonyProviders.flatMap(provider => provider.patches.map(file => join(provider.dir, file))),
   ])
+  const candidateFiles = new Set(declared)
   const nextProviders = new Map<string, ProviderRecord>()
   try {
     for (const provider of harmonyProviders) {
       const info = readPackageInfo(provider.dir)
-      const record = prepareProvider(info, providers.get(provider.name), true)
+      const record = prepareProvider(info, providers.get(provider.name), true, candidateFiles)
       if (record !== undefined) nextProviders.set(provider.name, record)
     }
   } catch (error) {
     for (const restore of [...stagedProviderCaches.values()].reverse()) restore()
     stagedProviderCaches.clear()
-    declaredProviderFiles = nextDeclared
+    declaredProviderFiles = candidateFiles
     refreshWatchedFiles?.()
     throw error
   }
   const nextPatchOrder = reconcilePatchOrder(profile.patchOrder, profile.order, nextProviders.values())
+  return {
+    profile: { ...profile, patchOrder: nextPatchOrder },
+    providers: nextProviders,
+    declared,
+    patchOrder: nextPatchOrder,
+  }
+}
+
+function sameProviderGraph(nextProviders: Map<string, ProviderRecord>, nextPatchOrder: string[], nextDisabled: string[]): boolean {
+  return providers.size === nextProviders.size
+    && [...nextProviders].every(([name, record]) => providers.get(name) === record)
+    && patchOrder.length === nextPatchOrder.length
+    && patchOrder.every((key, index) => key === nextPatchOrder[index])
+    && disabledPatchKeys.size === nextDisabled.length
+    && nextDisabled.every(key => disabledPatchKeys.has(key))
+}
+
+export function beginStartupUpdate(enabledPlugins: HarmonyActivePlugin[]): ProfileTransaction {
+  const next = preparePluginProfile(enabledPlugins)
+  if (!sameProviderGraph(next.providers, next.patchOrder, next.profile.disabled)) {
+    for (const restore of [...stagedProviderCaches.values()].reverse()) restore()
+    stagedProviderCaches.clear()
+    throw new Error('dsh-harmony: Patch graph changed during startup; restart is required')
+  }
+  const orderChanged = providerOrder.length !== next.profile.order.length
+    || providerOrder.some((name, index) => name !== next.profile.order[index])
+  let active = true
+  return {
+    generation,
+    profile: next.profile,
+    targets: new Map(),
+    async commit() {
+      if (!active) return
+      if (orderChanged) await saveHarmonyState(activeProfileDir!, {
+        order: next.profile.order,
+        patchOrder,
+        disabled: [...disabledPatchKeys],
+      })
+      declaredProviderFiles = next.declared
+      providerOrder = next.profile.order
+      activePlugins = enabledPlugins
+      profileSnapshot = next.profile
+      stagedProviderCaches.clear()
+      refreshWatchedFiles?.()
+      active = false
+    },
+    rollback() {
+      if (!active) return
+      for (const restore of [...stagedProviderCaches.values()].reverse()) restore()
+      stagedProviderCaches.clear()
+      active = false
+    },
+  }
+}
+
+export function beginPluginUpdate(
+  force = false,
+  enabledPlugins: HarmonyActivePlugin[] = activePlugins,
+  additional: string[] = additionalProfilePackages,
+): ProfileTransaction {
+  const next = preparePluginProfile(enabledPlugins, additional)
+  const profile = next.profile
+  const nextProviders = next.providers
+  const nextDeclared = next.declared
+  const nextPatchOrder = next.patchOrder
   const nextProfile = { ...profile, patchOrder: nextPatchOrder }
   const previous = {
     providers: new Map(providers),
@@ -647,32 +735,47 @@ export function beginPluginUpdate(
     statuses: patchStatuses,
     bindings: semanticBindings,
   }
+  const orderChanged = previous.order.length !== profile.order.length
+    || previous.order.some((name, index) => name !== profile.order[index])
   const changed = previous.providers.size !== nextProviders.size
     || [...nextProviders].some(([name, record]) => previous.providers.get(name) !== record)
-    || previous.order.length !== profile.order.length
-    || previous.order.some((name, index) => name !== profile.order[index])
     || previous.patchOrder.length !== nextPatchOrder.length
     || previous.patchOrder.some((key, index) => key !== nextPatchOrder[index])
     || previous.disabled.size !== profile.disabled.length
     || profile.disabled.some(key => !previous.disabled.has(key))
   if (!changed && !force) {
+    let active = true
     return {
       generation,
       profile: nextProfile,
       targets: new Map(),
-      commit() {
+      async commit() {
+        if (!active) return
+        if (orderChanged) await saveHarmonyState(activeProfileDir!, {
+          order: profile.order,
+          patchOrder,
+          disabled: [...disabledPatchKeys],
+        })
+        declaredProviderFiles = nextDeclared
+        providerOrder = profile.order
+        additionalProfilePackages = [...additional]
         activePlugins = enabledPlugins
         profileSnapshot = nextProfile
+        stagedProviderCaches.clear()
+        refreshWatchedFiles?.()
+        active = false
       },
-      rollback() {},
+      rollback() {
+        if (!active) return
+        for (const restore of [...stagedProviderCaches.values()].reverse()) restore()
+        stagedProviderCaches.clear()
+        active = false
+      },
     }
   }
   const targets: PatchTargets = new Map()
   mergeTargets(targets, targetsOf(previous.providers.values()))
   mergeTargets(targets, targetsOf(nextProviders.values()))
-  for (const name of new Set([...previous.providers.keys(), ...nextProviders.keys()])) {
-    if (previous.providers.get(name) !== nextProviders.get(name)) addTarget(targets, name, 'package.json')
-  }
   try {
     replaceProviders(nextProviders)
     declaredProviderFiles = nextDeclared
@@ -702,14 +805,15 @@ export function beginPluginUpdate(
     generation: candidateGeneration,
     profile: nextProfile,
     targets,
-    commit() {
+    async commit() {
       if (!active) return
       pruneSemanticBindings(candidateGeneration)
-      saveHarmonyState(activeProfileDir!, {
+      await saveHarmonyState(activeProfileDir!, {
         order: profile.order,
         patchOrder,
         disabled: profile.disabled,
       })
+      additionalProfilePackages = [...additional]
       activePlugins = enabledPlugins
       profileSnapshot = nextProfile
       refreshWatchedFiles?.()
@@ -782,10 +886,10 @@ export function beginProfileUpdate(input: {
     generation: candidateGeneration,
     profile: { ...currentProfile(), order, patchOrder: nextPatchOrder, disabled: [...disabled] },
     targets: allTargets(),
-    commit() {
+    async commit() {
       if (!active) return
       pruneSemanticBindings(candidateGeneration)
-      saveHarmonyState(activeProfileDir!, { order, patchOrder: nextPatchOrder, disabled: [...disabled] })
+      await saveHarmonyState(activeProfileDir!, { order, patchOrder: nextPatchOrder, disabled: [...disabled] })
       retainGeneration(candidateGeneration)
       pendingStatusGenerations.delete(candidateGeneration)
       active = false
@@ -1359,6 +1463,11 @@ export function inspectPatchTargets(): HarmonyPatchInspection[] {
   return getPatchInspections()
 }
 
+export function inspectUnresolvedPatchTargets(): HarmonyPatchInspection[] {
+  if (generationStates.get(generation)?.targetIndexComplete === true) return getPatchInspections()
+  return inspectPatchTargets()
+}
+
 function inspectTargets(order: string[], disabled: Set<string>, bind: boolean): void {
   const profileManifest = pathToFileURL(join(activeProfileDir!, 'package.json'))
   const allPatches = orderedPatches([...providers.values()].flatMap(provider => provider.patches), order)
@@ -1543,8 +1652,11 @@ export function prepareModuleReload(
   return { restore, load }
 }
 
-export function discoverProfile(profileDir: string): void {
-  synchronizeProfile(profileDir)
+export function discoverProfile(profileDir: string, includeHarmony = false, configured: string[] = []): void {
+  synchronizeProfile(profileDir, undefined, undefined, [
+    ...configured,
+    ...(includeHarmony ? [HARMONY_PLUGIN] : []),
+  ])
 }
 
 export function packageNameOf(specifier: string): string | undefined {
