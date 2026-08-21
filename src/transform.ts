@@ -28,6 +28,47 @@ export function parseSource(filename: string, source: string): ts.SourceFile {
   return ts.createSourceFile(filename, source, ts.ScriptTarget.Latest, true, scriptKind)
 }
 
+export interface SourceDelta {
+  start: number
+  removed: number
+  inserted: string
+}
+
+function copyStringRange(source: string, start: number, end: number): string {
+  let copied = ''
+  for (let offset = start; offset < end; offset += 8_192) {
+    const length = Math.min(8_192, end - offset)
+    const codes = new Uint16Array(length)
+    for (let index = 0; index < length; index += 1) codes[index] = source.charCodeAt(offset + index)
+    copied += String.fromCharCode(...codes)
+  }
+  return copied
+}
+
+export function sourceDelta(before: string, after: string): SourceDelta {
+  if (before === after) return { start: before.length, removed: 0, inserted: '' }
+  let start = 0
+  const shared = Math.min(before.length, after.length)
+  while (start < shared && before.charCodeAt(start) === after.charCodeAt(start)) start += 1
+  let beforeEnd = before.length
+  let afterEnd = after.length
+  while (beforeEnd > start && afterEnd > start
+    && before.charCodeAt(beforeEnd - 1) === after.charCodeAt(afterEnd - 1)) {
+    beforeEnd -= 1
+    afterEnd -= 1
+  }
+  return {
+    start,
+    removed: beforeEnd - start,
+    inserted: copyStringRange(after, start, afterEnd),
+  }
+}
+
+export function applySourceDelta(source: string, delta: SourceDelta): string {
+  if (delta.removed === 0 && delta.inserted.length === 0) return source
+  return source.slice(0, delta.start) + delta.inserted + source.slice(delta.start + delta.removed)
+}
+
 const SELECTOR_CACHE_LIMIT = 256
 const selectorCache = new Map<string, Selector>()
 
@@ -48,22 +89,18 @@ function query(sourceFile: ts.SourceFile, selector: string): ts.Node[] {
   return tsquery(sourceFile, parsedSelector(selector))
 }
 
-function sourceFileFor(filename: string, source: string, previous?: ts.SourceFile): ts.SourceFile {
+function sourceFileFor(
+  filename: string,
+  source: string,
+  previous?: ts.SourceFile,
+  previousDelta?: SourceDelta,
+): ts.SourceFile {
   if (previous === undefined) return parseSource(filename, source)
   if (previous.text === source) return previous
-  let start = 0
-  const shared = Math.min(previous.text.length, source.length)
-  while (start < shared && previous.text.charCodeAt(start) === source.charCodeAt(start)) start += 1
-  let previousEnd = previous.text.length
-  let sourceEnd = source.length
-  while (previousEnd > start && sourceEnd > start
-    && previous.text.charCodeAt(previousEnd - 1) === source.charCodeAt(sourceEnd - 1)) {
-    previousEnd -= 1
-    sourceEnd -= 1
-  }
+  const delta = previousDelta ?? sourceDelta(previous.text, source)
   return ts.updateSourceFile(previous, source, ts.createTextChangeRange(
-    ts.createTextSpan(start, previousEnd - start),
-    sourceEnd - start,
+    ts.createTextSpan(delta.start, delta.removed),
+    delta.inserted.length,
   ))
 }
 
@@ -96,16 +133,18 @@ export function applySourcePatch(
   original: string,
   registered: PatchIdentity,
   patch: HarmonySourcePatch,
-  history: ReadonlyArray<{ owner: string; source: string }>,
+  history: ReadonlyArray<{ owner: string }>,
+  historySources: () => ReadonlyArray<{ owner: string; source: string }>,
   previousSourceFile?: ts.SourceFile,
-): { source: string; matches: number; sourceFile: ts.SourceFile } {
-  const sourceFile = sourceFileFor(filename, source, previousSourceFile)
+  previousDelta?: SourceDelta,
+): { source: string; matches: number; sourceFile: ts.SourceFile; delta: SourceDelta } {
+  const sourceFile = sourceFileFor(filename, source, previousSourceFile, previousDelta)
   const nodes = query(sourceFile, patch.select)
   try {
     expectedMatches(registered, patch, nodes.length, target)
   } catch (error) {
     if (nodes.length === 0) {
-      const conflicting = conflictOwner(filename, original, patch.select, history)
+      const conflicting = conflictOwner(filename, original, patch.select, historySources())
       const reason = conflicting === undefined
         ? 'the selector matched no code in the original target'
         : `plugin ${JSON.stringify(conflicting)} removed or changed the selected code`
@@ -136,7 +175,8 @@ export function applySourcePatch(
       `  error: ${cause instanceof Error ? cause.message : String(cause)}`,
     ].join('\n'), { cause })
   }
-  return { source: edit.hasChanged() ? edit.toString() : source, matches: nodes.length, sourceFile }
+  const nextSource = edit.hasChanged() ? edit.toString() : source
+  return { source: nextSource, matches: nodes.length, sourceFile, delta: sourceDelta(source, nextSource) }
 }
 
 interface SourceTraceMetadata {

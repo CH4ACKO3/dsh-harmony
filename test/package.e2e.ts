@@ -43,6 +43,7 @@ try {
   const config = run(dsh, ['web', '--dump-config'], env)
   assert.match(config, /dsh-harmony-bootstrap/)
   assert.match(config, /id: harmony\s+name: dsh-harmony/)
+  assert.match(config, /id: harmony-settings\s+name: dsh-harmony\/settings/)
 } finally {
   rmSync(root, { recursive: true })
 }

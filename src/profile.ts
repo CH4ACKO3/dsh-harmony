@@ -27,6 +27,7 @@ export interface InstalledPlugin extends HarmonyProvider {
 
 export interface HarmonyProfile {
   dir: string
+  workerThreads: number
   order: string[]
   patchOrder: string[]
   disabled: string[]
@@ -54,6 +55,7 @@ export interface HarmonyProfilePluginView {
 export interface HarmonyProfileView {
   revision: number
   dir: string
+  workerThreads: number
   order: string[]
   patchOrder: string[]
   disabled: string[]
@@ -65,6 +67,7 @@ export interface HarmonyProfileView {
 
 export interface HarmonyProfileUpdate {
   expectedRevision?: number
+  workerThreads?: number
   order?: string[]
   patchOrder?: string[]
   disabled?: string[]
@@ -161,6 +164,7 @@ function installedPlugins(profileDir: string, requested?: string[], additional: 
 }
 
 export interface HarmonyState {
+  workerThreads: number
   order: string[]
   patchOrder: string[]
   disabled: string[]
@@ -177,9 +181,10 @@ export class HarmonyProfileConflictError extends Error {
 
 function readState(profileDir: string): HarmonyState {
   const path = join(profileDir, HARMONY_STATE_FILE)
-  if (!existsSync(path)) return { order: [], patchOrder: [], disabled: [] }
+  if (!existsSync(path)) return { workerThreads: 1, order: [], patchOrder: [], disabled: [] }
   const state = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>
   return {
+    workerThreads: workerThreadCount(state.workerThreads ?? 1),
     order: stringList(state.order, 'order'),
     patchOrder: stringList(state.patchOrder ?? [], 'patchOrder'),
     disabled: stringList(state.disabled, 'disabled'),
@@ -192,6 +197,7 @@ export async function saveHarmonyState(profileDir: string, state: HarmonyState):
     readState(profileDir)
     await writeFileAtomic(path, `${JSON.stringify({
       order: pinHarmonyOrder(state.order),
+      workerThreads: state.workerThreads,
       patchOrder: state.patchOrder,
       disabled: state.disabled,
     }, null, 2)}\n`, { mode: 0o600 })
@@ -216,6 +222,7 @@ export function synchronizeHarmonyProfile(
   const order = pinHarmonyOrder(collected)
   return {
     dir: profileDir,
+    workerThreads: state.workerThreads,
     order,
     patchOrder: state.patchOrder,
     disabled: state.disabled,
@@ -232,6 +239,15 @@ function stringList(value: unknown, field: string): string[] {
     throw new TypeError(`dsh-harmony: profile ${field} must be an array of non-empty strings`)
   }
   return [...value]
+}
+
+export const MAX_HARMONY_WORKER_THREADS = 32
+
+function workerThreadCount(value: unknown): number {
+  if (!Number.isInteger(value) || (value as number) < 1 || (value as number) > MAX_HARMONY_WORKER_THREADS) {
+    throw new TypeError(`dsh-harmony: profile workerThreads must be an integer from 1 to ${MAX_HARMONY_WORKER_THREADS}`)
+  }
+  return value as number
 }
 
 function profileOrder(current: string[], input: unknown): string[] {
@@ -301,6 +317,7 @@ export function prepareHarmonyProfileUpdate(profile: HarmonyProfile, input: Harm
   const disabled = [...new Set(input.disabled === undefined ? profile.disabled : stringList(input.disabled, 'disabled'))]
   return {
     ...profile,
+    workerThreads: input.workerThreads === undefined ? profile.workerThreads : workerThreadCount(input.workerThreads),
     order,
     patchOrder: nextPatchOrder,
     disabled,
@@ -316,6 +333,7 @@ export function createHarmonyProfileView(
   return {
     revision,
     dir: profile.dir,
+    workerThreads: profile.workerThreads,
     order: [...profile.order],
     patchOrder: [...profile.patchOrder],
     disabled: [...profile.disabled],
@@ -391,6 +409,7 @@ export async function updateStoppedHarmonyProfile(
     input,
   )
   await saveHarmonyState(profileDir, {
+    workerThreads: candidate.workerThreads,
     order: candidate.order,
     patchOrder: candidate.patchOrder,
     disabled: candidate.disabled,

@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, realpathSync, watchFile, unwatchFile } from 'node:fs'
 import { createRequire, findPackageJSON } from 'node:module'
-import { dirname, extname, isAbsolute, join, relative, resolve } from 'node:path'
+import { dirname, extname, isAbsolute, join, posix, relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL, URL } from 'node:url'
+import { Worker } from 'node:worker_threads'
 import semver from 'semver'
 import ts from 'typescript'
 import type {
@@ -39,13 +40,16 @@ import type { HarmonyProfile } from './profile.js'
 import { installNodeFileTransforms, installNodeModuleHooks } from './hooks.js'
 import {
   applySourcePatch,
+  applySourceDelta,
   assertNoReplaceConflict,
   instrumentSemantic,
   instrumentSourceTraces,
   parseSource,
   semanticMatchCount,
+  sourceDelta,
   type BoundSemanticPatch,
   type BoundSourceTrace,
+  type SourceDelta,
 } from './transform.js'
 
 const nativeReadFileSync = readFileSync
@@ -80,7 +84,41 @@ interface TransformRecord {
   packageVersion: string
   source: string
   output: string
-  inspection: HarmonyPatchInspection
+  inspection: CompactPatchInspection
+}
+
+export interface ParallelInspectionTask {
+  profileDir: string
+  requestedProfilePackages?: string[]
+  additionalProfilePackages: string[]
+  activePlugins: HarmonyActivePlugin[]
+  order: string[]
+  disabled: string[]
+  keys: string[]
+  generation: number
+}
+
+export interface ParallelInspectionResult {
+  generation: number
+  records: TransformRecord[]
+  statuses: HarmonyPatchStatus[]
+  targetFiles: Array<[string, TargetFileRecord]>
+  targetIndexComplete: boolean
+  typescriptLoaderPackages: string[]
+}
+
+interface CompactPatchStep {
+  key: string
+  owner: string
+  matches: number
+  delta: SourceDelta
+}
+
+interface CompactPatchInspection {
+  package: string
+  file: string
+  final: string
+  steps: CompactPatchStep[]
 }
 
 interface TargetFileRecord {
@@ -152,9 +190,12 @@ let profileSnapshot: HarmonyProfile | undefined
 let providerOrder: string[] = []
 let patchOrder: string[] = []
 let disabledPatchKeys = new Set<string>()
+let workerThreads = 1
 let activePlugins: HarmonyActivePlugin[] = []
 let refreshWatchedFiles: (() => void) | undefined
 let startupPerformance: HarmonyStartupPerformance | undefined
+let parallelInspectionTaskGeneration = -1
+let inspectionWorkerPool: Worker[] = []
 
 export function recordStartupPerformance(value: HarmonyStartupPerformance): void {
   startupPerformance = value
@@ -168,6 +209,7 @@ export function consumeStartupPerformance(): HarmonyStartupPerformance | undefin
 
 const pluginUrl = new URL('./plugin.js', import.meta.url).href
 const indexUrl = new URL('./index.js', import.meta.url).href
+const settingsUrl = new URL('./settings.js', import.meta.url).href
 const manifestUrl = new URL('../package.json', import.meta.url).href
 
 function readPackageInfo(packageDir: string): PackageInfo {
@@ -596,6 +638,7 @@ export function synchronizeProfile(
   const previousOrder = providerOrder
   const previousPatchOrder = patchOrder
   const previousDisabled = disabledPatchKeys
+  const previousWorkerThreads = workerThreads
   const profile = synchronizeHarmonyProfile(profileDir, installed, enabledPlugins, additional)
   const harmonyProviders = profile.plugins.filter(plugin => plugin.patches.length > 0)
   declaredProviderFiles = new Set([
@@ -634,9 +677,11 @@ export function synchronizeProfile(
     providerOrder = profile.order
     patchOrder = reconcilePatchOrder(profile.patchOrder, providerOrder, nextProviders.values())
     disabledPatchKeys = new Set(profile.disabled)
+    workerThreads = profile.workerThreads
     const patchOrderChanged = previousPatchOrder.length !== patchOrder.length
       || previousPatchOrder.some((key, index) => key !== patchOrder[index])
     if (registryChanged || orderChanged || patchOrderChanged || disabledChanged) notify(changedTargets)
+    if (previousWorkerThreads !== workerThreads) transformCache.clear()
     profileSnapshot = { ...profile, patchOrder: [...patchOrder] }
     return profileSnapshot
   } finally {
@@ -649,6 +694,7 @@ export function currentProfile(): HarmonyProfile {
   return {
     ...profileSnapshot,
     order: [...providerOrder],
+    workerThreads,
     patchOrder: [...patchOrder],
     disabled: [...disabledPatchKeys],
     compatibility: evaluatePluginCompatibility(profileSnapshot.plugins, activePlugins),
@@ -732,6 +778,7 @@ export function beginStartupUpdate(enabledPlugins: HarmonyActivePlugin[]): Profi
   }
   const orderChanged = providerOrder.length !== next.profile.order.length
     || providerOrder.some((name, index) => name !== next.profile.order[index])
+  const workerThreadsChanged = workerThreads !== next.profile.workerThreads
   let active = true
   return {
     generation,
@@ -739,13 +786,15 @@ export function beginStartupUpdate(enabledPlugins: HarmonyActivePlugin[]): Profi
     targets: new Map(),
     async commit() {
       if (!active) return
-      if (orderChanged) await saveHarmonyState(activeProfileDir!, {
+      if (orderChanged || workerThreadsChanged) await saveHarmonyState(activeProfileDir!, {
+        workerThreads: next.profile.workerThreads,
         order: next.profile.order,
         patchOrder,
         disabled: [...disabledPatchKeys],
       })
       declaredProviderFiles = next.declared
       providerOrder = next.profile.order
+      workerThreads = next.profile.workerThreads
       activePlugins = enabledPlugins
       profileSnapshot = next.profile
       stagedProviderCaches.clear()
@@ -778,6 +827,7 @@ export function beginPluginUpdate(
     order: providerOrder,
     patchOrder,
     disabled: disabledPatchKeys,
+    workerThreads,
     generation,
     cache: transformCache,
     statuses: patchStatuses,
@@ -791,6 +841,7 @@ export function beginPluginUpdate(
     || previous.patchOrder.some((key, index) => key !== nextPatchOrder[index])
     || previous.disabled.size !== profile.disabled.length
     || profile.disabled.some(key => !previous.disabled.has(key))
+    || previous.workerThreads !== profile.workerThreads
   if (!changed && !force) {
     let active = true
     return {
@@ -799,13 +850,15 @@ export function beginPluginUpdate(
       targets: new Map(),
       async commit() {
         if (!active) return
-        if (orderChanged) await saveHarmonyState(activeProfileDir!, {
+        if (orderChanged || previous.workerThreads !== profile.workerThreads) await saveHarmonyState(activeProfileDir!, {
+          workerThreads: profile.workerThreads,
           order: profile.order,
           patchOrder,
           disabled: [...disabledPatchKeys],
         })
         declaredProviderFiles = nextDeclared
         providerOrder = profile.order
+        workerThreads = profile.workerThreads
         additionalProfilePackages = [...additional]
         activePlugins = enabledPlugins
         profileSnapshot = nextProfile
@@ -830,6 +883,7 @@ export function beginPluginUpdate(
     providerOrder = profile.order
     patchOrder = nextPatchOrder
     disabledPatchKeys = new Set(profile.disabled)
+    workerThreads = profile.workerThreads
     preflight(patchOrder, disabledPatchKeys)
   } catch (error) {
     for (const restore of [...stagedProviderCaches.values()].reverse()) restore()
@@ -839,6 +893,7 @@ export function beginPluginUpdate(
     providerOrder = previous.order
     patchOrder = previous.patchOrder
     disabledPatchKeys = previous.disabled
+    workerThreads = previous.workerThreads
     throw error
   }
   generation = ++generationSequence
@@ -857,6 +912,7 @@ export function beginPluginUpdate(
       if (!active) return
       pruneSemanticBindings(candidateGeneration)
       await saveHarmonyState(activeProfileDir!, {
+        workerThreads: profile.workerThreads,
         order: profile.order,
         patchOrder,
         disabled: profile.disabled,
@@ -877,6 +933,7 @@ export function beginPluginUpdate(
       providerOrder = previous.order
       patchOrder = previous.patchOrder
       disabledPatchKeys = previous.disabled
+      workerThreads = previous.workerThreads
       generation = previous.generation
       transformCache = previous.cache
       patchStatuses = previous.statuses
@@ -892,6 +949,7 @@ export function beginPluginUpdate(
 }
 
 export function beginProfileUpdate(input: {
+  workerThreads?: number
   order?: string[]
   patchOrder?: string[]
   disabled?: string[]
@@ -900,6 +958,7 @@ export function beginProfileUpdate(input: {
     order: providerOrder,
     patchOrder,
     disabled: disabledPatchKeys,
+    workerThreads,
     generation,
     cache: transformCache,
     statuses: patchStatuses,
@@ -917,11 +976,13 @@ export function beginProfileUpdate(input: {
     throw new Error('dsh-harmony: profile patchOrder must be a complete permutation of registered Patches')
   }
   const disabled = new Set(input.disabled ?? disabledPatchKeys)
+  const nextWorkerThreads = input.workerThreads ?? workerThreads
   preflight(nextPatchOrder, disabled)
 
   providerOrder = order
   patchOrder = nextPatchOrder
   disabledPatchKeys = disabled
+  workerThreads = nextWorkerThreads
   generation = ++generationSequence
   const candidateGeneration = generation
   pendingStatusGenerations.add(candidateGeneration)
@@ -932,12 +993,17 @@ export function beginProfileUpdate(input: {
   let active = true
   return {
     generation: candidateGeneration,
-    profile: { ...currentProfile(), order, patchOrder: nextPatchOrder, disabled: [...disabled] },
+    profile: { ...currentProfile(), workerThreads: nextWorkerThreads, order, patchOrder: nextPatchOrder, disabled: [...disabled] },
     targets: allTargets(),
     async commit() {
       if (!active) return
       pruneSemanticBindings(candidateGeneration)
-      await saveHarmonyState(activeProfileDir!, { order, patchOrder: nextPatchOrder, disabled: [...disabled] })
+      await saveHarmonyState(activeProfileDir!, {
+        workerThreads: nextWorkerThreads,
+        order,
+        patchOrder: nextPatchOrder,
+        disabled: [...disabled],
+      })
       retainGeneration(candidateGeneration)
       pendingStatusGenerations.delete(candidateGeneration)
       active = false
@@ -947,6 +1013,7 @@ export function beginProfileUpdate(input: {
       providerOrder = previous.order
       patchOrder = previous.patchOrder
       disabledPatchKeys = previous.disabled
+      workerThreads = previous.workerThreads
       generation = previous.generation
       transformCache = previous.cache
       patchStatuses = previous.statuses
@@ -1031,9 +1098,21 @@ interface WorkingTransform {
   original: string
   output: string
   sourceFile?: ts.SourceFile
-  steps: HarmonyPatchInspection['steps']
+  sourceChange?: SourceDelta
+  steps: CompactPatchStep[]
   traceable: BoundSourceTrace<RegisteredPatch>[]
   semantic: Map<string, { bindingKey: string; patches: BoundSemanticPatch<RegisteredPatch>[] }>
+}
+
+function materializePatchSteps(
+  original: string,
+  steps: ReadonlyArray<CompactPatchStep>,
+): HarmonyPatchInspection['steps'] {
+  let source = original
+  return steps.map(step => {
+    source = applySourceDelta(source, step.delta)
+    return { key: step.key, owner: step.owner, matches: step.matches, source }
+  })
 }
 
 function beginWorkingTransform(filename: string, source: string): WorkingTransform {
@@ -1056,6 +1135,7 @@ function beginWorkingTransform(filename: string, source: string): WorkingTransfo
 interface WorkingTransformSnapshot {
   output: string
   sourceFile?: ts.SourceFile
+  sourceChange?: SourceDelta
   stepsLength: number
   traceableLength: number
   semantic: WorkingTransform['semantic']
@@ -1065,6 +1145,7 @@ function snapshotWorkingTransform(state: WorkingTransform): WorkingTransformSnap
   return {
     output: state.output,
     sourceFile: state.sourceFile,
+    sourceChange: state.sourceChange,
     stepsLength: state.steps.length,
     traceableLength: state.traceable.length,
     semantic: new Map([...state.semantic].map(([name, value]) => [name, {
@@ -1080,6 +1161,7 @@ function restoreWorkingTransform(
 ): void {
   state.output = snapshot.output
   state.sourceFile = snapshot.sourceFile
+  state.sourceChange = snapshot.sourceChange
   state.steps.length = snapshot.stepsLength
   state.traceable.length = snapshot.traceableLength
   state.semantic = snapshot.semantic
@@ -1091,6 +1173,10 @@ function applyRegisteredPatch(
   members: HarmonyPatch[],
   transformGeneration: number,
 ): number {
+  const before = state.output
+  let directDelta: SourceDelta | undefined = members.length === 1
+    ? { start: before.length, removed: 0, inserted: '' }
+    : undefined
   let matches = 0
   for (const patch of members) {
     if (patchKind(patch) === 'loader') {
@@ -1118,6 +1204,8 @@ function applyRegisteredPatch(
         )
         state.output = result.source
         state.sourceFile = undefined
+        state.sourceChange = undefined
+        if (members.length === 1) directDelta = sourceDelta(before, state.output)
         matches += result.matches
         state.semantic.set(functionName, { bindingKey, patches: [bound] })
       } else {
@@ -1136,14 +1224,23 @@ function applyRegisteredPatch(
       registered,
       sourcePatch,
       state.steps,
+      () => materializePatchSteps(state.original, state.steps),
       state.sourceFile,
+      state.sourceChange,
     )
     state.output = result.source
     state.sourceFile = result.sourceFile
+    state.sourceChange = result.delta
+    if (members.length === 1) directDelta = result.delta
     matches += result.matches
     if (sourcePatch.trace !== undefined) state.traceable.push({ registered, patch: sourcePatch })
   }
-  state.steps.push({ key: registered.key, owner: registered.owner, matches, source: state.output })
+  state.steps.push({
+    key: registered.key,
+    owner: registered.owner,
+    matches,
+    delta: directDelta ?? sourceDelta(before, state.output),
+  })
   return matches
 }
 
@@ -1172,7 +1269,6 @@ function finishWorkingTransform(
     inspection: {
       package: state.pkg.name,
       file: state.relativeFile,
-      original: state.source,
       final: state.output,
       steps: state.steps,
     },
@@ -1533,12 +1629,226 @@ export function getPatchOrderViolations(): ReturnType<typeof patchOrderViolation
 }
 
 export function getPatchInspections(packageName?: string, file?: string): HarmonyPatchInspection[] {
-  return [...transformCache.values()].filter(record => record.generation === generation).map(record => record.inspection)
-    .filter(item => (packageName === undefined || item.package === packageName) && (file === undefined || item.file === file))
+  return [...transformCache.values()]
+    .filter(record => record.generation === generation
+      && (packageName === undefined || record.inspection.package === packageName)
+      && (file === undefined || record.inspection.file === file))
+    .map(record => {
+      let steps: HarmonyPatchInspection['steps'] | undefined
+      return {
+        package: record.inspection.package,
+        file: record.inspection.file,
+        original: record.source,
+        final: record.inspection.final,
+        get steps() {
+          return steps ??= materializePatchSteps(record.source, record.inspection.steps)
+        },
+      }
+    })
 }
 
 export function inspectPatchTargets(): HarmonyPatchInspection[] {
   inspectTargets(patchOrder, disabledPatchKeys, true)
+  return getPatchInspections()
+}
+
+function patchComponents(items: RegisteredPatch[]): RegisteredPatch[][] {
+  const parent = items.map((_, index) => index)
+  const root = (index: number): number => {
+    while (parent[index] !== index) {
+      parent[index] = parent[parent[index]!]!
+      index = parent[index]!
+    }
+    return index
+  }
+  const unite = (left: number, right: number): void => {
+    left = root(left)
+    right = root(right)
+    if (left !== right) parent[right] = left
+  }
+  const ownerByTarget = new Map<string, number>()
+  const resolvedPackages = new Map<string, PackageInfo | undefined>()
+  const targetKeys = (patch: HarmonyPatch): string[] => {
+    let pkg = resolvedPackages.get(patch.target.package)
+    if (!resolvedPackages.has(patch.target.package)) {
+      try {
+        const manifest = findPackageJSON(patch.target.package, pathToFileURL(join(activeProfileDir!, 'package.json')))
+        pkg = manifest === undefined ? undefined : readPackageInfo(dirname(manifest))
+      } catch {
+        pkg = undefined
+      }
+      resolvedPackages.set(patch.target.package, pkg)
+    }
+    if (pkg !== undefined) {
+      const file = resolvedTargetFile(patch, pkg)
+      if (file !== undefined) return [canonicalFilename(join(pkg.dir, file))]
+    }
+    return patchTargetFiles(patch).map(file => (
+      `${patch.target.package}\0${posix.normalize(file.replaceAll('\\', '/'))}`
+    ))
+  }
+  items.forEach((item, index) => {
+    for (const patch of item.members) {
+      for (const target of targetKeys(patch)) {
+        const owner = ownerByTarget.get(target)
+        if (owner === undefined) ownerByTarget.set(target, index)
+        else unite(index, owner)
+      }
+    }
+  })
+  const components = new Map<number, RegisteredPatch[]>()
+  items.forEach((item, index) => {
+    const key = root(index)
+    const component = components.get(key) ?? []
+    component.push(item)
+    components.set(key, component)
+  })
+  return [...components.values()]
+}
+
+function workerScriptUrl(): URL {
+  const adjacent = new URL('./inspection-worker.js', import.meta.url)
+  return existsSync(fileURLToPath(adjacent)) ? adjacent : new URL('../lib/inspection-worker.js', import.meta.url)
+}
+
+function workerRequest(
+  worker: Worker,
+  id: number,
+  task: ParallelInspectionTask,
+): Promise<ParallelInspectionResult> {
+  return new Promise((resolveTask, rejectTask) => {
+    const cleanup = (): void => {
+      worker.off('message', onMessage)
+      worker.off('error', onError)
+      worker.off('exit', onExit)
+    }
+    const onMessage = (message: {
+      id: number
+      result?: ParallelInspectionResult
+      error?: { name: string; message: string; stack?: string }
+    }): void => {
+      if (message.id !== id) return
+      cleanup()
+      if (message.error === undefined) {
+        resolveTask(message.result!)
+        return
+      }
+      const error = new Error(message.error.message)
+      error.name = message.error.name
+      if (message.error.stack !== undefined) error.stack = message.error.stack
+      rejectTask(error)
+    }
+    const onError = (error: Error): void => {
+      cleanup()
+      rejectTask(error)
+    }
+    const onExit = (code: number): void => {
+      cleanup()
+      rejectTask(new Error(`dsh-harmony: inspection worker exited before replying (code ${code})`))
+    }
+    worker.on('message', onMessage)
+    worker.on('error', onError)
+    worker.on('exit', onExit)
+    worker.postMessage({ id, task })
+  })
+}
+
+async function runParallelInspectionTasks(
+  tasks: ParallelInspectionTask[],
+  concurrency: number,
+): Promise<ParallelInspectionResult[]> {
+  let cursor = 0
+  let sequence = 0
+  const results = new Array<ParallelInspectionResult>(tasks.length)
+  const workerCount = Math.min(concurrency, tasks.length)
+  while (inspectionWorkerPool.length < workerCount) {
+    const worker = new Worker(workerScriptUrl())
+    worker.unref()
+    inspectionWorkerPool.push(worker)
+  }
+  const workers = inspectionWorkerPool.slice(0, workerCount)
+  for (const worker of workers) worker.ref()
+  try {
+    await Promise.all(workers.map(async worker => {
+      while (cursor < tasks.length) {
+        const index = cursor++
+        results[index] = await workerRequest(worker, sequence++, tasks[index]!)
+      }
+    }))
+    for (const worker of workers) worker.unref()
+    return results
+  } catch (error) {
+    const failedPool = inspectionWorkerPool
+    inspectionWorkerPool = []
+    await Promise.allSettled(failedPool.map(worker => worker.terminate()))
+    throw error
+  }
+}
+
+function trimInspectionWorkerPool(size: number): void {
+  const removed = inspectionWorkerPool.splice(size)
+  for (const worker of removed) void worker.terminate()
+}
+
+function mergeParallelInspection(result: ParallelInspectionResult): void {
+  if (result.generation !== generation) {
+    throw new Error(`dsh-harmony: discarded stale parallel inspection generation ${result.generation}; current generation is ${generation}`)
+  }
+  const state = generationStates.get(generation)
+  if (state === undefined) throw new Error(`dsh-harmony: missing generation ${generation} during parallel inspection`)
+  const indexed = state.targetFiles ?? new Map<string, TargetFileRecord>()
+  for (const [filename, target] of result.targetFiles) indexed.set(filename, target)
+  state.targetFiles = indexed
+  state.targetIndexComplete = (state.targetIndexComplete ?? true) && result.targetIndexComplete
+  const loaders = state.typescriptLoaderPackages ?? new Set<string>()
+  for (const packageName of result.typescriptLoaderPackages) loaders.add(packageName)
+  state.typescriptLoaderPackages = loaders
+  for (const record of result.records) transformCache.set(`${generation}\0${record.filename}`, record)
+  const byKey = new Map([...providers.values()].flatMap(provider => provider.patches).map(item => [item.key, item]))
+  for (const status of result.statuses) {
+    const registered = byKey.get(status.key)
+    if (registered !== undefined) updateStatus(registered, status)
+  }
+}
+
+export async function inspectPatchTargetsAsync(): Promise<HarmonyPatchInspection[]> {
+  if (workerThreads === 1) {
+    trimInspectionWorkerPool(0)
+    return inspectPatchTargets()
+  }
+  const items = orderedPatches([...providers.values()].flatMap(provider => provider.patches), patchOrder)
+  const components = patchComponents(items)
+  if (components.length < 2) {
+    trimInspectionWorkerPool(0)
+    return inspectPatchTargets()
+  }
+
+  const state = generationStates.get(generation)
+  if (state !== undefined) {
+    state.targetFiles = new Map()
+    state.targetIndexComplete = true
+    state.typescriptLoaderPackages = new Set()
+  }
+  for (const key of [...transformCache.keys()]) if (key.startsWith(`${generation}\0`)) transformCache.delete(key)
+
+  const parallel = components.filter(component => component.every(item => item.members.every(patch => patchKind(patch) !== 'semantic')))
+  const serial = components.filter(component => !parallel.includes(component))
+  const tasks = parallel.map((component): ParallelInspectionTask => ({
+    profileDir: activeProfileDir!,
+    ...(requestedProfilePackages === undefined ? {} : { requestedProfilePackages: [...requestedProfilePackages] }),
+    additionalProfilePackages: [...additionalProfilePackages],
+    activePlugins: activePlugins.map(plugin => ({ ...plugin, entryIds: [...plugin.entryIds] })),
+    order: [...patchOrder],
+    disabled: [...disabledPatchKeys],
+    keys: component.map(item => item.key),
+    generation,
+  }))
+  const pending = runParallelInspectionTasks(tasks, workerThreads)
+  for (const component of serial) {
+    inspectTargets(patchOrder, disabledPatchKeys, true, new Set(component.map(item => item.key)))
+  }
+  for (const result of await pending) mergeParallelInspection(result)
+  trimInspectionWorkerPool(Math.min(workerThreads, tasks.length))
   return getPatchInspections()
 }
 
@@ -1547,9 +1857,21 @@ export function inspectUnresolvedPatchTargets(): HarmonyPatchInspection[] {
   return inspectPatchTargets()
 }
 
-function inspectTargets(order: string[], disabled: Set<string>, bind: boolean): void {
+export async function inspectUnresolvedPatchTargetsAsync(): Promise<HarmonyPatchInspection[]> {
+  if (generationStates.get(generation)?.targetIndexComplete === true) return getPatchInspections()
+  return inspectPatchTargetsAsync()
+}
+
+function inspectTargets(
+  order: string[],
+  disabled: Set<string>,
+  bind: boolean,
+  onlyKeys?: ReadonlySet<string>,
+  transformGeneration = generation,
+): ParallelInspectionResult {
   const profileManifest = pathToFileURL(join(activeProfileDir!, 'package.json'))
-  const allPatches = orderedPatches([...providers.values()].flatMap(provider => provider.patches), order)
+  const ordered = orderedPatches([...providers.values()].flatMap(provider => provider.patches), order)
+  const allPatches = onlyKeys === undefined ? ordered : ordered.filter(item => onlyKeys.has(item.key))
   const patchesByTargetPackage = new Map<string, Array<{
     item: RegisteredPatch
     members: HarmonyPatch[]
@@ -1637,7 +1959,7 @@ function inspectTargets(order: string[], disabled: Set<string>, bind: boolean): 
       let matches = 0
       try {
         for (const [filename, members] of targets) {
-          matches += applyRegisteredPatch(working.get(filename)!, item, members, generation)
+          matches += applyRegisteredPatch(working.get(filename)!, item, members, transformGeneration)
         }
         outcomes.set(key, matches)
       } catch (error) {
@@ -1650,17 +1972,28 @@ function inspectTargets(order: string[], disabled: Set<string>, bind: boolean): 
     }
   }
 
+  const records: TransformRecord[] = []
+  const typescriptLoaderPackages = new Set<string>()
   if (bind) {
     const generationState = generationStates.get(generation)
-    const typescriptLoaderPackages = new Set<string>()
     if (generationState !== undefined) {
-      generationState.targetFiles = targetFiles
-      generationState.targetIndexComplete = targetIndexComplete
-      generationState.typescriptLoaderPackages = typescriptLoaderPackages
+      if (onlyKeys === undefined) {
+        generationState.targetFiles = targetFiles
+        generationState.targetIndexComplete = targetIndexComplete
+        generationState.typescriptLoaderPackages = typescriptLoaderPackages
+      } else {
+        const indexed = generationState.targetFiles ?? new Map<string, TargetFileRecord>()
+        for (const [filename, target] of targetFiles) indexed.set(filename, target)
+        generationState.targetFiles = indexed
+        generationState.targetIndexComplete = (generationState.targetIndexComplete ?? true) && targetIndexComplete
+        const loaders = generationState.typescriptLoaderPackages ?? new Set<string>()
+        generationState.typescriptLoaderPackages = loaders
+      }
     }
     for (const [filename, state] of working) {
-      const result = finishWorkingTransform(state, generation, true)
-      transformCache.set(`${generation}\0${filename}`, result)
+      const result = finishWorkingTransform(state, transformGeneration, true)
+      records.push(result)
+      transformCache.set(`${transformGeneration}\0${filename}`, result)
     }
     for (const item of allPatches) {
       const disabledPatch = isPatchDisabled(item, disabled)
@@ -1672,17 +2005,49 @@ function inspectTargets(order: string[], disabled: Set<string>, bind: boolean): 
         }
       }
       updateStatus(item, disabledPatch ? {
-        state: 'disabled', matches: 0, error: undefined, generation,
+        state: 'disabled', matches: 0, error: undefined, generation: transformGeneration,
       } : failure !== undefined ? {
-        state: 'failed', matches, error: failure, generation,
+        state: 'failed', matches, error: failure, generation: transformGeneration,
       } : {
-        state: 'bound', matches, error: undefined, generation,
+        state: 'bound', matches, error: undefined, generation: transformGeneration,
       })
     }
+    const generationStateLoaders = generationState?.typescriptLoaderPackages
+    if (generationStateLoaders !== undefined) {
+      for (const packageName of typescriptLoaderPackages) generationStateLoaders.add(packageName)
+    }
+  }
+  return {
+    generation: transformGeneration,
+    records,
+    statuses: allPatches.map(item => patchStatuses.get(item.key) ?? freshStatus(item)),
+    targetFiles: [...targetFiles],
+    targetIndexComplete,
+    typescriptLoaderPackages: [...typescriptLoaderPackages],
   }
 }
 
+export function executeParallelInspectionTask(task: ParallelInspectionTask): ParallelInspectionResult {
+  if (activeProfileDir !== task.profileDir || parallelInspectionTaskGeneration !== task.generation) {
+    synchronizeProfile(
+      task.profileDir,
+      task.requestedProfilePackages,
+      task.activePlugins,
+      task.additionalProfilePackages,
+    )
+    parallelInspectionTaskGeneration = task.generation
+  }
+  return inspectTargets(
+    task.order,
+    new Set(task.disabled),
+    true,
+    new Set(task.keys),
+    task.generation,
+  )
+}
+
 export function preflightProfileUpdate(input: {
+  workerThreads?: number
   order?: string[]
   patchOrder?: string[]
   disabled?: string[]
@@ -1706,7 +2071,7 @@ export function installFileTransforms(): void {
 
 export function installModuleHooks(): void {
   installNodeModuleHooks({
-    aliases: { index: indexUrl, plugin: pluginUrl, manifest: manifestUrl },
+    aliases: { index: indexUrl, plugin: pluginUrl, settings: settingsUrl, manifest: manifestUrl },
     currentGeneration: () => generation,
     canonicalFilename,
     targetFilename: (filename, requestedGeneration) => targetFilename(filename, requestedGeneration, true),

@@ -59,7 +59,7 @@ export function installNodeFileTransforms(runtime: FileTransformHooks): void {
 }
 
 export interface ModuleTransformHooks<Loader> {
-  aliases: { index: string; plugin: string; manifest: string }
+  aliases: { index: string; plugin: string; settings: string; manifest: string }
   currentGeneration(): number
   canonicalFilename(filename: string): string
   targetFilename(filename: string, generation: number): string | undefined
@@ -87,6 +87,7 @@ export function installNodeModuleHooks<Loader>(runtime: ModuleTransformHooks<Loa
       const cleanSpecifier = index === -1 ? specifier : specifier.slice(0, index)
       if (cleanSpecifier === 'dsh-harmony') return { url: runtime.aliases.index, shortCircuit: true }
       if (cleanSpecifier === 'dsh-harmony:plugin') return { url: runtime.aliases.plugin, shortCircuit: true }
+      if (cleanSpecifier === 'dsh-harmony/settings') return { url: runtime.aliases.settings, shortCircuit: true }
       if (cleanSpecifier === 'dsh-harmony/package.json') return { url: runtime.aliases.manifest, shortCircuit: true }
       let nextGeneration = index === -1 ? undefined : specifier.slice(index + marker.length)
       const inherited = context.parentURL?.startsWith('file:')

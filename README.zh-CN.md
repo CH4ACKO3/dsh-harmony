@@ -89,6 +89,8 @@ dsh web
 
 启动 WebUI 后打开 **设置 → Harmony**。Profile、Desktop 集成、更新和卸载说明参见[安装指南](https://memorax-ai.github.io/dsh-harmony/zh/guide/installation)。
 
+**设置 → 插件 → 插件配置 → Harmony → 多线程装载** 用于控制 Patch 预检并行度。默认值为 `1`，完整保留原来的单线程执行模型。提高线程数后，互不依赖的源码 Patch 文件连通分量会在 worker 线程中并行执行；触及同一文件的所有 Patch，以及跨文件的组合 Patch，仍会留在同一分量内按顺序运行。语义 Patch 分量继续在主线程执行。worker 中的模块状态和全局状态彼此隔离，并且每个 worker 都会增加内存开销。
+
 终端 TUI 和非交互命令可操作任意 profile。命令会事务连接正在运行的 Host 并报告 `live`；已停止的 profile 则在本地校验后原子更新并报告 `offline`。
 
 同一 profile 可以由多个 Host 使用。Harmony 沿用 DSH Settings 的写入模型：整份配置通过文件锁串行并原子提交；陈旧界面的保存会被拒绝并刷新，跨进程并发写则以后完成的完整配置为准。

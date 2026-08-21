@@ -259,6 +259,7 @@ test('reads, preflights, and atomically updates a stopped profile', async () => 
   })
   expect(JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8'))).toEqual({
     order: ['second', 'first'],
+    workerThreads: 1,
     patchOrder: ['second/only', 'first/b', 'first/a'],
     disabled: ['first/*'],
   })
@@ -285,6 +286,7 @@ test('preserves Providers discovered from the composed DSH configuration', async
   await updateHarmonyProfile(profile, { disabled: ['configured-provider/*'] }, configured)
   expect(JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8'))).toEqual({
     order: ['configured-provider'],
+    workerThreads: 1,
     patchOrder: [],
     disabled: ['configured-provider/*'],
   })
@@ -308,8 +310,23 @@ test('serializes concurrent whole-profile writes without producing mixed state',
   ])
   const state = JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8'))
   expect([
-    { order: ['first', 'second'], patchOrder: [], disabled: ['first/*'] },
-    { order: ['second', 'first'], patchOrder: [], disabled: ['second/*'] },
+    { order: ['first', 'second'], workerThreads: 1, patchOrder: [], disabled: ['first/*'] },
+    { order: ['second', 'first'], workerThreads: 1, patchOrder: [], disabled: ['second/*'] },
   ]).toContainEqual(state)
+  rmSync(profile, { recursive: true })
+})
+
+test('defaults worker loading to one thread and validates persisted updates', async () => {
+  const profile = mkdtempSync(join(tmpdir(), 'dsh-harmony-worker-profile-'))
+  writeFileSync(join(profile, 'package.json'), '{}')
+
+  expect(readHarmonyProfile(profile).workerThreads).toBe(1)
+  expect(preflightHarmonyProfileUpdate(profile, { workerThreads: 4 }).workerThreads).toBe(4)
+  expect(() => preflightHarmonyProfileUpdate(profile, { workerThreads: 0 })).toThrow('integer from 1 to 32')
+  expect(() => preflightHarmonyProfileUpdate(profile, { workerThreads: 1.5 })).toThrow('integer from 1 to 32')
+
+  const updated = await updateHarmonyProfile(profile, { workerThreads: 4 })
+  expect(updated.profile.workerThreads).toBe(4)
+  expect(JSON.parse(readFileSync(join(profile, 'harmony.json'), 'utf8')).workerThreads).toBe(4)
   rmSync(profile, { recursive: true })
 })

@@ -119,12 +119,12 @@ if (isHarmonyCommand) {
       getPatchInspections,
       getPatchOrderViolations,
       getPatchStatuses,
-      inspectPatchTargets,
+      inspectPatchTargetsAsync,
       installModuleHooks,
     } = await import('./runtime.js')
     installModuleHooks()
     discoverProfile(profileDir!, false, offlineCandidates)
-    inspectPatchTargets()
+    await inspectPatchTargetsAsync()
     const patches = getPatchStatuses()
     const patchCounts = new Map(currentProfile().plugins.map(plugin => [plugin.name, 0]))
     for (const patch of patches) patchCounts.set(patch.owner, (patchCounts.get(patch.owner) ?? 0) + 1)

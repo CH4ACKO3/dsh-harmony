@@ -85,6 +85,8 @@ dsh web
 
 Open **Settings → Harmony** after starting the WebUI. For profiles, Desktop integration, updates, and removal, see the [installation guide](https://memorax-ai.github.io/dsh-harmony/guide/installation).
 
+**Settings → Plugins → Plugin configuration → Harmony → Multithreaded loading** controls parallel Patch preflight. It defaults to `1`, which preserves the original single-threaded execution model. Higher values run independent Source Patch file components in worker threads; every Patch touching the same file, and every cross-file composite Patch, remains ordered in one component. Semantic Patch components stay on the main thread. Worker callbacks have isolated module and global state, and each worker adds memory overhead.
+
 Use the terminal UI or non-interactive commands against any profile. Commands contact a running Host transactionally and report `live`; stopped profiles are validated and updated atomically as `offline`.
 
 Multiple Hosts may use the same profile. Harmony follows DSH Settings' write model: whole-profile writes are serialized by a file lock and committed atomically; a stale UI save is rejected and refreshed, while concurrent processes use last-complete-write-wins semantics.

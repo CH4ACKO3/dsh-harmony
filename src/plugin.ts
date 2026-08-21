@@ -29,8 +29,8 @@ import {
   getPatchInspections,
   getPatchOrderViolations,
   getPatchStatuses,
-  inspectPatchTargets,
-  inspectUnresolvedPatchTargets,
+  inspectPatchTargetsAsync,
+  inspectUnresolvedPatchTargetsAsync,
   packageNameOf,
   prepareModuleReload,
   subscribe,
@@ -395,7 +395,7 @@ export async function apply(ctx: Context): Promise<void> {
       assertNoSelfHostReload(transaction.targets, action)
       const transformStarted = probe === undefined ? undefined : process.hrtime.bigint()
       try {
-        inspectPatchTargets()
+        await inspectPatchTargetsAsync()
       } finally {
         if (probe !== undefined && transformStarted !== undefined) probe.transformMs += elapsedMilliseconds(transformStarted)
       }
@@ -492,7 +492,7 @@ export async function apply(ctx: Context): Promise<void> {
       transaction = beginStartupUpdate(loaderInventory(ctx).active)
       if (probe !== undefined && prepareStarted !== undefined) probe.prepareMs += elapsedMilliseconds(prepareStarted)
       const transformStarted = probe === undefined ? undefined : process.hrtime.bigint()
-      const inspections = inspectUnresolvedPatchTargets()
+      const inspections = await inspectUnresolvedPatchTargetsAsync()
       if (probe !== undefined) {
         if (transformStarted !== undefined) probe.transformMs += elapsedMilliseconds(transformStarted)
         probe.targetPackages = new Set(inspections.map(item => item.package)).size
@@ -522,6 +522,7 @@ export async function apply(ctx: Context): Promise<void> {
           throw new HarmonyProfileConflictError(requested.expectedRevision, profileRevision)
         }
         return beginProfileUpdate({
+          ...(requested.workerThreads === undefined ? {} : { workerThreads: candidate.workerThreads }),
           ...(requested.order === undefined ? {} : { order: candidate.order }),
           ...(requested.patchOrder === undefined ? {} : { patchOrder: candidate.patchOrder }),
           ...(requested.disabled === undefined ? {} : { disabled: candidate.disabled }),

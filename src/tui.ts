@@ -22,7 +22,7 @@ import {
   getPatchInspections,
   getPatchOrderViolations,
   getPatchStatuses,
-  inspectPatchTargets,
+  inspectPatchTargetsAsync,
   installModuleHooks,
 } from './runtime.js'
 
@@ -296,10 +296,10 @@ export async function runHarmonyTui(
     'dsh harmony requires an interactive terminal',
     'dsh harmony 需要交互式终端',
   ))
-  const offlineState = () => {
+  const offlineState = async () => {
     installModuleHooks()
     discoverProfile(profileDir, false, configured)
-    inspectPatchTargets()
+    await inspectPatchTargetsAsync()
     const patches = getPatchStatuses()
     const patchCounts = new Map(currentProfile().plugins.map(plugin => [plugin.name, 0]))
     for (const patch of patches) patchCounts.set(patch.owner, (patchCounts.get(patch.owner) ?? 0) + 1)
@@ -311,7 +311,7 @@ export async function runHarmonyTui(
   }
   const readState = async () => {
     const live = await readHarmonyRuntime(profileDir)
-    return live === undefined ? offlineState() : { mode: 'live' as const, ...live }
+    return live === undefined ? await offlineState() : { mode: 'live' as const, ...live }
   }
   let state = await readState()
   let profile = state.profile

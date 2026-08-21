@@ -142,6 +142,34 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
 .dshHarmonyFooter{flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:30px}
 .dshHarmonyFooterActions{display:flex;align-items:center;gap:8px}
 .dshHarmonyHint{margin:0;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:18px}
+.dshHarmonyWorkerCard{list-style:none;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-layer-3)}
+.dshHarmonyWorkerCard:hover{border-color:var(--dsw-alias-label-dimmed)}
+.dshHarmonyWorkerCard[data-open=true]{border-color:var(--dsw-alias-label-dimmed);background:var(--dsw-alias-bg-layer-2)}
+.dshHarmonyWorkerHeader{position:relative;display:flex;align-items:center;gap:12px;padding:14px 16px}
+.dshHarmonyWorkerHeaderButton{appearance:none;position:absolute;inset:0;z-index:0;width:100%;border:0;border-radius:12px;background:transparent;color:inherit;font:inherit;cursor:pointer}
+.dshHarmonyWorkerHeaderButton:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}
+.dshHarmonyWorkerText{position:relative;z-index:1;min-width:0;flex:1;display:flex;flex-direction:column;gap:4px;pointer-events:none}
+.dshHarmonyWorkerTitleRow{display:flex;align-items:baseline;gap:8px;min-width:0;flex-wrap:wrap}
+.dshHarmonyWorkerTitle{color:var(--dsw-alias-label-primary);font-size:16px;font-weight:600;line-height:24px}
+.dshHarmonyWorkerPlugin{max-width:100%;overflow:hidden;color:var(--dsw-alias-label-caption);font-size:12px;font-weight:400;line-height:18px;text-decoration:none;text-overflow:ellipsis;white-space:nowrap;opacity:.38;pointer-events:auto}
+.dshHarmonyWorkerPlugin:hover{color:var(--dsw-alias-label-secondary);opacity:.72}
+.dshHarmonyWorkerPlugin[data-ready=true],.dshHarmonyWorkerPlugin:focus-visible{color:var(--dsw-alias-state-business-primary);opacity:1}
+.dshHarmonyWorkerPlugin:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px;border-radius:2px}
+.dshHarmonyWorkerDescription{max-width:70ch;color:var(--dsw-alias-label-tertiary);font-size:13px;line-height:1.5}
+.dshHarmonyWorkerChevron{position:relative;z-index:1;flex:none;color:var(--dsw-alias-label-tertiary);pointer-events:none}
+.dshHarmonyWorkerCard[data-open=true] .dshHarmonyWorkerChevron{transform:rotate(180deg)}
+.dshHarmonyWorkerBody{display:flex;flex-direction:column;gap:10px;margin:0 16px;padding:12px 0 14px;border-top:1px solid var(--dsw-alias-border-l2)}
+.dshHarmonyWorkerSetting{display:flex;align-items:center;justify-content:space-between;gap:12px 20px;flex-wrap:wrap}
+.dshHarmonyWorkerSettingText{min-width:0;flex:1 1 280px;display:flex;flex-direction:column;gap:2px}
+.dshHarmonyWorkerSettingTitle{color:var(--dsw-alias-label-primary);font-size:13px;font-weight:600;line-height:20px}
+.dshHarmonyWorkerSettingDescription{max-width:70ch;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}
+.dshHarmonyWorkerControl{flex:none;display:flex;align-items:center;gap:12px}
+.dshHarmonyWorkerFieldLabel{color:var(--dsw-alias-label-primary);font-size:12px;font-weight:500;line-height:18px}
+.dshHarmonyWorkerSelect{height:34px;min-width:112px;padding:0 12px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;line-height:20px;cursor:pointer}
+.dshHarmonyWorkerSelect:hover:not(:disabled){border-color:var(--dsw-alias-label-dimmed);background:var(--dsw-alias-bg-module-platform)}
+.dshHarmonyWorkerSelect:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px}
+.dshHarmonyWorkerSelect:disabled{cursor:default;color:var(--dsw-alias-label-tertiary);opacity:.62}
+.dshHarmonyWorkerError{margin:0;color:var(--dsw-alias-state-error-primary);font-size:12px;line-height:18px}
 .dshHarmonySrOnly{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
 .dshHarmonyButton{min-width:68px;height:30px;padding:0 12px;border:0;border-radius:8px;background:var(--dsw-alias-state-business-primary);color:#fff;font:inherit;font-size:13px;cursor:pointer}
 .dshHarmonyButton:hover:not(:disabled){filter:brightness(.96)}
@@ -169,7 +197,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
 .dshHarmonyToastDot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--dsw-alias-state-business-primary)}
 .dshHarmonyToast[data-state=failed] .dshHarmonyToastDot{background:var(--dsw-alias-state-error-primary)}
 @media(max-width:680px){[role=dialog]:has(.dshHarmonyPage){max-width:calc(100vw - 24px)}[role=dialog]:has(.dshHarmonyPage)>nav{width:52px;gap:10px;padding:16px 6px 0}[role=dialog]:has(.dshHarmonyPage)>nav>div:first-child,[role=dialog]:has(.dshHarmonyPage)>nav button>span:last-child{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}[role=dialog]:has(.dshHarmonyPage)>nav button{justify-content:center;width:40px;padding:9px}[role=dialog]:has(.dshHarmonyPage)>div:last-child>div:last-child{padding-right:12px;padding-bottom:12px;padding-left:12px}.dshHarmonyPage{gap:8px}.dshHarmonyTabs{gap:12px}.dshHarmonyTab{padding-bottom:7px;font-size:11px}.dshHarmonyHeading{font-size:16px;line-height:22px}.dshHarmonyIntro{display:none}.dshHarmonyWorkspace,.dshHarmonyPatchWorkspace{display:block;overflow-y:auto}.dshHarmonyList,.dshHarmonyPatchList{min-height:220px;max-height:360px;padding:5px;gap:8px;border-radius:10px}.dshHarmonyDetail,.dshHarmonyPatchDetail{display:none}.dshHarmonyStackSummary{gap:4px;padding:8px 5px}.dshHarmonyStackGlyph{display:none}.dshHarmonyStackMeta{font-size:9px}.dshHarmonyPatchCard{grid-template-columns:22px minmax(0,1fr) auto;gap:4px;padding-right:5px}.dshHarmonyPatchGrip{display:none}.dshHarmonyIndex{font-size:9px}.dshHarmonyFooter{align-items:stretch;flex-direction:column}.dshHarmonyHint{display:none}.dshHarmonyButton{width:100%}.dshHarmonyFooterActions{width:100%}.dshHarmonyFooterActions>.dshHarmonyButton,.dshHarmonyFooterActions>.dshHarmonySecondary{width:auto;flex:1}.dshHarmonySkeleton{grid-template-columns:1fr}}
-@media(prefers-reduced-motion:no-preference){.dshHarmonySettingsPanel{transition:width .28s cubic-bezier(.16,1,.3,1)}.dshHarmonyStack{transition:width .22s cubic-bezier(.16,1,.3,1)}.dshHarmonyStackCover{transition:opacity .11s ease-out,box-shadow .16s ease-out}.dshHarmonyStack[data-collapsed=true] .dshHarmonyStackCover{transition:opacity .14s ease-out .14s,box-shadow .16s ease-out}.dshHarmonyPatchCard{transition:width .22s cubic-bezier(.16,1,.3,1),opacity .16s ease-out,box-shadow .16s ease-out}.dshHarmonyDropSlot{animation:dshHarmonyDropIn .13s cubic-bezier(.16,1,.3,1)}.dshHarmonyToast{animation:dshHarmonyToastIn .18s ease-out}}
+@media(prefers-reduced-motion:no-preference){.dshHarmonySettingsPanel{transition:width .28s cubic-bezier(.16,1,.3,1)}.dshHarmonyStack{transition:width .22s cubic-bezier(.16,1,.3,1)}.dshHarmonyStackCover{transition:opacity .11s ease-out,box-shadow .16s ease-out}.dshHarmonyStack[data-collapsed=true] .dshHarmonyStackCover{transition:opacity .14s ease-out .14s,box-shadow .16s ease-out}.dshHarmonyPatchCard{transition:width .22s cubic-bezier(.16,1,.3,1),opacity .16s ease-out,box-shadow .16s ease-out}.dshHarmonyDropSlot{animation:dshHarmonyDropIn .13s cubic-bezier(.16,1,.3,1)}.dshHarmonyToast{animation:dshHarmonyToastIn .18s ease-out}.dshHarmonyWorkerCard{transition:border-color .16s ease-out,background .16s ease-out}.dshHarmonyWorkerPlugin{transition:color .16s ease-out,opacity .16s ease-out}.dshHarmonyWorkerChevron{transition:transform .16s ease-out}.dshHarmonyWorkerSelect{transition:border-color .16s ease-out,background .16s ease-out}}
 @keyframes dshHarmonyToastIn{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1;transform:translate(-50%,0)}}
 @keyframes dshHarmonyDropIn{from{height:0;opacity:0}to{height:10px;opacity:1}}
 `
@@ -188,6 +216,16 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         nav: 'Harmony',
         orderPage: '应用顺序',
         patchPage: 'Patch 状态',
+        harmonySettingsTitle: 'Harmony',
+        harmonySettingsDescription: '集中管理 Harmony 的 Patch 装载和运行时选项。',
+        harmonySettingsExpand: '展开 Harmony 设置',
+        harmonySettingsCollapse: '收起 Harmony 设置',
+        workerThreadsTitle: '多线程装载',
+        workerThreadsDescription: '并行处理互不依赖的源码 Patch 文件组。1 为兼容模式；修改后从下一次 Patch 装载生效，提高线程数会增加内存占用。',
+        workerThreadsField: '装载线程数',
+        workerThreadsOption: '线程',
+        workerThreadsSaving: '正在保存线程设置…',
+        workerThreadsError: '无法保存线程设置。',
         patchTitle: '运行时 Patch',
         patchIntro: '只读监视 Patch 的绑定、兼容性和当前变换结果。',
         patchEmpty: '当前没有 Harmony Patch。安装或启用一个声明了 Patch 的插件后，它会显示在这里。',
@@ -288,6 +326,16 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         nav: 'Harmony',
         orderPage: 'Apply order',
         patchPage: 'Patch status',
+        harmonySettingsTitle: 'Harmony',
+        harmonySettingsDescription: 'Manage Harmony Patch loading and runtime options in one place.',
+        harmonySettingsExpand: 'Expand Harmony settings',
+        harmonySettingsCollapse: 'Collapse Harmony settings',
+        workerThreadsTitle: 'Multithreaded loading',
+        workerThreadsDescription: 'Process independent Source Patch file groups in parallel. 1 is compatibility mode; changes take effect on the next Patch load, and more threads use more memory.',
+        workerThreadsField: 'Loader threads',
+        workerThreadsOption: 'threads',
+        workerThreadsSaving: 'Saving thread setting…',
+        workerThreadsError: 'Thread setting could not be saved.',
         patchTitle: 'Runtime patches',
         patchIntro: 'Read-only monitoring for patch bindings, compatibility and transformed source.',
         patchEmpty: 'No Harmony patches are registered. Install or enable a plugin that declares patches to see it here.',
@@ -745,6 +793,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
 
     interface ProfileView {
       revision: number
+      workerThreads: number
       order: string[]
       patchOrder: string[]
       disabled: string[]
@@ -2287,6 +2336,132 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
               }, saving ? t('saving') : t('saveExit'))))) : null))
     }
 
+    function HarmonyPluginSettingsCard({ t }: { t: Translate }) {
+      const [open, setOpen] = useState(false)
+      const [profile, setProfile] = useState<ProfileView | null>(null)
+      const [saving, setSaving] = useState(false)
+      const [error, setError] = useState('')
+      const [ownerLinkReady, setOwnerLinkReady] = useState(false)
+      const ownerHoverStartedAt = useRef<number | null>(null)
+      const ownerReadyTimer = useRef<number | null>(null)
+
+      const load = async () => {
+        const response = await fetch('/dsh-harmony/profile', { cache: 'no-store' })
+        if (!response.ok) throw new Error(`${response.status}`)
+        setProfile(await response.json() as ProfileView)
+      }
+      useEffect(() => { void load().catch(reason => setError(reason instanceof Error ? reason.message : String(reason))) }, [])
+      useEffect(() => () => {
+        if (ownerReadyTimer.current !== null) window.clearTimeout(ownerReadyTimer.current)
+      }, [])
+
+      const beginOwnerHover = () => {
+        if (ownerReadyTimer.current !== null) window.clearTimeout(ownerReadyTimer.current)
+        ownerHoverStartedAt.current = Date.now()
+        setOwnerLinkReady(false)
+        ownerReadyTimer.current = window.setTimeout(() => {
+          ownerReadyTimer.current = null
+          setOwnerLinkReady(true)
+        }, 300)
+      }
+
+      const endOwnerHover = () => {
+        if (ownerReadyTimer.current !== null) window.clearTimeout(ownerReadyTimer.current)
+        ownerReadyTimer.current = null
+        ownerHoverStartedAt.current = null
+        setOwnerLinkReady(false)
+      }
+
+      const activateOwnerLink = (event: MouseEvent) => {
+        if (event.detail === 0) return
+        const startedAt = ownerHoverStartedAt.current
+        if (ownerLinkReady || typeof startedAt === 'number' && Date.now() - startedAt >= 300) return
+        event.preventDefault()
+        setOpen(current => !current)
+      }
+
+      const selectThreads = async (nextThreads: number) => {
+        if (profile === null || nextThreads === profile.workerThreads) return
+        const previous = profile
+        setProfile({ ...profile, workerThreads: nextThreads })
+        setSaving(true)
+        setError('')
+        try {
+          const response = await fetch('/dsh-harmony/profile', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ expectedRevision: profile.revision, workerThreads: nextThreads }),
+          })
+          const updated = await response.json() as ProfileView & { error?: string }
+          if (!response.ok) throw new Error(updated.error ?? `${response.status}`)
+          setProfile(updated)
+        } catch (reason) {
+          setProfile(previous)
+          setError(reason instanceof Error ? reason.message : String(reason))
+        } finally {
+          setSaving(false)
+        }
+      }
+
+      return h('li', { className: 'dshHarmonyWorkerCard', 'data-open': open ? 'true' : 'false' },
+        h('div', { className: 'dshHarmonyWorkerHeader' },
+          h('button', {
+            className: 'dshHarmonyWorkerHeaderButton',
+            type: 'button',
+            'aria-expanded': open,
+            'aria-controls': 'dsh-harmony-worker-body',
+            'aria-label': t(open ? 'harmonySettingsCollapse' : 'harmonySettingsExpand'),
+            onClick: () => setOpen(current => !current),
+          }),
+          h('span', { className: 'dshHarmonyWorkerText' },
+            h('span', { className: 'dshHarmonyWorkerTitleRow' },
+              h('span', { className: 'dshHarmonyWorkerTitle' }, t('harmonySettingsTitle')),
+              h('a', {
+                className: 'dshHarmonyWorkerPlugin',
+                href: 'https://github.com/memorax-ai/dsh-harmony',
+                target: '_blank',
+                rel: 'noreferrer',
+                'data-ready': ownerLinkReady ? 'true' : 'false',
+                onPointerEnter: beginOwnerHover,
+                onPointerLeave: endOwnerHover,
+                onClick: activateOwnerLink,
+              }, 'dsh-harmony')),
+            h('span', { className: 'dshHarmonyWorkerDescription' }, t('harmonySettingsDescription'))),
+          h('svg', {
+            className: 'dshHarmonyWorkerChevron',
+            width: 14,
+            height: 14,
+            viewBox: '0 0 14 14',
+            'aria-hidden': 'true',
+          }, h('path', {
+            d: 'M3.5 5.25 7 8.75l3.5-3.5',
+            fill: 'none',
+            stroke: 'currentColor',
+            strokeWidth: 1.5,
+            strokeLinecap: 'round',
+            strokeLinejoin: 'round',
+          }))),
+        open ? h('div', { className: 'dshHarmonyWorkerBody', id: 'dsh-harmony-worker-body' },
+          error ? h('p', { className: 'dshHarmonyWorkerError', role: 'alert' }, `${t('workerThreadsError')} ${error}`) : null,
+          h('div', { className: 'dshHarmonyWorkerSetting' },
+            h('span', { className: 'dshHarmonyWorkerSettingText' },
+              h('span', { className: 'dshHarmonyWorkerSettingTitle' }, t('workerThreadsTitle')),
+              h('span', { className: 'dshHarmonyWorkerSettingDescription' }, t('workerThreadsDescription'))),
+            h('div', { className: 'dshHarmonyWorkerControl' },
+              h('label', { className: 'dshHarmonyWorkerFieldLabel', htmlFor: 'dsh-harmony-worker-threads' }, t('workerThreadsField')),
+              h('select', {
+                id: 'dsh-harmony-worker-threads',
+                className: 'dshHarmonyWorkerSelect',
+                value: String(profile?.workerThreads ?? 1),
+                disabled: profile === null || saving,
+                onChange: (event: Event & { currentTarget: HTMLSelectElement }) => {
+                  void selectThreads(Number(event.currentTarget.value))
+                },
+              }, Array.from({ length: 32 }, (_, index) => index + 1).map(count => h('option', { key: count, value: count },
+                `${count} ${t('workerThreadsOption')}`))))),
+          saving ? h('span', { className: 'dshHarmonySrOnly', role: 'status' }, t('workerThreadsSaving')) : null) : null)
+    }
+
     const inject = ['slots', 'locale']
     function apply(ctx: HarmonyClientContext) {
       ctx.effect(() => ctx.locale.register(localeNamespace, dictionaries), 'dsh-harmony: dictionaries')
@@ -2316,13 +2491,22 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
           ...props,
           syntaxHighlighter: ctx.get('syntaxHighlighter') as SyntaxHighlighterService | undefined,
         })
-        return ctx.slots.inject('settings.section', () => ctx.slots.register({
+        const disposeWorkerCard = ctx.slots.inject('settings.plugin.item', () => ctx.slots.register({
+          name: 'settings.plugin.item',
+          key: 'dsh-harmony',
+          locale: localeNamespace,
+        }, HarmonyPluginSettingsCard)) as () => void
+        const disposeSection = ctx.slots.inject('settings.section', () => ctx.slots.register({
           name: 'settings.section',
           id: 'harmony',
           order: 35,
           label: () => t('nav'),
           locale: localeNamespace,
-        }, SettingsSection))
+        }, SettingsSection)) as () => void
+        return () => {
+          disposeSection()
+          disposeWorkerCard()
+        }
       }, 'dsh-harmony: settings section')
     }
 

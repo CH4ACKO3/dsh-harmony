@@ -21,6 +21,7 @@ import {
   getPatchInspections,
   getPatchStatuses,
   inspectPatchTargets,
+  inspectPatchTargetsAsync,
   installFileTransforms,
   retainedGenerationCount,
   synchronizePluginOrder,
@@ -155,6 +156,52 @@ module.exports = {
   expect(readFileSync(join(unrelated, 'lib/index.js'), 'utf8')).toBe('export const unrelated = true\n')
 })
 
+test('loads independent Source Patch file components with configured workers', async () => {
+  const profile = join(root, 'parallel-inspection-profile')
+  const provider = join(profile, 'node_modules', 'parallel-inspection-provider')
+  const first = join(profile, 'node_modules', 'parallel-target-first')
+  const second = join(profile, 'node_modules', 'parallel-target-second')
+  for (const directory of [provider, first, second]) mkdirSync(join(directory, 'lib'), { recursive: true })
+  writeFileSync(join(profile, 'package.json'), JSON.stringify({
+    dependencies: {
+      'parallel-inspection-provider': '1',
+      'parallel-target-first': '1',
+      'parallel-target-second': '1',
+    },
+  }))
+  writeFileSync(join(profile, 'harmony.json'), JSON.stringify({
+    workerThreads: 2, order: ['parallel-inspection-provider'], patchOrder: [], disabled: [],
+  }))
+  writeFileSync(join(provider, 'package.json'), JSON.stringify({
+    name: 'parallel-inspection-provider',
+    dsh: { harmony: { patches: ['./patch.cjs'] } },
+  }))
+  writeFileSync(join(provider, 'patch.cjs'), `
+const { isMainThread } = require('node:worker_threads')
+module.exports = ['first', 'second'].map((id) => ({
+  id,
+  target: { package: 'parallel-target-' + id, file: 'lib/index.js' },
+  select: 'NumericLiteral[text="1"]', expect: 1,
+  apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), isMainThread ? '99' : id === 'first' ? '11' : '22') },
+}))
+`)
+  for (const [directory, name] of [[first, 'parallel-target-first'], [second, 'parallel-target-second']] as const) {
+    writeFileSync(join(directory, 'package.json'), JSON.stringify({ name, version: '1.0.0', type: 'module' }))
+    writeFileSync(join(directory, 'lib/index.js'), 'export const value = 1\n')
+  }
+
+  discoverProfile(profile)
+  const inspections = await inspectPatchTargetsAsync()
+
+  expect(currentProfile().workerThreads).toBe(2)
+  expect(inspections.map(item => item.final).sort()).toEqual([
+    'export const value = 11\n',
+    'export const value = 22\n',
+  ])
+  expect(getPatchStatuses().filter(status => status.owner === 'parallel-inspection-provider'))
+    .toMatchObject([{ state: 'bound', matches: 1 }, { state: 'bound', matches: 1 }])
+})
+
 test('does not re-enter a transformation when a Patch reads its own target', () => {
   const target = join(root, 'reentrant-target')
   const provider = join(root, 'reentrant-provider')
@@ -246,17 +293,21 @@ test('matches syntax introduced by the preceding Source Patch', () => {
 module.exports = [{
   id: 'introduce', target: { package: 'incremental-ast-target', file: 'index.js' },
   select: 'Identifier[name="marker"]', expect: 1,
-  apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '({ nested: 41 })') },
+  apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '({ nested: "阶段🚀" })') },
 }, {
   id: 'consume', target: { package: 'incremental-ast-target', file: 'index.js' },
-  select: 'NumericLiteral[text="41"]', expect: 1,
-  apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '42') },
+  select: 'StringLiteral[text="阶段🚀"]', expect: 1,
+  apply({ node, edit }) { edit.overwrite(node.getStart(), node.getEnd(), '"完成✅"') },
 }]
 `)
 
   discoverPackage(provider)
 
-  expect(readFileSync(join(target, 'index.js'), 'utf8')).toContain('nested: 42')
+  expect(readFileSync(join(target, 'index.js'), 'utf8')).toContain('nested: "完成✅"')
+  expect(getPatchInspections('incremental-ast-target', 'index.js')[0]?.steps.map(step => step.source)).toEqual([
+    'export const value = ({ nested: "阶段🚀" })\n',
+    'export const value = ({ nested: "完成✅" })\n',
+  ])
 })
 
 test('uses provider constraints by default and lets a Patch override them', () => {

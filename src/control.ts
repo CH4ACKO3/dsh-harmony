@@ -189,6 +189,7 @@ export async function updateRuntimeProfile(
   const disabled = input.disabled === undefined ? undefined : [...new Set(input.disabled)]
   if (body.mode !== 'live'
     || body.profile.dir !== profileDir
+    || input.workerThreads !== undefined && body.profile.workerThreads !== input.workerThreads
     || input.order !== undefined && !sameOrder(body.profile.order, input.order)
     || input.patchOrder !== undefined && !sameOrder(body.profile.patchOrder, input.patchOrder)
     || disabled !== undefined && !sameOrder(body.profile.disabled, disabled)) {

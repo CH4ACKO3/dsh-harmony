@@ -1,3 +1,6 @@
 - insert:
     - id: harmony
       name: dsh-harmony
+
+    - id: harmony-settings
+      name: dsh-harmony/settings

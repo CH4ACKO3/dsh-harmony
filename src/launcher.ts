@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { configuredProfileCandidates, dshEntry, initProfile, PROFILE_TEMPLATES } from './dsh.js'
 import {
   discoverProfile,
-  inspectPatchTargets,
+  inspectPatchTargetsAsync,
   installFileTransforms,
   installModuleHooks,
   recordStartupPerformance,
@@ -69,7 +69,7 @@ export async function launchDsh(args: string[], profile: string | undefined, pro
     const configured = configuredProfileCandidates(profile!, profileDir, launcherPatchFiles(args), !isDefaultDump)
     discoverProfile(profileDir, injectHarmony, configured)
     const transformed = measure ? process.hrtime.bigint() : undefined
-    const inspections = inspectPatchTargets()
+    const inspections = await inspectPatchTargetsAsync()
     if (started !== undefined && transformed !== undefined) {
       const finished = process.hrtime.bigint()
       recordStartupPerformance({

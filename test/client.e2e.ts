@@ -6,7 +6,7 @@ import { runInNewContext } from 'node:vm'
 type Dictionaries = Record<'zh' | 'en', Record<string, string>>
 
 interface Registration {
-  options: { id: string; name?: string; label?: () => string; locale?: string }
+  options: { id?: string; key?: string; name?: string; label?: () => string; locale?: string }
   component: unknown
 }
 
@@ -39,7 +39,7 @@ type FetchInit = { method?: string; body?: string }
 let handleFetch = async (url: string, _init?: FetchInit): Promise<{ ok: boolean; json(): Promise<unknown> }> => ({
   ok: true,
   json: async () => url === '/dsh-harmony/profile'
-    ? { revision: 0, order: [], patchOrder: ['alpha/first', 'beta/only', 'alpha/last'], disabled: [], plugins: [{ name: 'alpha', harmony: true }, { name: 'beta', harmony: true }], orderViolations: [], patchOrderViolations: [], compatibility: [] }
+    ? { revision: 0, workerThreads: 1, order: [], patchOrder: ['alpha/first', 'beta/only', 'alpha/last'], disabled: [], plugins: [{ name: 'alpha', harmony: true }, { name: 'beta', harmony: true }], orderViolations: [], patchOrderViolations: [], compatibility: [] }
     : { state: 'active' },
 })
 type FakeStyle = {
@@ -133,7 +133,7 @@ client.apply({
   },
   slots: {
     inject(name, mount) {
-      assert.ok(['shell.overlay', 'settings.section'].includes(name))
+      assert.ok(['shell.overlay', 'settings.section', 'settings.plugin.item'].includes(name))
       mount()
     },
     register(options, component) {
@@ -156,13 +156,18 @@ assert.deepEqual(Object.keys(dictionaries.zh), Object.keys(dictionaries.en))
 assert.equal(dictionaries.zh.patchKindSource, '源码 Patch')
 assert.equal(dictionaries.zh.patchBound, '已启用')
 assert.equal(dictionaries.zh.viewPatchDetails, '查看详情')
+assert.equal(dictionaries.zh.workerThreadsTitle, '多线程装载')
 assert.equal(dictionaries.en.patchOperationReplace, 'Replace')
 assert.equal(typeof registration.component, 'function')
+const workerRegistration = registrations.find(value => value.options.key === 'dsh-harmony')
+assert.equal(workerRegistration?.options.name, 'settings.plugin.item')
+assert.equal(workerRegistration?.options.locale, 'dsh-harmony')
 assert.equal(registrations.find(value => value.options.id === 'harmony-runtime')?.options.name, 'shell.overlay')
 assert.equal(registrations.find(value => value.options.id === 'harmony-reload-notifications')?.options.name, 'shell.overlay')
 
 const profile = {
   revision: 4,
+  workerThreads: 1,
   order: ['alpha'],
   patchOrder: ['alpha/first'],
   disabled: ['alpha/first'],
@@ -195,6 +200,7 @@ const patch = {
   state: 'disabled', matches: 0, generation: 1, declaration: 'patch.cjs',
 }
 const updates: Array<{ expectedRevision: number; patchOrder: string[]; disabled: string[] }> = []
+const workerUpdates: Array<{ expectedRevision: number; workerThreads: number }> = []
 const highlighted: string[] = []
 let inspectLargeDiff = false
 const largeBefore = Array.from({ length: 1000 }, (_, index) => `const before${index} = ${index}`).join('\n')
@@ -226,10 +232,24 @@ handleFetch = async (url, init) => {
   }
   if (url !== '/dsh-harmony/profile') throw new Error(`unexpected request: ${url}`)
   if (init?.method === 'POST') {
-    const update = JSON.parse(init.body ?? '{}') as { expectedRevision: number; patchOrder: string[]; disabled: string[] }
-    updates.push(update)
-    profile.patchOrder = [...update.patchOrder]
-    profile.disabled = [...update.disabled]
+    const update = JSON.parse(init.body ?? '{}') as {
+      expectedRevision: number
+      workerThreads?: number
+      patchOrder?: string[]
+      disabled?: string[]
+    }
+    if (update.workerThreads !== undefined) {
+      workerUpdates.push({ expectedRevision: update.expectedRevision, workerThreads: update.workerThreads })
+      profile.workerThreads = update.workerThreads
+    } else {
+      updates.push({
+        expectedRevision: update.expectedRevision,
+        patchOrder: update.patchOrder!,
+        disabled: update.disabled!,
+      })
+      profile.patchOrder = [...update.patchOrder!]
+      profile.disabled = [...update.disabled!]
+    }
     profile.revision += 1
     patch.state = profile.disabled.includes(patch.key) ? 'disabled' : 'bound'
   }
@@ -370,3 +390,68 @@ await testRenderer.act(async () => {
   await new Promise(resolve => setImmediate(resolve))
 })
 assert.match(find(node => node.props.className === 'dshHarmonyDiffEmpty').children.join(''), /too large to diff safely/)
+
+const workerComponent = behaviorRegistrations.find(value => value.options.key === 'dsh-harmony')?.component
+assert.ok(workerComponent !== undefined)
+let workerRendered!: ReturnType<typeof testRenderer.create>
+await testRenderer.act(async () => {
+  workerRendered = testRenderer.create(React.createElement(workerComponent, {
+    t: (key: string) => dictionaries!.en[key] ?? key,
+  }))
+  await new Promise(resolve => setImmediate(resolve))
+})
+const workerCard = workerRendered.root.find(node => node.props.className === 'dshHarmonyWorkerCard')
+assert.equal(workerCard.type, 'li')
+assert.equal(workerCard.props['data-open'], 'false')
+assert.equal(workerRendered.root.find(node => node.props.className === 'dshHarmonyWorkerTitle').children.join(''), 'Harmony')
+const workerToggle = workerRendered.root.find(node => node.props.className === 'dshHarmonyWorkerHeaderButton')
+let workerOwner = workerRendered.root.find(node => node.props.className === 'dshHarmonyWorkerPlugin')
+assert.equal(workerOwner.type, 'a')
+assert.equal(workerOwner.props.href, 'https://github.com/memorax-ai/dsh-harmony')
+assert.equal(workerOwner.props.target, '_blank')
+assert.equal(workerOwner.props.rel, 'noreferrer')
+assert.equal(workerOwner.props['data-ready'], 'false')
+await testRenderer.act(async () => {
+  ;(workerOwner.props.onPointerEnter as () => void)()
+  let prevented = false
+  ;(workerOwner.props.onClick as (event: { detail: number; preventDefault(): void }) => void)({
+    detail: 1,
+    preventDefault() { prevented = true },
+  })
+  assert.equal(prevented, true)
+})
+assert.equal(workerRendered.root.find(node => node.props.className === 'dshHarmonyWorkerCard').props['data-open'], 'true')
+await testRenderer.act(async () => {
+  ;(workerToggle.props.onClick as () => void)()
+})
+assert.equal(workerRendered.root.find(node => node.props.className === 'dshHarmonyWorkerCard').props['data-open'], 'false')
+await testRenderer.act(async () => {
+  workerOwner = workerRendered.root.find(node => node.props.className === 'dshHarmonyWorkerPlugin')
+  ;(workerOwner.props.onPointerEnter as () => void)()
+  await new Promise(resolve => setTimeout(resolve, 310))
+})
+workerOwner = workerRendered.root.find(node => node.props.className === 'dshHarmonyWorkerPlugin')
+assert.equal(workerOwner.props['data-ready'], 'true')
+await testRenderer.act(async () => {
+  let prevented = false
+  ;(workerOwner.props.onClick as (event: { detail: number; preventDefault(): void }) => void)({
+    detail: 1,
+    preventDefault() { prevented = true },
+  })
+  assert.equal(prevented, false)
+  ;(workerOwner.props.onPointerLeave as () => void)()
+})
+assert.equal(workerRendered.root.find(node => node.props.className === 'dshHarmonyWorkerCard').props['data-open'], 'false')
+await testRenderer.act(async () => {
+  ;(workerToggle.props.onClick as () => void)()
+})
+assert.equal(workerRendered.root.find(node => node.props.className === 'dshHarmonyWorkerCard').props['data-open'], 'true')
+assert.equal(workerRendered.root.find(node => node.props.className === 'dshHarmonyWorkerSettingTitle').children.join(''), 'Multithreaded loading')
+const workerSelect = workerRendered.root.find(node => node.type === 'select')
+assert.equal(workerSelect.props.value, '1')
+await testRenderer.act(async () => {
+  ;(workerSelect.props.onChange as (event: { currentTarget: { value: string } }) => void)({ currentTarget: { value: '4' } })
+  await new Promise(resolve => setImmediate(resolve))
+})
+assert.deepEqual(workerUpdates, [{ expectedRevision: 5, workerThreads: 4 }])
+assert.equal(workerRendered.root.find(node => node.type === 'select').props.value, '4')
