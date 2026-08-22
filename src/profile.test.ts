@@ -170,7 +170,7 @@ test('declares the built-in Settings Patch when its target plugin is present', (
 
   writeProfile({ 'dsh-harmony': '1' }, ['custom-web-bundle'])
   expect(synchronizeHarmonyProfile(profile).plugins[0].patches)
-    .toEqual(['./lib/builtins/settings.patch.cjs'])
+    .toEqual(['./lib/builtins/settings.patch.cjs', './lib/builtins/session-profile.patch.cjs'])
 
   rmSync(settingsDir, { recursive: true })
   writeFileSync(join(bundle, 'package.json'), JSON.stringify({ name: 'custom-web-bundle' }))

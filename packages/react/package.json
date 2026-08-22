@@ -53,7 +53,7 @@
     "prepack": "npm run build"
   },
   "engines": {
-    "node": "^22.22.3 || >=24.11.1"
+    "node": "^22.15.0 || >=23.5.0"
   },
   "peerDependencies": {
     "dsh-harmony": "^0.8.0"

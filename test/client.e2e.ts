@@ -21,6 +21,11 @@ interface ClientContext {
     inject(name: string, mount: () => void): void
     register(options: Registration['options'], component: unknown): void
   }
+  sessions: {
+    list: { getSnapshot(): { current?: string; byId: Record<string, unknown> } }
+    open(id: string): void
+    clear(): void
+  }
 }
 
 interface ClientModule {
@@ -111,7 +116,7 @@ const client = loaded.factory(name => {
   }
 })
 assert.match(existingPluginStyle.textContent, /dshHarmonySourceSummary\{position:sticky/)
-assert.deepEqual(Array.from(client.inject), ['slots', 'locale'])
+assert.deepEqual(Array.from(client.inject), ['slots', 'locale', 'sessions'])
 
 const registrations: Registration[] = []
 let dictionaries: Dictionaries | undefined
@@ -120,6 +125,11 @@ client.apply({
     effects.push(Promise.resolve(register()))
   },
   get() { return undefined },
+  sessions: {
+    list: { getSnapshot() { return { byId: {} } } },
+    open() {},
+    clear() {},
+  },
   locale: {
     register(namespace, value) {
       assert.equal(namespace, 'dsh-harmony')
@@ -164,6 +174,8 @@ assert.equal(workerRegistration?.options.name, 'settings.plugin.item')
 assert.equal(workerRegistration?.options.locale, 'dsh-harmony')
 assert.equal(registrations.find(value => value.options.id === 'harmony-runtime')?.options.name, 'shell.overlay')
 assert.equal(registrations.find(value => value.options.id === 'harmony-reload-notifications')?.options.name, 'shell.overlay')
+assert.equal(registrations.find(value => value.options.id === 'harmony-session-patch-profile')?.options.name, 'shell.overlay')
+assert.equal(registrations.find(value => value.options.id === 'harmony-instance-patch-profile')?.options.name, 'shell.overlay')
 
 const profile = {
   revision: 4,
@@ -288,6 +300,11 @@ behaviorClient.apply({
   get(name) {
     assert.equal(name, 'syntaxHighlighter')
     return syntaxHighlighter
+  },
+  sessions: {
+    list: { getSnapshot() { return { byId: {} } } },
+    open() {},
+    clear() {},
   },
   locale: {
     register() { return () => {} },

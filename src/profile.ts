@@ -77,6 +77,7 @@ export const HARMONY_STATE_FILE = 'harmony.json'
 export const HARMONY_PLUGIN = 'dsh-harmony'
 const SETTINGS_PLUGIN = '@deepseek-ai/dsh-client-ui-settings-general'
 const SETTINGS_PATCH = './lib/builtins/settings.patch.cjs'
+const SESSION_PROFILE_PATCH = './lib/builtins/session-profile.patch.cjs'
 
 export function pinHarmonyOrder(order: string[]): string[] {
   if (!order.includes(HARMONY_PLUGIN)) return order
@@ -159,7 +160,7 @@ function installedPlugins(profileDir: string, requested?: string[], additional: 
   const settingsAvailable = seen.has(SETTINGS_PLUGIN) || settingsDependencyAvailable
   if (settingsAvailable) return plugins
   return plugins.map(plugin => plugin.name === HARMONY_PLUGIN
-    ? { ...plugin, patches: plugin.patches.filter(patch => patch !== SETTINGS_PATCH) }
+    ? { ...plugin, patches: plugin.patches.filter(patch => patch !== SETTINGS_PATCH && patch !== SESSION_PROFILE_PATCH) }
     : plugin)
 }
 

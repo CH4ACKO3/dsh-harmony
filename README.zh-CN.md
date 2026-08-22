@@ -21,7 +21,7 @@
 
   <p>
     <a href="LICENSE"><img alt="许可证：MIT" src="https://img.shields.io/badge/license-MIT-0b63f6.svg"></a>
-    <a href="package.json"><img alt="Node.js" src="https://img.shields.io/badge/node-%5E22.22.3%20%7C%7C%20%3E%3D24.11.1-2f6f3e.svg"></a>
+    <a href="package.json"><img alt="Node.js" src="https://img.shields.io/badge/node-%5E22.15.0%20%7C%7C%20%3E%3D23.5.0-2f6f3e.svg"></a>
     <a href="https://www.npmjs.com/package/dsh-harmony"><img alt="npm 版本" src="https://img.shields.io/npm/v/dsh-harmony.svg?style=flat&amp;color=0b63f6"></a>
     <a href="https://github.com/memorax-ai/dsh-harmony/stargazers"><img alt="GitHub Stars" src="https://img.shields.io/github/stars/memorax-ai/dsh-harmony?style=flat&amp;color=0b63f6"></a>
     <a href="https://awesome-dsh-plugin.com"><img alt="Awesome DSH Plugin" src="https://awesome-dsh-plugin.com/badge.svg"></a>
@@ -44,6 +44,10 @@ Source Patch 使用 TSQuery 查找 TypeScript AST 节点，再用 MagicString �
 Provider 可以声明自己的 Patch 应排在另一个 Provider 之前或之后；单个 Patch 也可以改用自己的规则。用户还能把不同 Provider 的 Patch 交错排列。若几处修改必须一起成功，可以把它们放进组合 Patch：它们共用一个位置和开关，任何成员失败时都不应用。
 
 对于浏览器插件，Harmony 还会按 Patch 顺序整理 Provider 所属的 `<style data-plugin>` 标签。每个 Provider 只有一组样式，它在 CSS 层叠中的位置由最后一个启用的 Patch 决定。Patch 重载后，Harmony 会再整理一次。
+
+Harmony 会把每个新 session 与创建它时“已启用 Patch 的有序 profile”绑定，并记录 Provider 版本与 Patch 内容指纹。绑定保存在 DSH 共享数据根的 `harmony-sessions.json` 中，不改动 DSH session 文件。Web 加载已记录的 session 前会先比较绑定状态与当前 profile；如果存在缺失、新增、实现变化或换序，会显示警告，并允许不加载、返回原来的 session。
+
+Harmony 还会在 `$DSH_HOME/harmony-instance.json` 中记录上一次启动共享 DSH 实例的有序 Patch profile。每次启动都会先把当前配置与这份数据侧记录比较；若不一致，会写入日志并在 Web 中显示一次警告，然后才把记录推进到本次运行配置。因此切换 profile 或修改 Patch 后，第一次开始接触同一 DSH_HOME 下共享的 session、附件、workspace 元数据和其他 storage 时会明确提示。
 
 Harmony 为 DeepSeek Harness 插件之间的协作补上了修改能力。
 
@@ -79,7 +83,7 @@ Harmony 不会把编译内部变成稳定的公开 API；它让这项依赖变�
 
 ## 安装
 
-需要 Node.js `^22.22.3` 或 `>=24.11.1`，并支持 `@deepseek-ai/dsh@0.1.0-rc.8` 或 `@deepseek-ai/dsh@>=0.1.1-rc.1 <0.1.2-0`。
+需要 Node.js `^22.15.0` 或 `>=23.5.0`，以及当前版本的 `@deepseek-ai/dsh`。Harmony 不会在安装阶段限制 DSH 版本；Patch 目标版本范围仅用于提示，对更新的版本仍会实际尝试应用。
 
 ```sh
 npm install -g @deepseek-ai/dsh@0.1.1-rc.2

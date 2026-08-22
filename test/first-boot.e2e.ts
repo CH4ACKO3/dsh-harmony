@@ -38,8 +38,8 @@ try {
     transformMs: number
   }
   assert.equal(performance.operation, 'startup')
-  assert.equal(performance.targetPackages, 1)
-  assert.equal(performance.targetFiles, 1)
+  assert.equal(performance.targetPackages, 2)
+  assert.equal(performance.targetFiles, 2)
   assert.ok(performance.prepareMs >= 0)
   assert.ok(performance.transformMs >= 0)
 
@@ -48,9 +48,10 @@ try {
   const inspection = await fetch(`${url}/dsh-harmony/inspect`).then(response => response.json() as Promise<{
     inspections: Array<{ package: string; file: string }>
   }>)
-  assert.deepEqual(inspection.inspections.map(item => `${item.package}/${item.file}`), [
+  assert.deepEqual(inspection.inspections.map(item => `${item.package}/${item.file}`).sort(), [
+    '@deepseek-ai/dsh-client-runtime/lib/client.js',
     '@deepseek-ai/dsh-client-ui-settings-general/lib/client.js',
-  ])
+  ].sort())
 } finally {
   if (child.exitCode === null) {
     const exited = new Promise(resolve => child.once('exit', resolve))

@@ -3,9 +3,10 @@ import { channel } from 'node:diagnostics_channel'
 import { readFileSync } from 'node:fs'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import type { ClientModuleRegistry } from '@deepseek-ai/dsh-client-modules'
 import type { WebServer } from '@deepseek-ai/dsh-host-webserver'
+import type { Session } from '@deepseek-ai/dsh-session'
 import type { Context, Fiber } from '@deepseek-ai/cordis'
 import type { Loader } from '@deepseek-ai/cordis-plugin-loader'
 import { publishRuntimeAddress } from './control.js'
@@ -25,6 +26,7 @@ import {
   beginPluginUpdate,
   beginStartupUpdate,
   consumeStartupPerformance,
+  currentSessionPatchProfile,
   currentProfile,
   getPatchInspections,
   getPatchOrderViolations,
@@ -39,6 +41,7 @@ import {
 } from './runtime.js'
 import type { PatchTargets, ProfileTransaction } from './runtime.js'
 import type { HarmonyActivePlugin } from './compatibility.js'
+import { harmonyDataRoot, HarmonySessionProfileStore } from './session-profile.js'
 
 const imageAssets = [
   ['/dsh-harmony/assets/harmony-icon-mono.png', new URL('../assets/harmony-icon-mono.png', import.meta.url), 'image/png'],
@@ -223,6 +226,23 @@ export async function apply(ctx: Context): Promise<void> {
   if (process.env.DSH_HARMONY_ACTIVE !== '1') return waitForRuntimeChoice(ctx)
 
   const profileDir = currentProfile().dir
+  const sessionProfiles = new HarmonySessionProfileStore(harmonyDataRoot(profileDir))
+  const instanceProfileCheck = await sessionProfiles.startInstance(basename(profileDir), currentSessionPatchProfile())
+  if (instanceProfileCheck.state === 'mismatch') {
+    const difference = instanceProfileCheck.difference
+    ctx.logger.warn?.([
+      `dsh-harmony: instance Patch profile changed from ${JSON.stringify(instanceProfileCheck.recorded.profile)} to ${JSON.stringify(instanceProfileCheck.current.profile)}`,
+      difference.missing.length === 0 ? undefined : `missing: ${difference.missing.join(', ')}`,
+      difference.added.length === 0 ? undefined : `added: ${difference.added.join(', ')}`,
+      difference.changed.length === 0 ? undefined : `changed: ${difference.changed.join(', ')}`,
+      difference.reordered ? 'application order changed' : undefined,
+    ].filter(Boolean).join('; '))
+  }
+  ctx.on('session/created', (session: Session) => {
+    void sessionProfiles.bind(session.id, currentSessionPatchProfile())
+      .catch(error => ctx.logger.error(error))
+  })
+  ctx.on('session/flush', () => sessionProfiles.flush())
   const pendingHost = new Set<string>()
   const pendingClient = new Set<string>()
   let pendingGeneration = 0
@@ -663,6 +683,15 @@ export async function apply(ctx: Context): Promise<void> {
           file: url.searchParams.get('file') ?? undefined,
         }))
       }
+      if (path === '/dsh-harmony/session-profile' && request.method === 'GET') {
+        const url = new URL(request.url ?? '/', 'http://localhost')
+        const sessionId = url.searchParams.get('sessionId')
+        if (sessionId === null || sessionId.length === 0) throw new TypeError('dsh-harmony: sessionId is required')
+        return sendJson(response, sessionProfiles.check(sessionId, currentSessionPatchProfile()))
+      }
+      if (path === '/dsh-harmony/instance-profile' && request.method === 'GET') {
+        return sendJson(response, instanceProfileCheck)
+      }
       response.writeHead(404)
       response.end()
     })().catch(error => sendError(response, error))
@@ -739,6 +768,35 @@ export async function apply(ctx: Context): Promise<void> {
         return sendJson(response, {
           inspections: inspection.targets,
         })
+      },
+    }), webCtx.webServer.register({
+      kind: 'exact',
+      path: '/dsh-harmony/session-profile',
+      handler(request: IncomingMessage, response: ServerResponse) {
+        if (request.method !== 'GET') {
+          response.writeHead(405)
+          response.end()
+          return
+        }
+        try {
+          const url = new URL(request.url ?? '/', 'http://localhost')
+          const sessionId = url.searchParams.get('sessionId')
+          if (sessionId === null || sessionId.length === 0) throw new TypeError('dsh-harmony: sessionId is required')
+          return sendJson(response, sessionProfiles.check(sessionId, currentSessionPatchProfile()))
+        } catch (error) {
+          return sendError(response, error)
+        }
+      },
+    }), webCtx.webServer.register({
+      kind: 'exact',
+      path: '/dsh-harmony/instance-profile',
+      handler(request: IncomingMessage, response: ServerResponse) {
+        if (request.method !== 'GET') {
+          response.writeHead(405)
+          response.end()
+          return
+        }
+        return sendJson(response, instanceProfileCheck)
       },
     })]
     for (const [path, url, contentType] of imageAssets) {

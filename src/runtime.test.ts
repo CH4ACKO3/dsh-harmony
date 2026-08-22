@@ -2201,3 +2201,36 @@ function SettingsPanel() {
     matches: 1,
   }))
 })
+
+test('applies the bundled session profile guard at the history loading boundary', () => {
+  const target = join(root, 'bundled-session-runtime-target')
+  const filename = join(target, 'lib/client.js')
+  mkdirSync(join(target, 'lib'), { recursive: true })
+  writeFileSync(join(target, 'package.json'), JSON.stringify({
+    name: '@deepseek-ai/dsh-client-runtime',
+    version: '0.1.0-rc.8',
+  }))
+  writeFileSync(filename, `
+class Session {
+  open() {
+    if (this.openState === "open") return Promise.resolve();
+    if (this.openPromise !== null) return this.openPromise;
+    const promise = this.doOpen(this.openGeneration).finally(() => {
+      if (this.openPromise === promise) this.openPromise = null;
+    });
+    this.openPromise = promise;
+    return promise;
+  }
+}
+`)
+
+  discoverPackage(process.cwd())
+  const transformed = readFileSync(filename, 'utf8')
+
+  expect(transformed).toContain('__dshHarmonyBeforeSessionOpen?.(this.sessionId)')
+  expect(getPatchStatuses()).toContainEqual(expect.objectContaining({
+    key: 'dsh-harmony/session-profile-guard',
+    state: 'bound',
+    matches: 1,
+  }))
+})

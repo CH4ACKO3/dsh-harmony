@@ -193,6 +193,8 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
 .dshHarmonyRuntimeDialog p{max-width:68ch;margin:8px 0 0;color:var(--dsw-alias-label-secondary);font-size:13px;line-height:21px;text-wrap:pretty}
 .dshHarmonyRuntimeError{color:var(--dsw-alias-state-error-primary)!important;overflow-wrap:anywhere}
 .dshHarmonyRuntimeActions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-top:20px}
+.dshHarmonySessionDiff{display:flex;flex-direction:column;gap:5px;margin:14px 0 0;padding:10px 12px;border:1px solid rgba(217,119,6,.24);border-radius:8px;background:rgba(217,119,6,.1);color:var(--dsw-alias-label-secondary);font-size:12px;line-height:19px}
+.dshHarmonySessionDiff code{overflow-wrap:anywhere;color:var(--dsw-alias-label-primary);font-family:var(--dsw-font-family-code,monospace);font-size:11px}
 .dshHarmonyDanger{color:var(--dsw-alias-state-error-primary)}
 .dshHarmonyToast{position:fixed;z-index:1200;top:24px;left:50%;display:flex;align-items:center;gap:9px;max-width:min(560px,calc(100vw - 32px));padding:10px 14px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);box-shadow:var(--dsw-shadow-lv2);font-size:13px;line-height:20px;transform:translateX(-50%)}
 .dshHarmonyToastDot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--dsw-alias-state-business-primary)}
@@ -314,6 +316,20 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         runtimeInstalled: '启动器已安装。下次启动 dsh 时将自动启用 Harmony。',
         runtimeWorking: '正在处理…',
         runtimeError: '操作失败',
+        sessionPatchTitle: 'Session 的 Patch 状态已变化',
+        sessionPatchBody: '这个 session 绑定的 Patch 与当前启用状态不一致。继续加载可能导致行为或上下文与原来不同。',
+        sessionPatchMissing: '当前缺失',
+        sessionPatchAdded: '当前新增',
+        sessionPatchChanged: '实现已变化',
+        sessionPatchReordered: '应用顺序已变化',
+        sessionPatchStay: '不加载，返回',
+        sessionPatchContinue: '仍然加载',
+        sessionPatchCheckErrorTitle: '无法检查 Session 的 Patch 状态',
+        sessionPatchCheckErrorBody: 'Harmony 无法读取这个 session 绑定的 Patch 信息。为避免在未知状态下加载，你可以先返回，或明确选择仍然加载。',
+        instancePatchTitle: '实例数据使用了不同的 Patch 配置',
+        instancePatchBody: '这个 DSH_HOME 上次由另一个有序 Patch profile 启动。当前实例已经继续启动并记录新状态；请确认下面的变化符合预期。',
+        instancePatchProfiles: 'Profile',
+        instancePatchDismiss: '我知道了',
         reloadStarting: 'Harmony 正在重载',
         reloadSucceeded: 'Harmony 重载成功',
         reloadFailed: 'Harmony 重载失败',
@@ -424,6 +440,20 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         runtimeInstalled: 'The launcher is installed. Harmony will activate the next time dsh starts.',
         runtimeWorking: 'Working…',
         runtimeError: 'The operation failed',
+        sessionPatchTitle: 'This session’s Patch profile changed',
+        sessionPatchBody: 'The Patches bound to this session do not match the currently enabled profile. Loading it may produce behavior or context different from the original session.',
+        sessionPatchMissing: 'Missing now',
+        sessionPatchAdded: 'Added now',
+        sessionPatchChanged: 'Implementation changed',
+        sessionPatchReordered: 'Application order changed',
+        sessionPatchStay: 'Go back without loading',
+        sessionPatchContinue: 'Load anyway',
+        sessionPatchCheckErrorTitle: 'Could not check this session’s Patch profile',
+        sessionPatchCheckErrorBody: 'Harmony could not read the Patch profile bound to this session. Go back to avoid loading it in an unknown state, or explicitly load it anyway.',
+        instancePatchTitle: 'Instance data used a different Patch profile',
+        instancePatchBody: 'This DSH_HOME was last started with another ordered Patch profile. The current instance continued startup and recorded its new state; verify that the changes below are intentional.',
+        instancePatchProfiles: 'Profiles',
+        instancePatchDismiss: 'Acknowledge',
         reloadStarting: 'Harmony is reloading',
         reloadSucceeded: 'Harmony reloaded successfully',
         reloadFailed: 'Harmony reload failed',
@@ -452,6 +482,63 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       signature: string
       state: ReloadState
       text: string
+    }
+
+    interface SessionPatchProfile {
+      recordedAt: number
+      patches: Array<{ key: string; providerVersion: string; fingerprint: string }>
+    }
+
+    interface SessionPatchMismatch {
+      sessionId: string
+      state: 'mismatch'
+      recorded: SessionPatchProfile
+      current: SessionPatchProfile
+      difference: { missing: string[]; added: string[]; changed: string[]; reordered: boolean }
+    }
+
+    type SessionPatchCheck = SessionPatchMismatch | {
+      sessionId: string
+      state: 'match'
+      recorded: SessionPatchProfile
+      current: SessionPatchProfile
+    } | {
+      sessionId: string
+      state: 'untracked'
+      current: SessionPatchProfile
+    }
+
+    interface InstancePatchMismatch {
+      state: 'mismatch'
+      recorded: SessionPatchProfile & { profile: string }
+      current: SessionPatchProfile & { profile: string }
+      difference: { missing: string[]; added: string[]; changed: string[]; reordered: boolean }
+    }
+
+    interface SessionPatchPromptRequest {
+      check?: SessionPatchMismatch
+      error?: string
+      resolve(allowed: boolean): void
+    }
+
+    interface SessionsService {
+      list: { getSnapshot(): { current?: string; byId: Record<string, unknown> } }
+      open(id: string): void
+      clear(): void
+    }
+
+    let sessionPatchPromptListener: ((request: SessionPatchPromptRequest) => void) | undefined
+
+    function requestSessionPatchConfirmation(input: { check: SessionPatchMismatch } | { error: string }): Promise<boolean> {
+      return new Promise((resolve) => {
+        if (sessionPatchPromptListener === undefined) {
+          resolve(window.confirm('error' in input
+            ? 'Harmony could not check the Patches bound to this session. Load it anyway?'
+            : 'The Patches bound to this session do not match the current profile. Load it anyway?'))
+          return
+        }
+        sessionPatchPromptListener({ ...input, resolve })
+      })
     }
 
     interface PatchStatus {
@@ -936,6 +1023,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         inject(name: string, mount: () => unknown): unknown
         register(options: Record<string, unknown>, component: unknown): unknown
       }
+      sessions: SessionsService
     }
 
     const localeNamespace = 'dsh-harmony'
@@ -1164,6 +1252,98 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
                 h('button', { className: 'dshHarmonySecondary', type: 'button', disabled: busy, onClick: () => { void choose('ignore') } }, t('ignoreOnce')),
                 h('button', { className: 'dshHarmonySecondary', type: 'button', disabled: busy, onClick: () => { void choose('install') } }, t('install')),
                 h('button', { ref: primary, className: 'dshHarmonyButton', type: 'button', disabled: busy, onClick: () => { void choose('install-restart') } }, busy ? t('runtimeWorking') : t('installRestart'))))))
+    }
+
+    function SessionPatchPrompt({ t }: { t: Translate }) {
+      const [request, setRequest] = useState<SessionPatchPromptRequest | null>(null)
+      const current = useRef<SessionPatchPromptRequest | null>(null)
+      const queue = useRef<SessionPatchPromptRequest[]>([])
+      const layer = useRef<HTMLElement | null>(null)
+      const dialog = useRef<HTMLElement | null>(null)
+      const primary = useRef<HTMLButtonElement | null>(null)
+      current.current = request
+
+      useEffect(() => {
+        const listener = (next: SessionPatchPromptRequest) => {
+          setRequest(active => {
+            if (active === null) return next
+            queue.current.push(next)
+            return active
+          })
+        }
+        sessionPatchPromptListener = listener
+        return () => {
+          if (sessionPatchPromptListener === listener) sessionPatchPromptListener = undefined
+          current.current?.resolve(false)
+          for (const pending of queue.current.splice(0)) pending.resolve(false)
+        }
+      }, [])
+
+      const finish = (allowed: boolean) => {
+        if (request === null) return
+        request.resolve(allowed)
+        setRequest(queue.current.shift() ?? null)
+      }
+      useModalFocus(request !== null, layer, dialog, primary, () => finish(false))
+      useEffect(() => { if (request !== null) primary.current?.focus() }, [request])
+
+      if (request === null) return null
+      const difference = request.check?.difference
+      const rows = difference === undefined ? [] : [
+        difference.missing.length === 0 ? null : [t('sessionPatchMissing'), difference.missing],
+        difference.added.length === 0 ? null : [t('sessionPatchAdded'), difference.added],
+        difference.changed.length === 0 ? null : [t('sessionPatchChanged'), difference.changed],
+        difference.reordered ? [t('sessionPatchReordered'), []] : null,
+      ].filter((row): row is [string, string[]] => row !== null)
+      const failed = request.error !== undefined
+      return h('div', { className: 'dshHarmonyRuntimeLayer', role: 'presentation', ref: layer },
+        h('section', { className: 'dshHarmonyRuntimeDialog', role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'dsh-harmony-session-patch-title', ref: dialog, tabIndex: -1 },
+          h('h2', { id: 'dsh-harmony-session-patch-title' }, t(failed ? 'sessionPatchCheckErrorTitle' : 'sessionPatchTitle')),
+          h('p', null, t(failed ? 'sessionPatchCheckErrorBody' : 'sessionPatchBody')),
+          failed ? h('p', { className: 'dshHarmonyRuntimeError', role: 'alert' }, request.error) : null,
+          rows.length === 0 ? null : h('div', { className: 'dshHarmonySessionDiff' }, rows.map(([label, keys]) =>
+            h('div', { key: label }, h('strong', null, label), keys.length === 0 ? null : ': ',
+              keys.length === 0 ? null : h('code', null, keys.join(', '))))),
+          h('div', { className: 'dshHarmonyRuntimeActions' },
+            h('button', { ref: primary, className: 'dshHarmonySecondary', type: 'button', onClick: () => finish(false) }, t('sessionPatchStay')),
+            h('button', { className: 'dshHarmonyButton', type: 'button', onClick: () => finish(true) }, t('sessionPatchContinue')))))
+    }
+
+    function InstancePatchPrompt({ t }: { t: Translate }) {
+      const [check, setCheck] = useState<InstancePatchMismatch | null>(null)
+      const layer = useRef<HTMLElement | null>(null)
+      const dialog = useRef<HTMLElement | null>(null)
+      const primary = useRef<HTMLButtonElement | null>(null)
+      useEffect(() => {
+        let mounted = true
+        void fetch('/dsh-harmony/instance-profile', { cache: 'no-store' })
+          .then(response => response.ok ? response.json() as Promise<InstancePatchMismatch | { state: string }> : undefined)
+          .then(result => {
+            if (mounted && result?.state === 'mismatch') setCheck(result as InstancePatchMismatch)
+          })
+          .catch(() => {})
+        return () => { mounted = false }
+      }, [])
+      useModalFocus(check !== null, layer, dialog, primary, () => setCheck(null))
+      if (check === null) return null
+      const difference = check.difference
+      const rows = [
+        check.recorded.profile === check.current.profile
+          ? null : [t('instancePatchProfiles'), [`${check.recorded.profile} → ${check.current.profile}`]],
+        difference.missing.length === 0 ? null : [t('sessionPatchMissing'), difference.missing],
+        difference.added.length === 0 ? null : [t('sessionPatchAdded'), difference.added],
+        difference.changed.length === 0 ? null : [t('sessionPatchChanged'), difference.changed],
+        difference.reordered ? [t('sessionPatchReordered'), []] : null,
+      ].filter((row): row is [string, string[]] => row !== null)
+      return h('div', { className: 'dshHarmonyRuntimeLayer', role: 'presentation', ref: layer },
+        h('section', { className: 'dshHarmonyRuntimeDialog', role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'dsh-harmony-instance-patch-title', ref: dialog, tabIndex: -1 },
+          h('h2', { id: 'dsh-harmony-instance-patch-title' }, t('instancePatchTitle')),
+          h('p', null, t('instancePatchBody')),
+          h('div', { className: 'dshHarmonySessionDiff' }, rows.map(([label, values]) =>
+            h('div', { key: label }, h('strong', null, label), values.length === 0 ? null : ': ',
+              values.length === 0 ? null : h('code', null, values.join(', '))))),
+          h('div', { className: 'dshHarmonyRuntimeActions' },
+            h('button', { ref: primary, className: 'dshHarmonyButton', type: 'button', onClick: () => setCheck(null) }, t('instancePatchDismiss')))))
     }
 
     function ReloadNotifications({ t }: { t: Translate }) {
@@ -2474,7 +2654,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
           saving ? h('span', { className: 'dshHarmonySrOnly', role: 'status' }, t('workerThreadsSaving')) : null) : null)
     }
 
-    const inject = ['slots', 'locale']
+    const inject = ['slots', 'locale', 'sessions']
     function apply(ctx: HarmonyClientContext) {
       ctx.effect(() => ctx.locale.register(localeNamespace, dictionaries), 'dsh-harmony: dictionaries')
       ctx.effect(() => {
@@ -2496,6 +2676,74 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
         order: -109,
         locale: localeNamespace,
       }, ReloadNotifications))
+      ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+        name: 'shell.overlay',
+        id: 'harmony-session-patch-profile',
+        order: -108,
+        locale: localeNamespace,
+      }, SessionPatchPrompt))
+      ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+        name: 'shell.overlay',
+        id: 'harmony-instance-patch-profile',
+        order: -107,
+        locale: localeNamespace,
+      }, InstancePatchPrompt))
+      ctx.effect(() => {
+        const approved = new Map<string, string>()
+        let lastAllowed = ctx.sessions.list.getSnapshot().current
+        const global = globalThis as typeof globalThis & {
+          __dshHarmonyBeforeSessionOpen?: (sessionId: string) => Promise<boolean>
+        }
+        const previous = global.__dshHarmonyBeforeSessionOpen
+        const guard = async (sessionId: string): Promise<boolean> => {
+          try {
+            const response = await fetch(`/dsh-harmony/session-profile?${new URLSearchParams({ sessionId })}`, { cache: 'no-store' })
+            if (!response.ok) throw new Error(`session Patch profile check failed: ${response.status}`)
+            const check = await response.json() as SessionPatchCheck
+            const signature = JSON.stringify(check.current.patches)
+            if (approved.get(sessionId) === signature) {
+              lastAllowed = sessionId
+              return true
+            }
+            const prior = lastAllowed
+            const allowed = check.state !== 'mismatch' || await requestSessionPatchConfirmation({ check })
+            if (allowed) {
+              approved.set(sessionId, signature)
+              lastAllowed = sessionId
+              return true
+            }
+            queueMicrotask(() => {
+              const snapshot = ctx.sessions.list.getSnapshot()
+              if (snapshot.current !== sessionId) return
+              if (prior !== undefined && prior !== sessionId && snapshot.byId[prior] !== undefined) ctx.sessions.open(prior)
+              else ctx.sessions.clear()
+            })
+            return false
+          } catch (error) {
+            console.warn('[dsh-harmony] session Patch profile check failed', error)
+            const prior = lastAllowed
+            const allowed = await requestSessionPatchConfirmation({ error: error instanceof Error ? error.message : String(error) })
+            if (allowed) {
+              lastAllowed = sessionId
+              return true
+            }
+            queueMicrotask(() => {
+              const snapshot = ctx.sessions.list.getSnapshot()
+              if (snapshot.current !== sessionId) return
+              if (prior !== undefined && prior !== sessionId && snapshot.byId[prior] !== undefined) ctx.sessions.open(prior)
+              else ctx.sessions.clear()
+            })
+            return false
+          }
+        }
+        global.__dshHarmonyBeforeSessionOpen = guard
+        return () => {
+          if (global.__dshHarmonyBeforeSessionOpen === guard) {
+            if (previous === undefined) delete global.__dshHarmonyBeforeSessionOpen
+            else global.__dshHarmonyBeforeSessionOpen = previous
+          }
+        }
+      }, 'dsh-harmony: session Patch profile guard')
       ctx.effect(async () => {
         const status = await fetch('/dsh-harmony/runtime', { cache: 'no-store' }).then(response => response.json())
         if (status.state !== 'active') return

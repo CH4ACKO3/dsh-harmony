@@ -21,7 +21,7 @@
 
   <p>
     <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-0b63f6.svg"></a>
-    <a href="package.json"><img alt="Node.js" src="https://img.shields.io/badge/node-%5E22.22.3%20%7C%7C%20%3E%3D24.11.1-2f6f3e.svg"></a>
+    <a href="package.json"><img alt="Node.js" src="https://img.shields.io/badge/node-%5E22.15.0%20%7C%7C%20%3E%3D23.5.0-2f6f3e.svg"></a>
     <a href="https://www.npmjs.com/package/dsh-harmony"><img alt="npm version" src="https://img.shields.io/npm/v/dsh-harmony.svg?style=flat&amp;color=0b63f6"></a>
     <a href="https://github.com/memorax-ai/dsh-harmony/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/memorax-ai/dsh-harmony?style=flat&amp;color=0b63f6"></a>
     <a href="https://awesome-dsh-plugin.com"><img alt="Awesome DSH Plugin" src="https://awesome-dsh-plugin.com/badge.svg"></a>
@@ -44,6 +44,10 @@ Source Patches find TypeScript AST nodes with TSQuery and rewrite their source r
 A provider can place its Patches before or after another provider. One Patch may override that rule, and users may interleave Patches from different providers. When several changes must succeed together, a composite Patch gives them one position and one switch; if a member fails, Harmony applies none of them.
 
 For browser plugins, Harmony also keeps provider-owned `<style data-plugin>` tags in Patch order. A provider owns one style group, so its last enabled Patch decides where that group appears in the CSS cascade. Harmony repeats the ordering after a Patch reload.
+
+Harmony binds each new session to the ordered enabled Patch profile that created it, including provider versions and Patch-content fingerprints. The shared DSH data root stores these bindings in `harmony-sessions.json`, leaving DSH session artifacts unchanged. Before Web loads a tracked session, Harmony compares that binding with the current profile; a mismatch shows the missing, added, changed, or reordered Patches and lets you return without loading the session.
+
+Harmony also records the last ordered Patch profile that started the shared DSH instance in `$DSH_HOME/harmony-instance.json`. Every startup compares its current profile with that data-side record. A mismatch is logged and shown in Web before the record advances to the running configuration, so a profile switch or Patch change is visible once at the point it starts touching the shared sessions, attachments, workspace metadata, and other storage under the same DSH home.
 
 Harmony adds modification to the ways DeepSeek Harness plugins can work together.
 
@@ -75,7 +79,7 @@ Load [`use-dsh-harmony`](https://github.com/memorax-ai/dsh-harmony/blob/main/.ag
 
 ## Install
 
-Requires Node.js `^22.22.3` or `>=24.11.1` and either `@deepseek-ai/dsh@0.1.0-rc.8` or `@deepseek-ai/dsh@>=0.1.1-rc.1 <0.1.2-0`.
+Requires Node.js `^22.15.0` or `>=23.5.0` and a current `@deepseek-ai/dsh` installation. Harmony does not gate DSH versions during installation; Patch target ranges are advisory and Harmony still attempts each Patch against newer releases.
 
 ```sh
 npm install -g @deepseek-ai/dsh@0.1.1-rc.2

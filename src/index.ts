@@ -181,3 +181,11 @@ export type {
 } from './compatibility.js'
 export type { HarmonyReloadStatus } from './installer.js'
 export type { HarmonyOrderViolation } from './order.js'
+export type {
+  HarmonyInstancePatchCheck,
+  HarmonyInstancePatchProfile,
+  HarmonySessionPatch,
+  HarmonySessionPatchCheck,
+  HarmonySessionPatchDifference,
+  HarmonySessionPatchProfile,
+} from './session-profile.js'

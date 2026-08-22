@@ -17,6 +17,7 @@ import type {
   HarmonySemanticPatch,
   HarmonySourcePatch,
 } from './index.js'
+import type { HarmonySessionPatchProfile } from './session-profile.js'
 import {
   autoSortPatchOrder,
   patchOrderInsertionIndex,
@@ -1391,7 +1392,10 @@ function targetFilename(
   if (state.targetIndexComplete === true && !discoverTarget) return undefined
   const normalized = absolute.replaceAll('\\', '/')
   for (const suffix of state.targetFileSuffixes) {
-    if (normalized.endsWith(suffix)) return canonicalFilename(absolute)
+    if (!normalized.endsWith(suffix)) continue
+    const target = canonicalFilename(absolute)
+    const pkg = packageFor(target)
+    if (pkg !== undefined && state.patchesByPackage.has(pkg.name)) return target
   }
   return undefined
 }
@@ -1630,6 +1634,22 @@ function invokeSemantic(bindingKey: string, self: unknown, initialArgs: unknown[
 export function getPatchStatuses(): HarmonyPatchStatus[] {
   return orderedPatches([...providers.values()].flatMap(provider => provider.patches))
     .map(registered => patchStatuses.get(registered.key) ?? freshStatus(registered))
+}
+
+export function currentSessionPatchProfile(recordedAt = Date.now()): HarmonySessionPatchProfile {
+  const providerByPatch = new Map([...providers.values()].flatMap(provider =>
+    provider.patches.map(patch => [patch.key, provider] as const)))
+  return {
+    recordedAt,
+    patches: getPatchStatuses().filter(patch => patch.state !== 'disabled').map((patch) => {
+      const provider = providerByPatch.get(patch.key)!
+      return {
+        key: patch.key,
+        providerVersion: provider.info.version,
+        fingerprint: provider.signature,
+      }
+    }),
+  }
 }
 
 export function getPatchOrderViolations(): ReturnType<typeof patchOrderViolations> {

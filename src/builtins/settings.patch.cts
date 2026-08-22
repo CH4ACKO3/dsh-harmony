@@ -14,7 +14,7 @@ const patch: HarmonySourcePatch = {
   description: 'Adds Harmony Patch management to the DSH Settings window.',
   target: {
     package: '@deepseek-ai/dsh-client-ui-settings-general',
-    version: '0.1.0-rc.8 || >=0.1.1-rc.1 <0.1.2-0',
+    version: '>=0.1.0-rc.8',
     file: 'lib/client.js',
   },
   select: 'SourceFile',
