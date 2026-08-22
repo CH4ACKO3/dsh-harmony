@@ -55,7 +55,7 @@ Ordinary DSH extension points remain the first choice when the target exposes th
 | --- | --- |
 | Hide or duplicate an internal UI and keep both implementations aligned | Replace the selected component or compiled call site in place |
 | Patch `node_modules`, carry a fork, or reapply edits after upgrades | Transform source in memory; installed package files remain byte-for-byte unchanged |
-| Discover a selector drift only after the UI silently breaks | Pin package version and `expect`; mismatches fail visibly in `status` |
+| Discover a selector drift only after the UI silently breaks | Pin package version and `expect`; version drift warns while a real match failure fails visibly in `status` |
 | Treat the final bundle as a black box | Inspect the original, every Patch step, and the final transformed source |
 | Remove custom edits manually | Disable or remove the Provider to restore the original behavior |
 

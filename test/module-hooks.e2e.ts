@@ -71,7 +71,7 @@ module.exports = [
   replaceValue('array-source', 'lib/array.js'),
   replaceValue('typed-source', 'lib/typed.js'),
   {
-    id: 'typescript-loader', target: { package: 'module-hook-target', file: 'index.ts' },
+    id: 'typescript-loader', target: { package: 'module-hook-target', version: '^2.0.0', file: 'index.ts' },
     loader: 'typescript',
   },
   {
@@ -148,7 +148,9 @@ module.exports = [
   assert.equal(typescript.value, 3)
   assert.equal((globalThis as any).__dshHarmonyAliasApplications, 1)
   assert.equal((globalThis as any).__dshHarmonyIdempotentApplications, 1)
-  assert.equal(getPatchStatuses().find(patch => patch.key === 'module-hook-provider/typescript-loader')?.state, 'bound')
+  const loaderStatus = getPatchStatuses().find(patch => patch.key === 'module-hook-provider/typescript-loader')
+  assert.equal(loaderStatus?.state, 'bound')
+  assert.deepEqual(loaderStatus?.warnings, ['target module-hook-target@1.0.0 does not satisfy ^2.0.0'])
   assert.equal(getPatchStatuses().find(patch => patch.key === 'module-hook-provider/typescript-source')?.state, 'bound')
 
   const candidate = beginProfileUpdate({ disabled: ['module-hook-provider/typescript-loader'] })

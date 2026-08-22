@@ -229,6 +229,7 @@ export function renderHarmonyPatchTui(
         `${selectedPatch.state} · generation ${selectedPatch.generation} · ${patchTarget(selectedPatch)}`,
         `${patchStateLabel(locale, selectedPatch.state)} · 代次 ${selectedPatch.generation} · ${patchTarget(selectedPatch)}`,
       ),
+      ...(selectedPatch.warnings ?? []).map(warning => `${ESC}33m${warning}${ESC}0m`),
       ...(selectedPatch.error === undefined ? [] : [`${ESC}31m${selectedPatch.error}${ESC}0m`]),
     ]),
     ...(message.length === 0 ? [] : [`${ESC}33m${message}${ESC}0m`]),

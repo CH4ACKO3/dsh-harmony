@@ -474,9 +474,23 @@ function updateStatus(registered: RegisteredPatch, value: Partial<HarmonyPatchSt
   const next = { ...previous, ...value }
   patchStatuses.set(registered.key, next)
   if (!pendingStatusGenerations.has(next.generation)
-    && (previous.state !== next.state || previous.error !== next.error)) {
+    && (previous.state !== next.state || previous.error !== next.error
+      || previous.warnings?.join('\0') !== next.warnings?.join('\0'))) {
     for (const listener of patchStatusListeners) listener()
   }
+}
+
+function addStatusWarnings(
+  registered: RegisteredPatch,
+  warnings: ReadonlyArray<string>,
+  statusGeneration: number,
+): void {
+  if (warnings.length === 0) return
+  const previous = patchStatuses.get(registered.key)?.warnings ?? []
+  updateStatus(registered, {
+    warnings: [...new Set([...previous, ...warnings])],
+    generation: statusGeneration,
+  })
 }
 
 function notify(targets: PatchTargets): void {
@@ -1083,7 +1097,7 @@ function missingTargetFileError(patch: HarmonyPatch): string {
     : `none of the target files exist: ${files.join(', ')}`
 }
 
-function versionError(patch: HarmonyPatch, pkg: PackageInfo): string | undefined {
+function versionWarning(patch: HarmonyPatch, pkg: PackageInfo): string | undefined {
   const range = patch.target.version
   if (range === undefined || semver.satisfies(pkg.version, range, { includePrerelease: true })) return undefined
   return `target ${pkg.name}@${pkg.version} does not satisfy ${range}`
@@ -1303,10 +1317,13 @@ function buildTransform(
     const members: HarmonyPatch[] = []
     let memberError: string | undefined
     for (const patch of registered.members.filter(patch => patch.target.package === pkg.name)) {
-      const incompatible = versionError(patch, pkg)
+      const warning = versionWarning(patch, pkg)
+      if (recordStatus && warning !== undefined) {
+        addStatusWarnings(registered, [warning], transformGeneration)
+      }
       const file = resolvedTargetFile(patch, pkg)
-      if (incompatible !== undefined || file === undefined) {
-        memberError = incompatible ?? missingTargetFileError(patch)
+      if (file === undefined) {
+        memberError = missingTargetFileError(patch)
         break
       }
       if (file === relativeFile) members.push(patch)
@@ -1429,13 +1446,9 @@ function activeTypeScriptLoader(
     }
     const loaders = registered.members.filter(patch => patchKind(patch) === 'loader'
       && patch.target.package === pkg.name) as HarmonyLoaderPatch[]
-    const incompatible = loaders.map(patch => versionError(patch, pkg)).find(error => error !== undefined)
-    if (incompatible !== undefined) {
-      if (recordStatus) updateStatus(registered, {
-        state: 'failed', matches: 0, error: incompatible, generation: requestedGeneration,
-      })
-      continue
-    }
+    const warnings = loaders.map(patch => versionWarning(patch, pkg))
+      .filter((warning): warning is string => warning !== undefined)
+    if (recordStatus) addStatusWarnings(registered, warnings, requestedGeneration)
     const files = loaders.map(patch => resolvedTargetFile(patch, pkg))
     if (files.some(file => file === undefined)) {
       if (recordStatus) updateStatus(registered, {
@@ -1895,6 +1908,7 @@ function inspectTargets(
   const working = new Map<string, WorkingTransform>()
   const applications = new Map<string, Map<string, HarmonyPatch[]>>()
   const failures = new Map<string, string>()
+  const warnings = new Map<string, string[]>()
   for (const [packageName, targetPatches] of patchesByTargetPackage) {
     let manifest: string | undefined
     try {
@@ -1913,10 +1927,15 @@ function inspectTargets(
     packageCache.set(pkg.dir, pkg)
     for (const { item, members } of targetPatches) {
       for (const patch of members) {
-        const incompatible = versionError(patch, pkg)
+        const warning = versionWarning(patch, pkg)
+        if (warning !== undefined && enabled.has(item.key)) {
+          const itemWarnings = warnings.get(item.key) ?? []
+          if (!itemWarnings.includes(warning)) itemWarnings.push(warning)
+          warnings.set(item.key, itemWarnings)
+        }
         const file = resolvedTargetFile(patch, pkg)
-        if (incompatible !== undefined || file === undefined) {
-          failures.set(item.key, incompatible ?? missingTargetFileError(patch))
+        if (file === undefined) {
+          failures.set(item.key, missingTargetFileError(patch))
           continue
         }
         const filename = canonicalFilename(join(pkg.dir, file))
@@ -2005,11 +2024,11 @@ function inspectTargets(
         }
       }
       updateStatus(item, disabledPatch ? {
-        state: 'disabled', matches: 0, error: undefined, generation: transformGeneration,
+        state: 'disabled', matches: 0, warnings: undefined, error: undefined, generation: transformGeneration,
       } : failure !== undefined ? {
-        state: 'failed', matches, error: failure, generation: transformGeneration,
+        state: 'failed', matches, warnings: warnings.get(item.key), error: failure, generation: transformGeneration,
       } : {
-        state: 'bound', matches, error: undefined, generation: transformGeneration,
+        state: 'bound', matches, warnings: warnings.get(item.key), error: undefined, generation: transformGeneration,
       })
     }
     const generationStateLoaders = generationState?.typescriptLoaderPackages

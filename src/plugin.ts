@@ -240,6 +240,7 @@ export async function apply(ctx: Context): Promise<void> {
     : packageNameOf((selfEntry as ReloadableEntry).options.name) ?? HARMONY_PLUGIN
   let warnedCompatibility = new Set<string>()
   let patchFailures = new Map<string, string>()
+  let patchWarnings = new Map<string, string>()
   let reloadSequence = 0
   let reloadStatus: HarmonyReloadStatus = { sequence: 0, state: 'idle' }
   let profileRevision = 0
@@ -315,8 +316,16 @@ export async function apply(ctx: Context): Promise<void> {
     warnedCompatibility = next
   }
 
-  const warnPatchFailures = (): void => {
-    const failures = getPatchStatuses().filter(patch => patch.state === 'failed')
+  const warnPatchStatuses = (): void => {
+    const patches = getPatchStatuses()
+    const warnings = patches.filter(patch => patch.warnings !== undefined)
+    const nextWarnings = new Map(warnings.map(patch => [patch.key, patch.warnings!.join('; ')]))
+    for (const patch of warnings) {
+      if (patchWarnings.get(patch.key) === nextWarnings.get(patch.key)) continue
+      ctx.logger.warn?.(`dsh-harmony: Patch ${JSON.stringify(patch.key)} compatibility warning: ${nextWarnings.get(patch.key)}; application continues`)
+    }
+    patchWarnings = nextWarnings
+    const failures = patches.filter(patch => patch.state === 'failed')
     const next = new Map(failures.map(patch => [patch.key, patch.error ?? 'unknown error']))
     for (const patch of failures) {
       if (patchFailures.get(patch.key) === next.get(patch.key)) continue
@@ -389,7 +398,7 @@ export async function apply(ctx: Context): Promise<void> {
       if (transaction.targets.size === 0 && action === undefined) {
         await transaction.commit()
         warnCompatibility(transaction.profile)
-        warnPatchFailures()
+        warnPatchStatuses()
         return
       }
       assertNoSelfHostReload(transaction.targets, action)
@@ -423,7 +432,7 @@ export async function apply(ctx: Context): Promise<void> {
       }
       await transaction.commit()
       warnCompatibility(transaction.profile)
-      warnPatchFailures()
+      warnPatchStatuses()
     } catch (error) {
       failure = error
       const rollbackErrors = []
@@ -500,7 +509,7 @@ export async function apply(ctx: Context): Promise<void> {
       }
       await transaction.commit()
       warnCompatibility(transaction.profile)
-      warnPatchFailures()
+      warnPatchStatuses()
     } catch (error) {
       failure = error
       if (probe !== undefined && prepareStarted !== undefined && transaction === undefined) {
@@ -758,7 +767,7 @@ export async function apply(ctx: Context): Promise<void> {
     })
   }
   ctx.effect(() => watchProfile(synchronizeLoader, (error) => ctx.logger.error(error)), 'dsh-harmony: profile order watch')
-  ctx.effect(() => subscribePatchStatuses(warnPatchFailures), 'dsh-harmony: Patch failure warnings')
+  ctx.effect(() => subscribePatchStatuses(warnPatchStatuses), 'dsh-harmony: Patch status warnings')
   ctx.on('loader/config-update', synchronizeLoader)
   ctx.on('internal/plugin', (fiber: Fiber) => {
     if (fiber.entry === undefined || !reloadingEntries.has(fiber.entry)) synchronizeLoader()

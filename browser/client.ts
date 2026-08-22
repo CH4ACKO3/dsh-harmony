@@ -96,6 +96,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
 .dshHarmonyPatchRow:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}
 .dshHarmonyPatchState{width:8px;height:8px;margin-top:6px;border-radius:50%;background:var(--dsw-alias-label-tertiary)}
 .dshHarmonyPatchState[data-state=bound]{background:var(--dsw-alias-state-business-primary)}
+.dshHarmonyPatchState[data-state=warning]{background:#d97706}
 .dshHarmonyPatchState[data-state=failed]{background:var(--dsw-alias-state-error-primary)}
 .dshHarmonyPatchState[data-state=disabled]{background:var(--dsw-alias-label-tertiary)}
 .dshHarmonyPatchRowText{min-width:0;display:flex;flex-direction:column;gap:1px}
@@ -467,6 +468,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       matches: number
       generation: number
       declaration: string
+      warnings?: string[]
       error?: string
       members?: Array<{ id: string; description?: string; kind: 'source' | 'semantic' | 'loader' }>
     }
@@ -1231,6 +1233,8 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       const selectedRow = useRef<HTMLButtonElement | null>(null)
       const patch = patches.find(item => item.key === selected) ?? patches[0]
       const stateLabel = (state: PatchStatus['state']) => t({ pending: 'patchPending', bound: 'patchBound', disabled: 'patchDisabled', failed: 'patchFailed' }[state] as TranslationKey)
+      const displayStateLabel = (patch: PatchStatus) => patch.state === 'bound' && patch.warnings?.length
+        ? t('patchWarning') : stateLabel(patch.state)
       const diffSteps = useMemo(() => {
         if (inspection === null) return []
         let previous = inspection.original
@@ -1348,11 +1352,15 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
                     'data-patch-key': item.key,
                     onClick: () => onSelect(item.key),
                   },
-                  h('span', { className: 'dshHarmonyPatchState', 'data-state': item.state, title: stateLabel(item.state) }),
+                  h('span', {
+                    className: 'dshHarmonyPatchState',
+                    'data-state': item.state === 'bound' && item.warnings?.length ? 'warning' : item.state,
+                    title: displayStateLabel(item),
+                  }),
                   h('span', { className: 'dshHarmonyPatchRowText' },
                     h('span', { className: 'dshHarmonyPatchRowTitle' },
                       h('span', { className: 'dshHarmonyPatchKey', title: item.key }, item.id),
-                      h('span', { className: 'dshHarmonyPatchRowStatus' }, stateLabel(item.state))),
+                      h('span', { className: 'dshHarmonyPatchRowStatus' }, displayStateLabel(item))),
                     h('span', { className: 'dshHarmonyPatchProvider', title: item.owner }, displayName(item.owner)),
                     h('span', { className: 'dshHarmonyPatchTarget', title: patchTargetLabel(item) }, patchTargetLabel(item))))))),
               patch === undefined ? h('p', { className: 'dshHarmonyStatus' }, t('patchSelect')) :
@@ -1370,6 +1378,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
                     h('span', null, `${t('patchMatches')}: ${patch.matches}`),
                     h('span', null, `${t('patchGeneration')}: ${patch.generation}`),
                     patch.operation ? h('span', null, `${t('patchOperation')}: ${patchOperationLabel(t, patch.operation)}`) : null),
+                  (patch.warnings ?? []).map(warning => h('p', { className: 'dshHarmonyWarning', role: 'status', key: warning }, warning)),
                   patch.error ? h('p', { className: 'dshHarmonyConstraint dshHarmonyError', role: 'alert' }, patch.error) : null,
                   inspection ? h(React.Fragment, null,
                     h('h4', { className: 'dshHarmonyScope' }, t('patchChain')),
@@ -1431,8 +1440,10 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
       dirtyRef.current = dirty
       const plugins = useMemo(() => new Map((view?.plugins ?? []).map(plugin => [plugin.name, plugin])), [view])
       const patchMap = useMemo(() => new Map(patches.map(patch => [patch.key, patch])), [patches])
-      const warningPatchKeys = useMemo(() => new Set((view?.patchOrderViolations ?? [])
-        .flatMap(violation => [violation.before, violation.after])), [view])
+      const warningPatchKeys = useMemo(() => new Set([
+        ...(view?.patchOrderViolations ?? []).flatMap(violation => [violation.before, violation.after]),
+        ...patches.filter(patch => patch.warnings?.length).map(patch => patch.key),
+      ]), [view, patches])
       const patchDisabled = (patch: PatchStatus | undefined) => patch !== undefined
         && (draftDisabled.includes(patch.key) || draftDisabled.includes(`${patch.owner}/*`))
       const patchOrderState = (patch: PatchStatus): PatchStatus['state'] => {
@@ -2241,6 +2252,7 @@ body[data-ds-dark-theme] .dshHarmonyPreviewImageDark{display:block}
                 h('span', null, `${t('patchMatches')}: ${selectedPatch.matches}`),
                 h('span', null, `${t('patchGeneration')}: ${selectedPatch.generation}`)),
               selectedPatch.members === undefined ? null : h('p', { className: 'dshHarmonyConstraint' }, selectedPatch.members.map(member => `${member.id} · ${patchKindLabel(t, member.kind)}`).join(' · ')),
+              (selectedPatch.warnings ?? []).map(warning => h('p', { className: 'dshHarmonyWarning', role: 'status', key: warning }, warning)),
               selectedPatch.error ? h('p', { className: 'dshHarmonyConstraint dshHarmonyError', role: 'alert' }, selectedPatch.error) : null,
               h('div', { className: 'dshHarmonyDetailActions' },
                 h('button', {

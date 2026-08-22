@@ -199,6 +199,9 @@ if (isHarmonyCommand) {
           `  matches=${patch.matches} generation=${patch.generation}${patch.error === undefined ? '' : `\n  ${patch.error}`}\n`,
           `  匹配数=${patch.matches} 代次=${patch.generation}${patch.error === undefined ? '' : `\n  ${patch.error}`}\n`,
         ))
+        for (const warning of patch.warnings ?? []) {
+          await writeStdout(text(`  warning: ${warning}\n`, `  警告：${warning}\n`))
+        }
       }
     }
     const unhealthy = status.patches.some(patch => patch.state === 'failed')

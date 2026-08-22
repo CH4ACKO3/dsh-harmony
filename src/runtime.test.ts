@@ -522,7 +522,7 @@ module.exports = { id: 'atomic', patches: [
   expect(getPatchStatuses().find(patch => patch.key === 'successful-composite-provider/atomic')).toMatchObject({ state: 'disabled' })
 })
 
-test('uses target version ranges and an exact target file', () => {
+test('warns on target version drift and still attempts the exact target file', () => {
   const target = join(root, 'version-target')
   const provider = join(root, 'version-provider')
   mkdirSync(join(target, 'dist'), { recursive: true })
@@ -551,9 +551,18 @@ module.exports = {
 
   writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'version-target', version: '3.0.0' }))
   writeFileSync(join(target, 'dist/index.js'), 'export const value = 3\n')
-  expect(readFileSync(join(target, 'dist/index.js'), 'utf8')).toContain('value = 3')
+  expect(readFileSync(join(target, 'dist/index.js'), 'utf8')).toContain('value = 2')
+  expect(getPatchStatuses().find(patch => patch.key === 'version-provider/versioned')).toMatchObject({
+    state: 'bound', matches: 1,
+    warnings: ['target version-target@3.0.0 does not satisfy ^2.0.0'],
+  })
+
+  writeFileSync(join(target, 'dist/index.js'), 'export const value = "three"\n')
+  expect(readFileSync(join(target, 'dist/index.js'), 'utf8')).toContain('value = "three"')
   expect(getPatchStatuses().find(patch => patch.key === 'version-provider/versioned')).toMatchObject({
     state: 'failed', matches: 0,
+    warnings: ['target version-target@3.0.0 does not satisfy ^2.0.0'],
+    error: expect.stringContaining('the selector matched no code'),
   })
 })
 
@@ -1107,7 +1116,7 @@ test('reconciles the existing Loader tree when Harmony activates', async () => {
   writeFileSync(join(provider, 'patch.cjs'), `
 module.exports = [{
   id: 'test-patch',
-  target: { package: 'initial-loader-target', file: 'lib/index.js' },
+  target: { package: 'initial-loader-target', version: '^1.0.0', file: 'lib/index.js' },
   select: 'SourceFile',
   apply() {},
 }, {
@@ -1132,7 +1141,7 @@ module.exports = [{
     version: '1.0.0',
     dsh: { plugin: { compatibility: { conflicts: { 'initial-loader-provider': '*' } } } },
   }))
-  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'initial-loader-target' }))
+  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'initial-loader-target', version: '2.0.0' }))
   writeFileSync(join(target, 'lib/index.js'), 'export const value = 1\n')
   synchronizeProfile(profile)
 
@@ -1180,10 +1189,13 @@ module.exports = [{
   await expect(reloadHarmonyRuntime(profile, 'dsh-harmony'))
     .rejects.toThrow('reloading "dsh-harmony" inside its own runtime is unsafe')
   expect(warnings[0]).toBe('dsh-harmony: incompatible-loader-provider@2.0.0 conflicts with initial-loader-provider@0.0.0; both remain enabled')
-  expect(warnings[1]).toContain('skipped Patch "initial-loader-provider/wrong-count"')
-  expect(warnings[1]).toContain('expected 2 match(es)')
-  expect(warnings[2]).toContain('skipped Patch "initial-loader-provider/missing-target"')
-  expect(warnings[2]).toContain('is not installed')
+  expect(warnings[1]).toContain('Patch "initial-loader-provider/test-patch" compatibility warning')
+  expect(warnings[1]).toContain('target initial-loader-target@2.0.0 does not satisfy ^1.0.0')
+  expect(warnings[1]).toContain('application continues')
+  expect(warnings[2]).toContain('skipped Patch "initial-loader-provider/wrong-count"')
+  expect(warnings[2]).toContain('expected 2 match(es)')
+  expect(warnings[3]).toContain('skipped Patch "initial-loader-provider/missing-target"')
+  expect(warnings[3]).toContain('is not installed')
   for (const dispose of disposers) dispose()
 })
 

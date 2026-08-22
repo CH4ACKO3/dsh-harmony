@@ -239,7 +239,7 @@ Offline preflight validates and normalizes profile state without writing it. It 
 Check these in order:
 
 1. Confirm the selected profile contains both the provider and target.
-2. Confirm `target.version` accepts the installed target version and `file` names a compiled file that exists.
+2. Review any `target.version` warning against the installed target version and confirm `file` names a compiled file that exists.
 3. Compare `expect` with the actual selector match count against the current compiled shape.
 4. Inspect earlier Patch outputs; a prior Patch may have changed or removed the selected node.
 5. Replace a browser Semantic Patch with a Source Patch.
@@ -247,7 +247,7 @@ Check these in order:
 7. Check `dsh.plugin.compatibility` findings for unmet requirements or conflicts, and treat contradictory `before`/`after` constraints as ordering problems.
 8. When load or reload performance is in question, start DSH with `DSH_HARMONY_PERF=1` and compare the reported `prepareMs`, `transformMs`, `hostReloadMs`, `clientRebuildMs`, and `totalMs` fields. Node.js diagnostic tools may subscribe to the `dsh-harmony:load` diagnostics channel instead of enabling logs.
 
-Harmony skips an individual Patch that cannot match or apply, marks it `failed`, and continues with later Patches. Treat the warning and `status` exit code `1` as work to fix even though the Host remains available. A provider declaration that cannot load or a target reload that cannot commit still rolls back the candidate generation. Never repair a failure by modifying the installed target package or weakening `expect` without verifying the new compiled structure.
+A `target.version` mismatch is advisory: Harmony warns and still attempts the Patch. Harmony skips an individual Patch only when it cannot match or apply, marks it `failed`, and continues with later Patches. Treat a compatibility warning or `status` exit code `1` as work to investigate even though the Host remains available. A provider declaration that cannot load or a target reload that cannot commit still rolls back the candidate generation. Never repair a failure by modifying the installed target package or weakening `expect` without verifying the new compiled structure.
 
 ## Completion check
 

@@ -145,6 +145,7 @@ export interface HarmonyPatchStatus {
     operation?: HarmonySemanticOperation
     loader?: HarmonyLoaderPatch['loader']
   }>
+  warnings?: string[]
   error?: string
 }
 
